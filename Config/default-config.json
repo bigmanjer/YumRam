@@ -1,0 +1,390 @@
+{
+  "Version": "5.2.74",
+  "TelemetryIntervalSeconds": 0.5,
+  "UIRefreshIntervalSeconds": 0.25,
+  "GPUIntervalSeconds": 3.0,
+  "GameDetectionIntervalSeconds": 2.0,
+  "MinimumAvailableGB": 4.0,
+  "CleanupTargetAvailableGB": 4.0,
+  "EmergencyAvailableGB": 2.0,
+  "SafePressurePercent": 92,
+  "BalancedPressurePercent": 85,
+  "AggressivePressurePercent": 78,
+  "MaxCPUPercent": 90,
+  "Mode": "Balanced",
+  "SafeProcessesPerPass": 2,
+  "BalancedProcessesPerPass": 3,
+  "AggressiveProcessesPerPass": 5,
+  "MinimumCleanIntervalSeconds": 30,
+  "ProtectForegroundProcess": true,
+  "AutoDetectGames": true,
+  "ProtectGame": true,
+  "AutoCleanOnGameStart": false,
+  "GamePriority": "KeepExisting",
+  "Logging": true,
+  "LogFileName": "YUMRAM.log",
+  "StartMonitoringAutomatically": false,
+  "ProtectedProcesses": [
+    "System",
+    "System Idle Process",
+    "Registry",
+    "smss",
+    "csrss",
+    "wininit",
+    "services",
+    "lsass",
+    "winlogon",
+    "svchost",
+    "fontdrvhost",
+    "dwm",
+    "explorer",
+    "MsMpEng",
+    "SecurityHealthService",
+    "Memory Compression",
+    "SearchIndexer",
+    "SearchHost",
+    "StartMenuExperienceHost",
+    "ShellExperienceHost",
+    "RuntimeBroker",
+    "sihost",
+    "ctfmon",
+    "conhost",
+    "WmiPrvSE",
+    "audiodg",
+    "spoolsv",
+    "taskhostw",
+    "dllhost",
+    "powershell",
+    "pwsh",
+    "YUMRAM",
+    "YUMRAM.Host"
+  ],
+  "KnownGames": [
+    "cs2",
+    "csgo",
+    "valorant",
+    "VALORANT-Win64-Shipping",
+    "FortniteClient-Win64-Shipping",
+    "RocketLeague",
+    "r5apex",
+    "Apex",
+    "eldenring",
+    "Cyberpunk2077",
+    "Starfield",
+    "Fallout4",
+    "Fallout76",
+    "SkyrimSE",
+    "witcher3",
+    "helldivers2",
+    "bg3",
+    "HogwartsLegacy",
+    "palworld",
+    "javaw",
+    "Minecraft",
+    "Minecraft.Windows",
+    "GTA5",
+    "FiveM",
+    "RobloxPlayerBeta",
+    "Overwatch",
+    "OverwatchLauncher",
+    "DiabloIV",
+    "Destiny2",
+    "Warframe",
+    "TslGame",
+    "PUBG"
+  ],
+  "EnableOptionalBackgroundCleanup": true,
+  "EnableOptionalServiceCleanup": false,
+  "OptionalBackgroundProcesses": [
+    "Widgets",
+    "GameBarFTServer",
+    "SteamWebHelper",
+    "EpicWebHelper"
+  ],
+  "OptionalServices": [],
+  "TargetHysteresisGB": 0.3,
+  "ControllerMinIntervalSeconds": 0.75,
+  "ControllerMaxIntervalSeconds": 4.0,
+  "ControllerNoGainBackoffSeconds": 3.0,
+  "ProcessCooldownSeconds": 60,
+  "RecommendedOptionalBackgroundProcesses": [
+    {
+      "Name": "OneDrive",
+      "Category": "Cloud Sync",
+      "Risk": "Medium",
+      "Reason": "Cloud sync client; closing pauses synchronization."
+    },
+    {
+      "Name": "Dropbox",
+      "Category": "Cloud Sync",
+      "Risk": "Medium",
+      "Reason": "Cloud sync client; closing pauses synchronization."
+    },
+    {
+      "Name": "GoogleDriveFS",
+      "Category": "Cloud Sync",
+      "Risk": "Medium",
+      "Reason": "Google Drive desktop client; closing pauses synchronization."
+    },
+    {
+      "Name": "iCloudDrive",
+      "Category": "Cloud Sync",
+      "Risk": "Medium",
+      "Reason": "Apple cloud-sync component; closing pauses synchronization."
+    },
+    {
+      "Name": "MEGAsync",
+      "Category": "Cloud Sync",
+      "Risk": "Medium",
+      "Reason": "MEGA desktop sync client; closing pauses synchronization."
+    },
+    {
+      "Name": "Teams",
+      "Category": "Communications",
+      "Risk": "Medium",
+      "Reason": "Communications client; closing ends the desktop session."
+    },
+    {
+      "Name": "ms-teams",
+      "Category": "Communications",
+      "Risk": "Medium",
+      "Reason": "Microsoft Teams client; closing ends the desktop session."
+    },
+    {
+      "Name": "Slack",
+      "Category": "Communications",
+      "Risk": "Medium",
+      "Reason": "Communications client; closing ends the desktop session."
+    },
+    {
+      "Name": "Discord",
+      "Category": "Communications",
+      "Risk": "Medium",
+      "Reason": "Chat/overlay client; closing ends notifications and overlay features."
+    },
+    {
+      "Name": "Zoom",
+      "Category": "Communications",
+      "Risk": "Medium",
+      "Reason": "Meeting client; closing ends the desktop client session."
+    },
+    {
+      "Name": "Skype",
+      "Category": "Communications",
+      "Risk": "Low",
+      "Reason": "Optional communications client; closing disconnects the client."
+    },
+    {
+      "Name": "WhatsApp",
+      "Category": "Communications",
+      "Risk": "Low",
+      "Reason": "Optional messaging client; closing stops desktop notifications."
+    },
+    {
+      "Name": "Telegram",
+      "Category": "Communications",
+      "Risk": "Low",
+      "Reason": "Optional messaging client; closing stops desktop notifications."
+    },
+    {
+      "Name": "PhoneExperienceHost",
+      "Category": "Windows Companion",
+      "Risk": "Low",
+      "Reason": "Phone Link companion; closing pauses phone integration."
+    },
+    {
+      "Name": "YourPhone",
+      "Category": "Windows Companion",
+      "Risk": "Low",
+      "Reason": "Phone Link companion on systems using this executable name."
+    },
+    {
+      "Name": "Widgets",
+      "Category": "Windows Optional",
+      "Risk": "Low",
+      "Reason": "Windows Widgets host; closing disables the current Widgets session."
+    },
+    {
+      "Name": "GameBarFTServer",
+      "Category": "Windows Optional",
+      "Risk": "Low",
+      "Reason": "Xbox Game Bar helper; closing can disable Game Bar features."
+    },
+    {
+      "Name": "SteamWebHelper",
+      "Category": "Game Launcher",
+      "Risk": "Low",
+      "Reason": "Steam web helper; closing can reduce Steam UI features."
+    },
+    {
+      "Name": "EpicWebHelper",
+      "Category": "Game Launcher",
+      "Risk": "Low",
+      "Reason": "Epic launcher web helper; closing can reduce launcher UI features."
+    },
+    {
+      "Name": "EpicGamesLauncher",
+      "Category": "Game Launcher",
+      "Risk": "Medium",
+      "Reason": "Epic launcher; closing ends launcher/session activity."
+    },
+    {
+      "Name": "EADesktop",
+      "Category": "Game Launcher",
+      "Risk": "Medium",
+      "Reason": "EA launcher; closing ends launcher/session activity."
+    },
+    {
+      "Name": "Battle.net",
+      "Category": "Game Launcher",
+      "Risk": "Medium",
+      "Reason": "Blizzard launcher; closing ends launcher/session activity."
+    },
+    {
+      "Name": "UbisoftConnect",
+      "Category": "Game Launcher",
+      "Risk": "Medium",
+      "Reason": "Ubisoft launcher; closing ends launcher/session activity."
+    },
+    {
+      "Name": "RiotClientServices",
+      "Category": "Game Launcher",
+      "Risk": "Medium",
+      "Reason": "Riot client component; closing can interrupt Riot clients."
+    },
+    {
+      "Name": "RiotClientUx",
+      "Category": "Game Launcher",
+      "Risk": "Low",
+      "Reason": "Riot launcher UI component; closing can interrupt launcher UI."
+    },
+    {
+      "Name": "Overwolf",
+      "Category": "Gaming Overlay",
+      "Risk": "Medium",
+      "Reason": "Gaming overlay/client; closing disables overlay features."
+    },
+    {
+      "Name": "CCXProcess",
+      "Category": "Adobe Helper",
+      "Risk": "Low",
+      "Reason": "Adobe Creative Cloud helper; closing may pause background integration."
+    },
+    {
+      "Name": "AdobeCollabSync",
+      "Category": "Adobe Helper",
+      "Risk": "Low",
+      "Reason": "Adobe collaboration helper; closing affects background collaboration."
+    },
+    {
+      "Name": "CoreSync",
+      "Category": "Adobe Helper",
+      "Risk": "Low",
+      "Reason": "Adobe Creative Cloud sync helper; closing pauses synchronization."
+    },
+    {
+      "Name": "Spotify",
+      "Category": "Media",
+      "Risk": "Low",
+      "Reason": "Media client; closing stops background playback/control integration."
+    },
+    {
+      "Name": "NVIDIA Share",
+      "Category": "Gaming Overlay",
+      "Risk": "Medium",
+      "Reason": "NVIDIA overlay/helper; closing can disable capture/overlay features."
+    }
+  ],
+  "ProcessIdleSecondsForCandidate": 8,
+  "CandidateWorkingSetMB": 100,
+  "EndTaskRequiresConfirmation": true,
+  "EnableSystemScanner": true,
+  "ScannerMaxItems": 80,
+  "GPUColor": "#B7E3FF",
+  "MemoryDisplayDecimals": 2,
+  "LiveInventoryIntervalSeconds": 5.0,
+  "LiveInventoryMaxItems": 200,
+  "ShowMemoryDiagnostics": true,
+  "RecommendedOptionalServices": [
+    {
+      "Name": "Spooler",
+      "Category": "Printing",
+      "Risk": "Review",
+      "Reason": "Printing service; only useful when printing is needed. Dependencies are checked before stopping."
+    },
+    {
+      "Name": "MapsBroker",
+      "Category": "Maps",
+      "Risk": "Review",
+      "Reason": "Offline map broker; optional on systems that do not use offline maps."
+    },
+    {
+      "Name": "Fax",
+      "Category": "Legacy",
+      "Risk": "Review",
+      "Reason": "Legacy fax service; usually unnecessary unless fax functionality is used."
+    },
+    {
+      "Name": "WerSvc",
+      "Category": "Diagnostics",
+      "Risk": "Review",
+      "Reason": "Windows Error Reporting; stopping can reduce background reporting but changes diagnostics behavior."
+    }
+  ],
+  "IntelligenceDatabaseFileName": "intelligence-db.json",
+  "IntelligenceCacheMaxAgeDays": 30,
+  "IntelligenceRefreshSeconds": 0,
+  "ProcessCpuSampleIntervalSeconds": 1.0,
+  "IntelligenceResearchEnabled": true,
+  "EnableOnlineResearch": true,
+  "ResearchMaxItemsPerScan": 999999,
+  "ResearchMaxOnlineItemsPerScan": 8,
+  "ResearchCacheMaxAgeDays": 14,
+  "ResearchRequestTimeoutSeconds": 6,
+  "StartupScanEnabled": true,
+  "StartupMaxItems": 120,
+  "ResearchSources": [
+    "Windows Registry",
+    "Authenticode",
+    "File Version Metadata",
+    "WinGet Local Catalog",
+    "Windows Service Metadata",
+    "Verified Web Sources",
+    "AppX Package Identity",
+    "GitHub Repository Corroboration",
+    "Reddit Community Context"
+  ],
+  "ResearchEngineVersion": "5.2.74",
+  "CleanupStepDelayMs": 200,
+  "CleanupMaxPassMilliseconds": 750,
+  "CleanupMaxTrimMBPerPass": 384,
+  "GamingCleanupStepDelayMs": 300,
+  "GamingCleanupMaxPassMilliseconds": 700,
+  "GamingCleanupMaxTrimMBPerPass": 256,
+  "ResearchConcurrency": 1,
+  "ResearchInterItemDelayMs": 250,
+  "FallbackStallPasses": 4,
+  "EnableTargetFallbackCleanup": true,
+  "FallbackProcessesPerPass": 5,
+  "FallbackFollowUpPasses": 24,
+  "FallbackMaxTrimMBPerPass": 768,
+  "FallbackCandidateScoreMinimum": 24,
+  "CleanupSelectionStrategy": "AdaptiveSmallestFirstThenLegacyFallback",
+  "AutoResearchAfterScan": false,
+  "UnknownAutoResearchEnabled": false,
+  "UnknownAutoManage": false,
+  "UnknownResearchMinConfidence": 80,
+  "UnknownIdentityRequiredForAutoManage": true,
+  "ResearchWorkerTimeoutSeconds": 1800,
+  "ServiceScanMaxItems": 300,
+  "AppScanMaxItems": 250,
+  "TargetMaintenanceEnabled": true,
+  "TargetMaintenanceHysteresisGB": 0.3,
+  "TargetMaintenanceMinimumIntervalSeconds": 15,
+  "IntelligentServiceCleanupEnabled": false,
+  "IntelligentServiceStopThresholdGB": 0.75,
+  "IntelligentServiceMaxStopsPerSession": 2,
+  "AutoRestoreSessionStoppedServices": true,
+  "CleanupTargetOvershootMB": 128,
+  "FallbackMaxTrimPerSessionMB": 3072
+}

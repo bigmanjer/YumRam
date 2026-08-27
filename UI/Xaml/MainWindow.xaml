@@ -1,0 +1,223 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Window
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="YUMRAM - Memory Care &#x1F49C;"
+    Width="1180" Height="800" MinWidth="1000" MinHeight="700"
+    WindowStartupLocation="CenterScreen"
+    Background="#180D20" Foreground="#FFF7FF" ResizeMode="CanResize">
+
+  <Window.Resources>
+    <SolidColorBrush x:Key="PurpleBrush" Color="#9B5DE5"/>
+    <SolidColorBrush x:Key="PurpleDarkBrush" Color="#6A35A8"/>
+    <SolidColorBrush x:Key="PurpleLightBrush" Color="#CFA8FF"/>
+
+    <Style TargetType="Button">
+      <Setter Property="Background" Value="#321B42"/><Setter Property="Foreground" Value="#FFF7FF"/>
+      <Setter Property="BorderBrush" Value="#9B5DE5"/><Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="Padding" Value="12,8"/><Setter Property="Margin" Value="4"/>
+      <Setter Property="FontSize" Value="13"/><Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Template">
+        <Setter.Value><ControlTemplate TargetType="{x:Type Button}">
+          <Border x:Name="ButtonBorder" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="9" Padding="{TemplateBinding Padding}">
+            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="ButtonBorder" Property="Background" Value="#6A35A8"/><Setter TargetName="ButtonBorder" Property="BorderBrush" Value="#CFA8FF"/></Trigger>
+            <Trigger Property="IsPressed" Value="True"><Setter TargetName="ButtonBorder" Property="Background" Value="#9B5DE5"/></Trigger>
+            <Trigger Property="IsEnabled" Value="False"><Setter TargetName="ButtonBorder" Property="Opacity" Value="0.45"/></Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate></Setter.Value>
+      </Setter>
+    </Style>
+
+    <Style TargetType="TextBox">
+      <Setter Property="Background" Value="#24152F"/><Setter Property="Foreground" Value="#FFF7FF"/>
+      <Setter Property="BorderBrush" Value="#6A35A8"/><Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="Padding" Value="8"/><Setter Property="FontSize" Value="14"/>
+    </Style>
+
+    <Style x:Key="YumComboBoxItem" TargetType="{x:Type ComboBoxItem}">
+      <Setter Property="Foreground" Value="#FFF7FF"/><Setter Property="Background" Value="#321B42"/>
+      <Setter Property="Padding" Value="10,8"/><Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+      <Setter Property="Template">
+        <Setter.Value><ControlTemplate TargetType="{x:Type ComboBoxItem}">
+          <Border x:Name="ItemBorder" Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}" CornerRadius="6">
+            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="Center" TextElement.Foreground="{TemplateBinding Foreground}"/>
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="ItemBorder" Property="Background" Value="#6A35A8"/></Trigger>
+            <Trigger Property="IsSelected" Value="True"><Setter TargetName="ItemBorder" Property="Background" Value="#9B5DE5"/></Trigger>
+            <MultiTrigger><MultiTrigger.Conditions><Condition Property="IsSelected" Value="True"/><Condition Property="IsMouseOver" Value="True"/></MultiTrigger.Conditions><Setter TargetName="ItemBorder" Property="Background" Value="#B16BEF"/></MultiTrigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate></Setter.Value>
+      </Setter>
+    </Style>
+
+    <Style TargetType="{x:Type ComboBox}">
+      <Setter Property="Background" Value="#321B42"/><Setter Property="Foreground" Value="#FFF7FF"/>
+      <Setter Property="BorderBrush" Value="#9B5DE5"/><Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="Padding" Value="6"/><Setter Property="Margin" Value="4"/><Setter Property="Height" Value="38"/>
+      <Setter Property="ItemContainerStyle" Value="{StaticResource YumComboBoxItem}"/>
+      <Setter Property="Template">
+        <Setter.Value><ControlTemplate TargetType="{x:Type ComboBox}">
+          <Grid>
+            <Border Background="#321B42" BorderBrush="#9B5DE5" BorderThickness="1" CornerRadius="9">
+              <Grid>
+                <ContentPresenter Margin="10,0,38,0" VerticalAlignment="Center" HorizontalAlignment="Left" Content="{TemplateBinding SelectionBoxItem}" ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}" TextElement.Foreground="#FFF7FF"/>
+                <Path HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,12,0" Fill="#CFA8FF" Data="M 0 0 L 8 0 L 4 5 Z"/>
+              </Grid>
+            </Border>
+            <ToggleButton Background="Transparent" BorderThickness="0" Focusable="False" IsChecked="{Binding IsDropDownOpen,Mode=TwoWay,RelativeSource={RelativeSource TemplatedParent}}">
+              <ToggleButton.Template><ControlTemplate TargetType="{x:Type ToggleButton}"><Border Background="Transparent" CornerRadius="9"/></ControlTemplate></ToggleButton.Template>
+            </ToggleButton>
+            <Popup x:Name="PART_Popup" Placement="Bottom" PlacementTarget="{Binding RelativeSource={RelativeSource TemplatedParent}}" IsOpen="{TemplateBinding IsDropDownOpen}" AllowsTransparency="True" Focusable="False" PopupAnimation="Fade">
+              <Border Background="#24152F" BorderBrush="#9B5DE5" BorderThickness="1" CornerRadius="10" Padding="5" MinWidth="{Binding ActualWidth,RelativeSource={RelativeSource TemplatedParent}}">
+                <ScrollViewer MaxHeight="220" CanContentScroll="False" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto"><ItemsPresenter/></ScrollViewer>
+              </Border>
+            </Popup>
+          </Grid>
+        </ControlTemplate></Setter.Value>
+      </Setter>
+    </Style>
+
+    <Style TargetType="{x:Type CheckBox}"><Setter Property="Foreground" Value="#FFF7FF"/><Setter Property="Margin" Value="4,5"/><Setter Property="FontSize" Value="13"/></Style>
+
+
+  </Window.Resources>
+
+  <Grid Margin="22">
+    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+
+    <Border Grid.Row="0" Background="#321B42" CornerRadius="18" Padding="18" Margin="0,0,0,12">
+      <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+        <StackPanel><TextBlock Text="Y U M R A M &#x1F49C;" FontSize="30" FontWeight="Bold" Foreground="#CFA8FF"/><TextBlock Text="Yumes Ultimate Memory Reclaim &amp; Monitor" FontSize="13" Foreground="#BFAFC9" Margin="2,2,0,0"/></StackPanel>
+        <StackPanel Grid.Column="1"><TextBlock x:Name="Mode" Text="BALANCED" HorizontalAlignment="Right" FontWeight="Bold" Foreground="#FF9ECD"/><TextBlock x:Name="Status" Text="● Paused" HorizontalAlignment="Right" Foreground="#FDE68A"/></StackPanel>
+      </Grid>
+    </Border>
+
+    <Grid Grid.Row="1" Margin="0,0,0,12"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+      <Border Grid.Column="0" Background="#321B42" CornerRadius="14" Padding="12" Margin="4"><StackPanel><TextBlock Text="&#x1F49C; AVAILABLE RAM" Foreground="#BFAFC9"/><TextBlock x:Name="Available" Text="-- GB" FontSize="24" FontWeight="Bold" Foreground="#86EFAC"/></StackPanel></Border>
+      <Border Grid.Column="1" Background="#321B42" CornerRadius="14" Padding="12" Margin="4"><StackPanel><TextBlock Text="&#x1F9E0; MEMORY USED" Foreground="#BFAFC9"/><TextBlock x:Name="Memory" Text="--%" FontSize="24" FontWeight="Bold" Foreground="#CFA8FF"/></StackPanel></Border>
+      <Border Grid.Column="2" Background="#321B42" CornerRadius="14" Padding="12" Margin="4"><StackPanel><TextBlock Text="&#x26A1; CPU" Foreground="#BFAFC9"/><TextBlock x:Name="CPU" Text="--%" FontSize="24" FontWeight="Bold" Foreground="#FF9ECD"/></StackPanel></Border>
+      <Border Grid.Column="3" Background="#321B42" CornerRadius="14" Padding="12" Margin="4"><StackPanel><TextBlock Text="&#x1F3AE; GPU 3D" Foreground="#BFAFC9"/><TextBlock x:Name="GPU" Text="--%" FontSize="24" FontWeight="Bold" Foreground="#B7E3FF"/></StackPanel></Border>
+      <Border Grid.Column="4" Background="#321B42" CornerRadius="14" Padding="12" Margin="4"><StackPanel><TextBlock Text="&#x1F3AE; GAME" Foreground="#BFAFC9"/><TextBlock x:Name="Game" Text="None" FontSize="17" FontWeight="Bold" Foreground="#86EFAC" TextTrimming="CharacterEllipsis"/></StackPanel></Border>
+    </Grid>
+
+    <Grid Grid.Row="2"><Grid.ColumnDefinitions><ColumnDefinition Width="3*"/><ColumnDefinition Width="380" MinWidth="350"/></Grid.ColumnDefinitions>
+      <Border Grid.Column="0" Background="#24152F" CornerRadius="18" Padding="16" Margin="0,0,10,0">
+        <Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+          <DockPanel>
+            <TextBlock Text="💜 YUMRAM Control Center" FontSize="19" FontWeight="Bold" Foreground="#CFA8FF"/>
+            <TextBlock Text="Live memory picture" DockPanel.Dock="Right" VerticalAlignment="Center" Foreground="#BFAFC9" FontSize="11"/>
+          </DockPanel>
+          <Canvas x:Name="Graph" Grid.Row="1" Margin="0,12,0,0" Background="#180D20" SnapsToDevicePixels="True" ClipToBounds="True"/>
+          <Border Grid.Row="2" HorizontalAlignment="Center" Margin="0,8,0,10" Background="#321B42" CornerRadius="8" Padding="9,5" BorderBrush="#6A35A8" BorderThickness="1">
+            <StackPanel Orientation="Horizontal">
+              <TextBlock Text="● AVAILABLE RAM" Foreground="#86EFAC" FontWeight="SemiBold" Margin="0,0,14,0"/>
+              <TextBlock Text="● MEMORY USED" Foreground="#CFA8FF" FontWeight="SemiBold" Margin="0,0,14,0"/>
+              <TextBlock Text="● CPU" Foreground="#FF9ECD" FontWeight="SemiBold" Margin="0,0,14,0"/>
+              <TextBlock Text="● GPU 3D" Foreground="#B7E3FF" FontWeight="SemiBold"/>
+            </StackPanel>
+          </Border>
+          <StackPanel Grid.Row="3"><DockPanel><TextBlock Text="RAM Usage" Foreground="#BFAFC9"/><TextBlock x:Name="Usage" DockPanel.Dock="Right" Text="-- / -- GB" Margin="12,0,0,0" Foreground="#BFAFC9"/></DockPanel><ProgressBar x:Name="MemoryBar" Height="14" Maximum="100" Background="#321B42" Foreground="#9B5DE5" Margin="0,7,0,0"/>
+          </StackPanel>
+          <StackPanel Grid.Row="4" Margin="0,10,0,0"><Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBlock x:Name="Target" Text="Available: -- GB / Target: -- GB" Foreground="#BFAFC9"/><Border Grid.Column="1" Margin="14,0,0,0" Padding="8,2" Background="#321B42" CornerRadius="6"><TextBlock x:Name="TargetStatus" Text="--" Foreground="#86EFAC" HorizontalAlignment="Right"/></Border></Grid><ProgressBar x:Name="TargetBar" Height="14" Maximum="100" Background="#321B42" Foreground="#86EFAC" Margin="0,7,0,0"/></StackPanel>
+        </Grid>
+      </Border>
+
+      <Border Grid.Column="1" Background="#321B42" CornerRadius="18" Padding="16">
+        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+          <StackPanel>
+            <DockPanel Margin="0,0,0,8">
+              <StackPanel>
+                <TextBlock Text="💜 RAM CONTROL" FontSize="19" FontWeight="Bold" Foreground="#CFA8FF"/>
+                <TextBlock Text="Monitor • Reach target • Protect" FontSize="11" Foreground="#BFAFC9" Margin="4,1,4,0"/>
+              </StackPanel>
+              <Border DockPanel.Dock="Right" Background="#24152F" CornerRadius="8" Padding="8,4" Margin="8,0,0,0" VerticalAlignment="Top">
+                <TextBlock x:Name="QuickMonitorStatus" Text="PAUSED" Foreground="#FDE68A" FontWeight="Bold" FontSize="10.5"/>
+              </Border>
+            </DockPanel>
+
+            <!-- RIGHT NOW -->
+            <Border Background="#24152F" CornerRadius="12" Padding="10" Margin="0,0,0,8" BorderBrush="#59336E" BorderThickness="1">
+              <StackPanel>
+                <DockPanel Margin="0,0,0,5">
+                  <TextBlock Text="RIGHT NOW" Foreground="#FF9ECD" FontWeight="Bold" FontSize="11"/>
+                  <TextBlock x:Name="QuickMonitorTelemetry" Text="Telemetry: --" DockPanel.Dock="Right" Foreground="#BFAFC9" FontSize="10"/>
+                </DockPanel>
+                <Button x:Name="Monitor" Content="▶ Start Monitoring" Height="40"/>
+                <TextBlock Text="ON = YUMRAM automatically works toward your target. OFF = no automatic cleanup." TextWrapping="Wrap" FontSize="10" Foreground="#9584A0" Margin="4,5,4,0"/>
+              </StackPanel>
+            </Border>
+
+            <!-- MEMORY GOAL -->
+            <Border Background="#24152F" CornerRadius="12" Padding="10" Margin="0,0,0,8" BorderBrush="#59336E" BorderThickness="1">
+              <StackPanel>
+                <DockPanel Margin="0,0,0,4">
+                  <TextBlock Text="MEMORY GOAL" Foreground="#FF9ECD" FontWeight="Bold" FontSize="11"/>
+                  <TextBlock Text="Available RAM" DockPanel.Dock="Right" Foreground="#BFAFC9" FontSize="10"/>
+                </DockPanel>
+                <Grid Margin="0,2,0,0">
+                  <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                  <TextBox x:Name="TargetBox" Height="36" VerticalContentAlignment="Center" Margin="0,0,6,0"/>
+                  <Button x:Name="Apply" Grid.Column="1" Content="Apply" Width="72" Height="36" Margin="0"/>
+                </Grid>
+                <TextBlock x:Name="ModeHelp" TextWrapping="Wrap" FontSize="10.5" Foreground="#BFAFC9" Margin="4,4,4,4" Text="Balanced: recommended."/>
+                <ComboBox x:Name="ModeBox"><ComboBoxItem Content="Safe — Minimal intervention" Tag="Safe"/><ComboBoxItem Content="Balanced — Recommended" Tag="Balanced"/><ComboBoxItem Content="Aggressive — Maximum reclaim" Tag="Aggressive"/></ComboBox>
+              </StackPanel>
+            </Border>
+
+            <!-- ACTIONS -->
+            <Border Background="#2A1836" CornerRadius="12" Padding="10" Margin="0,0,0,8" BorderBrush="#6A35A8" BorderThickness="1">
+              <StackPanel>
+                <TextBlock Text="ACTIONS" Foreground="#FF9ECD" FontWeight="Bold" FontSize="11" Margin="0,0,0,5"/>
+                <Button x:Name="Clean" Content="💜 Reach Target Now" Height="42" FontWeight="SemiBold" Margin="0,0,0,5"/>
+                <Button x:Name="Preview" Content="🔎 Preview What Will Be Cleaned" Height="36"/>
+                <TextBlock Text="Reach Target Now performs one cleanup without enabling monitoring. Preview is read-only and shows the planned actions." TextWrapping="Wrap" FontSize="10" Foreground="#9584A0" Margin="4,5,4,0"/>
+              </StackPanel>
+            </Border>
+
+            <!-- SMART TOOLS -->
+            <TextBlock Text="SMART TOOLS" FontWeight="Bold" Foreground="#FF9ECD" Margin="4,2,4,3" FontSize="11"/>
+            <Border Background="#24152F" CornerRadius="10" Padding="8" Margin="0,0,0,8">
+              <StackPanel>
+                <Button x:Name="Intelligence" Content="🧠 Intelligence &amp; Research" Height="38"/>
+                <TextBlock Text="Scan manually. Unresolved items wait for RUN RESEARCH and are saved after successful organization." TextWrapping="Wrap" FontSize="10.5" Foreground="#BFAFC9" Margin="6,4,6,2"/>
+              </StackPanel>
+            </Border>
+
+            <!-- PROTECTION -->
+            <Expander Header="🛡 Protection &amp; Gaming" Foreground="#CFA8FF" IsExpanded="False" Margin="0,0,0,8">
+              <StackPanel Margin="4,6,4,2">
+                <CheckBox x:Name="AutoGame" Content="🎮 Detect games automatically" Margin="0,2"/>
+                <CheckBox x:Name="ProtectGame" Content="🛡 Protect active game" Margin="0,2"/>
+                <CheckBox x:Name="AutoClean" Content="✨ Clean when game starts" Margin="0,2"/>
+                <TextBlock Text="Game Priority" FontWeight="Bold" Foreground="#FF9ECD" Margin="4,10,4,3"/>
+                <ComboBox x:Name="PriorityBox"><ComboBoxItem Content="Keep Existing"/><ComboBoxItem Content="Normal (Default)"/><ComboBoxItem Content="Above Normal (Game Preference)"/><ComboBoxItem Content="High (Advanced)"/></ComboBox>
+                <TextBlock Text="CPU scheduling only; this does not add RAM or GPU power." FontSize="10.5" Foreground="#BFAFC9" TextWrapping="Wrap" Margin="4,3,4,6"/>
+              </StackPanel>
+            </Expander>
+
+            <!-- DIAGNOSTICS -->
+            <Expander Header="📊 Diagnostics" Foreground="#CFA8FF" IsExpanded="False" Margin="0,0,0,8">
+              <StackPanel Margin="4,6,4,2">
+                <Button x:Name="Processes" Content="📊 Top Memory Processes" Height="36"/>
+                <TextBlock Text="Use this when you want to see which processes are using the most RAM." TextWrapping="Wrap" FontSize="10.5" Foreground="#BFAFC9" Margin="6,4,6,2"/>
+              </StackPanel>
+            </Expander>
+
+            <!-- FOOTER / APP -->
+            <Separator Margin="0,2,0,8"/>
+            <DockPanel>
+              <Button x:Name="Settings" Content="⚙ Settings" Height="34" Width="112" Margin="0,0,5,0"/>
+              <Button x:Name="About" Content="💜 About" Height="34" Width="92" Margin="5,0,0,0"/>
+            </DockPanel>
+          </StackPanel>
+        </ScrollViewer>
+      </Border>
+    </Grid>
+
+    <DockPanel Grid.Row="3" Margin="0,12,0,0"><TextBlock x:Name="Footer" Text="Ready &#x1F49C;" Foreground="#BFAFC9" VerticalAlignment="Center"/><TextBlock x:Name="TelemetryStatus" DockPanel.Dock="Right" Text="Telemetry: --" Margin="12,0,16,0" Foreground="#BFAFC9" VerticalAlignment="Center"/><TextBlock x:Name="VersionStatus" DockPanel.Dock="Right" Text="YUMRAM" Foreground="#BFAFC9" VerticalAlignment="Center"/></DockPanel>
+  </Grid>
+</Window>

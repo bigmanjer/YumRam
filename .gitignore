@@ -1,0 +1,27 @@
+# Runtime logs and generated diagnostics
+*.log
+YUMRAM.log
+
+# Local intelligence / research state
+intelligence-db.json
+research-cache.json
+research-history.json
+research-status.json
+research-live.json
+research-live-results.json
+
+# Temporary / backup files
+*.tmp
+*.temp
+*.bak
+*.backup
+
+# PowerShell/editor noise
+.vscode/
+.idea/
+*.user
+*.suo
+
+# Windows filesystem noise
+Thumbs.db
+Desktop.ini

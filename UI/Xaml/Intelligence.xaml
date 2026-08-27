@@ -1,0 +1,228 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="YUMRAM - Intelligence" Width="1380" Height="920" MinWidth="1180" MinHeight="760" WindowStartupLocation="CenterOwner" Background="#180D20" Foreground="#FFF7FF">
+  <Window.Resources>
+    <SolidColorBrush x:Key="Panel" Color="#24152F"/>
+    <SolidColorBrush x:Key="PanelStrong" Color="#321B42"/>
+    <SolidColorBrush x:Key="BorderPurple" Color="#9B5DE5"/>
+    <SolidColorBrush x:Key="PurpleText" Color="#CFA8FF"/>
+    <SolidColorBrush x:Key="Muted" Color="#C7B9D1"/>
+    <SolidColorBrush x:Key="Good" Color="#86EFAC"/>
+    <SolidColorBrush x:Key="Warn" Color="#FDE68A"/>
+    <Style TargetType="Button">
+      <Setter Property="Background" Value="#321B42"/><Setter Property="Foreground" Value="#FFF7FF"/>
+      <Setter Property="BorderBrush" Value="#9B5DE5"/><Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="Padding" Value="12,8"/><Setter Property="Margin" Value="4"/><Setter Property="FontSize" Value="13"/>
+      <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">
+        <Border x:Name="ButtonBorder" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="9" Padding="{TemplateBinding Padding}">
+          <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+        </Border>
+        <ControlTemplate.Triggers>
+          <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="ButtonBorder" Property="Background" Value="#6A35A8"/><Setter TargetName="ButtonBorder" Property="BorderBrush" Value="#CFA8FF"/></Trigger>
+          <Trigger Property="IsPressed" Value="True"><Setter TargetName="ButtonBorder" Property="Background" Value="#9B5DE5"/></Trigger>
+          <Trigger Property="IsEnabled" Value="False"><Setter TargetName="ButtonBorder" Property="Opacity" Value="0.45"/></Trigger>
+        </ControlTemplate.Triggers>
+      </ControlTemplate></Setter.Value></Setter>
+    </Style>
+    <Style TargetType="TextBox">
+      <Setter Property="Background" Value="#180D20"/><Setter Property="Foreground" Value="#FFF7FF"/>
+      <Setter Property="BorderBrush" Value="#9B5DE5"/><Setter Property="BorderThickness" Value="1"/><Setter Property="Padding" Value="9"/>
+    </Style>
+    <Style TargetType="ComboBoxItem">
+      <Setter Property="Foreground" Value="#FFF7FF"/>
+      <Setter Property="Background" Value="#321B42"/>
+      <Setter Property="Padding" Value="10,8"/>
+      <Setter Property="HorizontalContentAlignment" Value="Left"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="ComboBoxItem">
+            <Border x:Name="ItemBorder" Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}">
+              <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="Center" TextElement.Foreground="{TemplateBinding Foreground}"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsHighlighted" Value="True"><Setter TargetName="ItemBorder" Property="Background" Value="#6A35A8"/></Trigger>
+              <Trigger Property="IsSelected" Value="True"><Setter TargetName="ItemBorder" Property="Background" Value="#7B42BE"/></Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <Style TargetType="ComboBox">
+      <Setter Property="Background" Value="#321B42"/>
+      <Setter Property="Foreground" Value="#FFF7FF"/>
+      <Setter Property="BorderBrush" Value="#9B5DE5"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="Padding" Value="6"/>
+      <Setter Property="Height" Value="38"/>
+      <Setter Property="ScrollViewer.CanContentScroll" Value="True"/>
+      <Setter Property="VirtualizingStackPanel.IsVirtualizing" Value="True"/>
+      <Setter Property="VirtualizingStackPanel.VirtualizationMode" Value="Recycling"/>
+      <Setter Property="SnapsToDevicePixels" Value="True"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="ComboBox">
+            <Grid>
+              <Border Background="#321B42" BorderBrush="#9B5DE5" BorderThickness="1" CornerRadius="8">
+                <ContentPresenter Margin="10,0,32,0" VerticalAlignment="Center" Content="{TemplateBinding SelectionBoxItem}" TextElement.Foreground="#FFF7FF"/>
+              </Border>
+              <ToggleButton Background="Transparent" BorderThickness="0" Focusable="False" IsChecked="{Binding IsDropDownOpen,Mode=TwoWay,RelativeSource={RelativeSource TemplatedParent}}">
+                <ToggleButton.Template><ControlTemplate TargetType="ToggleButton"><Border Background="Transparent"/></ControlTemplate></ToggleButton.Template>
+              </ToggleButton>
+              <Path HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,10,0" Fill="#CFA8FF" Data="M 0 0 L 8 0 L 4 5 Z"/>
+              <Popup x:Name="PART_Popup" Placement="Bottom" PlacementTarget="{Binding RelativeSource={RelativeSource TemplatedParent}}" IsOpen="{TemplateBinding IsDropDownOpen}" AllowsTransparency="True" Focusable="False">
+                <Border Background="#24152F" BorderBrush="#9B5DE5" BorderThickness="1" CornerRadius="8" Padding="4" MinWidth="{Binding ActualWidth,RelativeSource={RelativeSource TemplatedParent}}">
+                  <ScrollViewer CanContentScroll="True" MaxHeight="280">
+                    <ItemsPresenter/>
+                  </ScrollViewer>
+                </Border>
+              </Popup>
+            </Grid>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <Style TargetType="ListViewItem">
+      <Setter Property="Foreground" Value="#FFF7FF"/><Setter Property="Padding" Value="6,8"/>
+      <Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="#321B42"/></Trigger><Trigger Property="IsSelected" Value="True"><Setter Property="Background" Value="#6A35A8"/><Setter Property="Foreground" Value="#FFFFFF"/></Trigger></Style.Triggers>
+    </Style>
+    <Style TargetType="GridViewColumnHeader">
+      <Setter Property="Foreground" Value="#FFF7FF"/><Setter Property="Background" Value="#321B42"/><Setter Property="FontWeight" Value="Bold"/><Setter Property="Padding" Value="8,7"/>
+    </Style>
+  </Window.Resources>
+
+  <Grid Margin="22">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="*"/>
+      <RowDefinition Height="Auto"/>
+    </Grid.RowDefinitions>
+
+    <Border Grid.Row="0" Background="{StaticResource PanelStrong}" BorderBrush="#6A35A8" BorderThickness="1" CornerRadius="16" Padding="16" Margin="0,0,0,12">
+      <Grid>
+        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+        <StackPanel>
+          <TextBlock Text="🧠 INTELLIGENCE CENTER" FontSize="24" FontWeight="Bold" Foreground="{StaticResource PurpleText}"/>
+          <TextBlock x:Name="OverviewMessage" Text="Open Intelligence to view saved knowledge. Run Scan is manual. Unresolved results wait for RUN RESEARCH, which investigates, organizes, and saves the result." Foreground="{StaticResource Muted}" Margin="0,5,0,0" TextWrapping="Wrap"/>
+          <TextBlock x:Name="DatabaseStatus" Text="Local profile • Waiting for first scan" Foreground="{StaticResource Good}" Margin="0,8,0,0" FontWeight="SemiBold"/>
+        </StackPanel>
+        <StackPanel Grid.Column="1" Orientation="Vertical" VerticalAlignment="Center">
+          <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button x:Name="Refresh" Content="🔍  RUN SCAN" Width="135" Height="42" FontWeight="Bold" ToolTip="Manually scan the current system. Opening Intelligence does not start a scan."/>
+            <Button x:Name="RunResearch" Content="🧠  RUN RESEARCH" Width="155" Height="42" FontWeight="Bold" ToolTip="Research unresolved items now. Results are organized and saved so completed identities are not researched again."/>
+            <Button x:Name="Close" Content="CLOSE" Width="80" Height="42"/>
+          </StackPanel>
+          <Border Background="#21152B" BorderBrush="#7443A8" BorderThickness="1" CornerRadius="8" Padding="9" Margin="0,8,0,0">
+            <StackPanel Width="310">
+              <TextBlock x:Name="ActivityStatus" Text="READY" FontSize="11" FontWeight="Bold" Foreground="#86EFAC"/>
+              <TextBlock x:Name="ActivityDetail" Text="No scan or research is running." Foreground="#D8CBDD" FontSize="10.5" Margin="0,3,0,5" TextWrapping="Wrap"/>
+              <ProgressBar x:Name="ActivityProgress" Minimum="0" Maximum="100" Value="0" Height="7" IsIndeterminate="False"/>
+            </StackPanel>
+          </Border>
+        </StackPanel>
+      </Grid>
+    </Border>
+
+    <Border Grid.Row="1" Background="{StaticResource Panel}" BorderBrush="#6A35A8" BorderThickness="1" CornerRadius="12" Padding="8" Margin="0,0,0,12">
+      <UniformGrid Columns="4" Rows="2">
+        <Border Background="#202033" BorderBrush="#5B5F88" BorderThickness="1" CornerRadius="9" Padding="9" Margin="3"><StackPanel><TextBlock Text="SCANNED" Foreground="#C8C4DA" FontSize="10" FontWeight="Bold"/><TextBlock x:Name="ScannedCount" Text="--" FontSize="21" FontWeight="Bold"/></StackPanel></Border>
+        <Border Background="#3A321C" BorderBrush="#9F862A" BorderThickness="1" CornerRadius="9" Padding="9" Margin="3"><StackPanel><TextBlock Text="REVIEW" Foreground="#FDE68A" FontSize="10" FontWeight="Bold"/><TextBlock x:Name="ReviewCount" Text="--" FontSize="21" FontWeight="Bold"/></StackPanel></Border>
+        <Border Background="#29203B" BorderBrush="#7651A8" BorderThickness="1" CornerRadius="9" Padding="9" Margin="3"><StackPanel><TextBlock Text="RESEARCHING" Foreground="#CFA8FF" FontSize="10" FontWeight="Bold"/><TextBlock x:Name="ResearchingCount" Text="--" FontSize="21" FontWeight="Bold"/></StackPanel></Border>
+        <Border Background="#1B3325" BorderBrush="#3A8E57" BorderThickness="1" CornerRadius="9" Padding="9" Margin="3"><StackPanel><TextBlock Text="RESOLVED" Foreground="#86EFAC" FontSize="10" FontWeight="Bold"/><TextBlock x:Name="ResolvedCount" Text="--" FontSize="21" FontWeight="Bold"/></StackPanel></Border>
+        <Border Background="#29292D" BorderBrush="#67676F" BorderThickness="1" CornerRadius="9" Padding="9" Margin="3"><StackPanel><TextBlock Text="UNKNOWN" Foreground="#D1D5DB" FontSize="10" FontWeight="Bold"/><TextBlock x:Name="UnknownCount" Text="--" FontSize="21" FontWeight="Bold"/></StackPanel></Border>
+        <Border Background="#3A1F32" BorderBrush="#A34B80" BorderThickness="1" CornerRadius="9" Padding="9" Margin="3"><StackPanel><TextBlock Text="PROTECTED" Foreground="#FF9ECD" FontSize="10" FontWeight="Bold"/><TextBlock x:Name="ProtectedCount" Text="--" FontSize="21" FontWeight="Bold"/></StackPanel></Border>
+        <Border Background="#1C2938" BorderBrush="#4B6B8A" BorderThickness="1" CornerRadius="9" Padding="9" Margin="3"><StackPanel><TextBlock Text="CACHED" Foreground="#B7E3FF" FontSize="10" FontWeight="Bold"/><TextBlock x:Name="CachedCount" Text="--" FontSize="21" FontWeight="Bold"/></StackPanel></Border>
+        <Border Background="#3B2121" BorderBrush="#A85A5A" BorderThickness="1" CornerRadius="9" Padding="9" Margin="3"><StackPanel><TextBlock Text="ERRORS" Foreground="#FCA5A5" FontSize="10" FontWeight="Bold"/><TextBlock x:Name="ResearchErrorCount" Text="--" FontSize="21" FontWeight="Bold"/></StackPanel></Border>
+      </UniformGrid>
+    </Border>
+
+    <Border Grid.Row="2" Background="{StaticResource Panel}" BorderBrush="#6A35A8" BorderThickness="1" CornerRadius="12" Padding="9" Margin="0,0,0,12">
+      <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="210"/><ColumnDefinition Width="*"/><ColumnDefinition Width="250"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+        <ComboBox x:Name="Filter" Grid.Column="0" ToolTip="Choose the Intelligence view">
+          <ComboBoxItem Content="Overview"/><ComboBoxItem Content="Review Queue"/><ComboBoxItem Content="Needs Research"/><ComboBoxItem Content="Researching"/><ComboBoxItem Content="Research Errors"/><ComboBoxItem Content="Cached / Knowledge"/><ComboBoxItem Content="Organized"/><ComboBoxItem Content="Unknown"/><ComboBoxItem Content="Protected"/><ComboBoxItem Content="Games"/><ComboBoxItem Content="Apps"/><ComboBoxItem Content="Services"/><ComboBoxItem Content="Startup"/><ComboBoxItem Content="Drivers / Hardware"/><ComboBoxItem Content="Processes"/><ComboBoxItem Content="All Items"/>
+        </ComboBox>
+        <TextBox x:Name="Search" Grid.Column="1" Height="36" VerticalContentAlignment="Center" Margin="4" ToolTip="Search names, publishers, paths, categories, or research notes"/>
+        <TextBlock x:Name="ResearchProgress" Grid.Column="2" Text="Ready" Foreground="#CFA8FF" VerticalAlignment="Center" Margin="10,0" FontWeight="SemiBold"/>
+        <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center">
+          <Button x:Name="RefreshView" Content="↻ VIEW" Width="78" Height="32" Margin="4" ToolTip="Reload the saved Intelligence database and merge it with the current scan without starting a new scan."/>
+        </StackPanel>
+      </Grid>
+    </Border>
+
+    <Grid Grid.Row="3">
+      <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="370"/></Grid.ColumnDefinitions>
+      <Border Grid.Column="0" Background="{StaticResource Panel}" BorderBrush="#6A35A8" BorderThickness="1" CornerRadius="12" Padding="2" Margin="0,0,12,0">
+        <ListView x:Name="IntelligenceResults" Background="Transparent" BorderThickness="0" SelectionMode="Single"
+                  ScrollViewer.CanContentScroll="True" VirtualizingStackPanel.IsVirtualizing="True" VirtualizingStackPanel.VirtualizationMode="Recycling" ScrollViewer.IsDeferredScrollingEnabled="True">
+          <ListView.View><GridView>
+            <GridViewColumn Header="Item" DisplayMemberBinding="{Binding Name}" Width="235"/>
+            <GridViewColumn Header="Category" DisplayMemberBinding="{Binding Category}" Width="125"/>
+            <GridViewColumn Header="RAM" DisplayMemberBinding="{Binding Memory}" Width="78"/>
+            <GridViewColumn Header="Risk" DisplayMemberBinding="{Binding Risk}" Width="98"/>
+            <GridViewColumn Header="Research" DisplayMemberBinding="{Binding ResearchStatus}" Width="115"/>
+            <GridViewColumn Header="Placement" DisplayMemberBinding="{Binding Placement}" Width="155"/>
+            <GridViewColumn Header="Confidence" DisplayMemberBinding="{Binding ResearchConfidence}" Width="92"/>
+          </GridView></ListView.View>
+        </ListView>
+      </Border>
+
+      <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Margin="0,0,2,0">
+          <Border Background="{StaticResource PanelStrong}" BorderBrush="#6A35A8" BorderThickness="1" CornerRadius="12" Padding="13" Margin="0,0,0,10">
+            <StackPanel>
+              <TextBlock Text="SELECTED ITEM" FontSize="14" FontWeight="Bold" Foreground="{StaticResource PurpleText}"/>
+              <TextBlock x:Name="Details" Text="Select an item. YUMRAM will show its classification, research state, evidence, and recommended action here." Foreground="#FFF7FF" TextWrapping="Wrap" Margin="0,7,0,0"/>
+            </StackPanel>
+          </Border>
+          <Border Background="{StaticResource PanelStrong}" BorderBrush="#6A35A8" BorderThickness="1" CornerRadius="12" Padding="13" Margin="0,0,0,10">
+            <StackPanel>
+              <TextBlock Text="RESEARCH STATE" FontSize="14" FontWeight="Bold" Foreground="{StaticResource PurpleText}"/>
+              <TextBlock x:Name="SelectedResearch" Text="Not selected" Foreground="#FFF7FF" Margin="0,7,0,0" TextWrapping="Wrap"/>
+              <Button x:Name="ResearchSelected" Content="🧠 RESEARCH SELECTED" Height="34" Margin="0,10,0,0" ToolTip="Explicitly research only the selected record."/>
+            </StackPanel>
+          </Border>
+          <Border Background="{StaticResource PanelStrong}" BorderBrush="#6A35A8" BorderThickness="1" CornerRadius="12" Padding="13" Margin="0,0,0,10">
+            <StackPanel>
+              <TextBlock Text="MANUAL ORGANIZATION" FontSize="14" FontWeight="Bold" Foreground="#86EFAC"/>
+              <TextBlock Text="You control this decision. Selecting a category saves the override immediately and it is reused on future scans." Foreground="#D8CBDD" TextWrapping="Wrap" Margin="0,6,0,8"/>
+              <ComboBox x:Name="ManualCategory" Height="36" SelectedIndex="0">
+                <ComboBoxItem Content="Games / Gaming"/>
+                <ComboBoxItem Content="User Background Apps"/>
+                <ComboBoxItem Content="Identified Applications"/>
+                <ComboBoxItem Content="Security"/>
+                <ComboBoxItem Content="Drivers / Hardware"/>
+                <ComboBoxItem Content="Startup Inventory"/>
+                <ComboBoxItem Content="Review Queue"/>
+                <ComboBoxItem Content="Unknown / Quarantine"/>
+              </ComboBox>
+              <StackPanel Orientation="Horizontal" Margin="-4,7,0,0">
+                <Button x:Name="ApplyOrganization" Content="✓ APPLY &amp; SAVE" Height="36" Width="145" Margin="4" ToolTip="Save the selected manual category to the Intelligence database."/>
+                <Button x:Name="ClearOrganization" Content="↩ RESET" Height="36" Width="92" Margin="4" ToolTip="Remove the manual override and return the item to Review."/>
+              </StackPanel>
+              <TextBlock x:Name="ManualOrganizationStatus" Text="No manual override selected." Foreground="#BFAFC9" Margin="0,6,0,0" TextWrapping="Wrap"/>
+            </StackPanel>
+          </Border>
+          <Border Background="{StaticResource PanelStrong}" BorderBrush="#6A35A8" BorderThickness="1" CornerRadius="12" Padding="13" Margin="0,0,0,10">
+            <StackPanel>
+              <TextBlock Text="ACTION" FontSize="14" FontWeight="Bold" Foreground="{StaticResource PurpleText}"/>
+              <TextBlock x:Name="SelectedAction" Text="Select an item to see the recommended action." Foreground="#86EFAC" Margin="0,7,0,0" TextWrapping="Wrap"/>
+            </StackPanel>
+          </Border>
+          <Border Background="#1D1622" BorderBrush="#6A35A8" BorderThickness="1" CornerRadius="12" Padding="13">
+            <StackPanel>
+              <TextBlock Text="HOW INTELLIGENCE WORKS" FontSize="14" FontWeight="Bold" Foreground="#86EFAC"/>
+              <TextBlock Text="RUN SCAN builds the live inventory. RUN RESEARCH investigates unresolved identities. Local evidence is preferred before online corroboration. You can manually organize any record at any time. Manual organization is persisted and reused on future scans. The database view is separate from scanning, so saved records remain visible even after a scan finishes." Foreground="#D8CBDD" TextWrapping="Wrap" Margin="0,7,0,0"/>
+              <TextBlock x:Name="Summary" Text="Saved knowledge refreshes live. Use VIEW to reload the database without scanning." Foreground="#FFF7FF" TextWrapping="Wrap" Margin="0,12,0,0"/>
+            </StackPanel>
+          </Border>
+        </StackPanel>
+      </ScrollViewer>
+    </Grid>
+
+    <DockPanel Grid.Row="4" Margin="0,10,0,0">
+      <TextBlock x:Name="LastScan" Text="Not scanned yet" Foreground="#BFAFC9"/>
+      <TextBlock x:Name="DatabaseCount" DockPanel.Dock="Right" Text="0 saved records" Foreground="#BFAFC9"/>
+    </DockPanel>
+  </Grid>
+</Window>

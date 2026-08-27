@@ -1,0 +1,100 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Title="&#x2699; YUMRAM Settings" Width="980" Height="900" MinWidth="900" MinHeight="720" WindowStartupLocation="CenterOwner" Background="#180D20" Foreground="#FFF7FF">
+  <Window.Resources><Style TargetType="TextBox"><Setter Property="Background" Value="#24152F"/><Setter Property="Foreground" Value="#FFF7FF"/><Setter Property="BorderBrush" Value="#6A35A8"/><Setter Property="Padding" Value="8,4"/><Setter Property="FontSize" Value="13"/></Style><Style TargetType="CheckBox"><Setter Property="Foreground" Value="#FFF7FF"/><Setter Property="Margin" Value="0,4,0,4"/></Style><Style TargetType="ComboBox"><Setter Property="Background" Value="#321B42"/><Setter Property="Foreground" Value="#FFF7FF"/><Setter Property="BorderBrush" Value="#9B5DE5"/><Setter Property="Margin" Value="0,4,0,4"/><Setter Property="Height" Value="34"/><Setter Property="Padding" Value="6"/><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ComboBox"><Grid><Border Background="#321B42" BorderBrush="#9B5DE5" BorderThickness="1" CornerRadius="7"><ContentPresenter Margin="9,0,30,0" VerticalAlignment="Center" Content="{TemplateBinding SelectionBoxItem}" TextElement.Foreground="#FFF7FF"/></Border><ToggleButton Background="Transparent" BorderThickness="0" Focusable="False" IsChecked="{Binding IsDropDownOpen,Mode=TwoWay,RelativeSource={RelativeSource TemplatedParent}}"><ToggleButton.Template><ControlTemplate TargetType="ToggleButton"><Border Background="Transparent"/></ControlTemplate></ToggleButton.Template></ToggleButton><Path HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,10,0" Fill="#CFA8FF" Data="M 0 0 L 8 0 L 4 5 Z"/><Popup x:Name="PART_Popup" Placement="Bottom" PlacementTarget="{Binding RelativeSource={RelativeSource TemplatedParent}}" IsOpen="{TemplateBinding IsDropDownOpen}" AllowsTransparency="True"><Border Background="#24152F" BorderBrush="#9B5DE5" BorderThickness="1" CornerRadius="7" Padding="4" MinWidth="{Binding ActualWidth,RelativeSource={RelativeSource TemplatedParent}}"><ScrollViewer CanContentScroll="False" MaxHeight="240"><ItemsPresenter/></ScrollViewer></Border></Popup></Grid></ControlTemplate></Setter.Value></Setter></Style><Style TargetType="ComboBoxItem"><Setter Property="Background" Value="#321B42"/><Setter Property="Foreground" Value="#FFF7FF"/><Setter Property="Padding" Value="8,6"/><Setter Property="TextElement.Foreground" Value="#FFF7FF"/><Style.Triggers><Trigger Property="IsSelected" Value="True"><Setter Property="Background" Value="#6A35A8"/><Setter Property="Foreground" Value="#FFFFFF"/><Setter Property="TextElement.Foreground" Value="#FFFFFF"/></Trigger><Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="#9B5DE5"/><Setter Property="Foreground" Value="#FFFFFF"/><Setter Property="TextElement.Foreground" Value="#FFFFFF"/></Trigger></Style.Triggers></Style></Window.Resources>
+  <Grid Margin="16">
+    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+    <StackPanel Grid.Row="0">
+      <TextBlock Text="&#x2699; YUMRAM Settings" FontSize="23" FontWeight="Bold" Foreground="#CFA8FF"/>
+      <TextBlock Text="Tune monitoring, memory pressure, game behavior, cleanup, and scanner behavior. Changes are saved locally." Foreground="#BFAFC9" TextWrapping="Wrap" Margin="0,8,0,16" FontSize="12.5"/>
+    </StackPanel>
+    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" CanContentScroll="False">
+      <StackPanel>
+        <GroupBox Header="Memory &amp; Cleanup" Foreground="#CFA8FF" Margin="0,0,0,10">
+          <Grid Margin="10">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="330"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+            <Grid.RowDefinitions><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
+            <TextBlock Grid.Row="0" Text="Minimum Available RAM (GB)" VerticalAlignment="Center"/>
+            <TextBox x:Name="MinimumAvailable" Grid.Row="0" Grid.Column="1" Height="32"/>
+            <TextBlock Grid.Row="1" Text="Cleanup Target (GB) — same as Minimum Available" VerticalAlignment="Center" Margin="0,8,0,0"/>
+            <TextBox x:Name="CleanupTarget" Grid.Row="1" Grid.Column="1" Height="32" Margin="0,8,0,0" IsReadOnly="True" ToolTip="Compatibility display. YUMRAM uses the Minimum Available RAM target as the single source of truth."/>
+            <TextBlock Grid.Row="2" Text="Target Hysteresis (GB)" VerticalAlignment="Center" Margin="0,8,0,0"/>
+            <TextBox x:Name="Hysteresis" Grid.Row="2" Grid.Column="1" Height="32" Margin="0,8,0,0"/>
+            <TextBlock Grid.Row="3" Text="Minimum Clean Interval (seconds)" VerticalAlignment="Center" Margin="0,8,0,0"/>
+            <TextBox x:Name="CleanInterval" Grid.Row="3" Grid.Column="1" Height="32" Margin="0,8,0,0"/>
+            <TextBlock Grid.Row="4" Text="Process Cooldown (seconds)" VerticalAlignment="Center" Margin="0,8,0,0"/>
+            <TextBox x:Name="ProcessCooldown" Grid.Row="4" Grid.Column="1" Height="32" Margin="0,8,0,0"/>
+            <ComboBox x:Name="Mode" Grid.Row="5" Grid.Column="1" Height="34" Margin="0,8,0,0"><ComboBoxItem Content="Safe — Minimal intervention" Tag="Safe"/><ComboBoxItem Content="Balanced — Recommended" Tag="Balanced"/><ComboBoxItem Content="Aggressive — Maximum reclaim" Tag="Aggressive"/></ComboBox>
+            <TextBlock Grid.Row="5" Text="Memory Mode" VerticalAlignment="Center" Margin="0,8,0,0"/>
+          </Grid>
+        </GroupBox>
+        <GroupBox Header="Telemetry &amp; Sampling" Foreground="#CFA8FF" Margin="0,0,0,10">
+          <Grid Margin="10">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="330"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+            <Grid.RowDefinitions><RowDefinition/><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
+            <TextBlock Text="Core RAM sampling (seconds)" VerticalAlignment="Center"/>
+            <TextBox x:Name="TelemetryInterval" Grid.Column="1" Height="32"/>
+            <TextBlock Grid.Row="1" Text="GPU sampling (seconds)" VerticalAlignment="Center" Margin="0,8,0,0"/>
+            <TextBox x:Name="GpuInterval" Grid.Row="1" Grid.Column="1" Height="32" Margin="0,8,0,0"/>
+            <TextBlock Grid.Row="2" Text="Game detection (seconds)" VerticalAlignment="Center" Margin="0,8,0,0"/>
+            <TextBox x:Name="GameInterval" Grid.Row="2" Grid.Column="1" Height="32" Margin="0,8,0,0"/>
+          </Grid>
+        </GroupBox>
+        <GroupBox Header="Game Behavior" Foreground="#CFA8FF" Margin="0,0,0,10">
+          <Grid Margin="10">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="330"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+            <Grid.RowDefinitions><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
+            <CheckBox x:Name="AutoDetectGames" Grid.ColumnSpan="2" Content="Detect games automatically"/>
+            <CheckBox x:Name="ProtectGame" Grid.Row="1" Grid.ColumnSpan="2" Content="Protect detected game from cleanup" Margin="0,8,0,0"/>
+            <CheckBox x:Name="AutoCleanOnGameStart" Grid.Row="2" Grid.ColumnSpan="2" Content="Clean when a game starts" Margin="0,8,0,0"/>
+            <ComboBox x:Name="GamePriority" Grid.Row="3" Grid.Column="1" Height="34" Margin="0,8,0,0"><ComboBoxItem Content="Keep Existing"/><ComboBoxItem Content="Normal (Default)"/><ComboBoxItem Content="Above Normal (Game Preference)"/><ComboBoxItem Content="High (Advanced)"/></ComboBox>
+            <TextBlock Grid.Row="3" Text="Game CPU scheduling preference" VerticalAlignment="Center" Margin="0,8,0,0"/>
+          </Grid>
+        </GroupBox>
+        <GroupBox Header="Pressure &amp; Pass Limits" Foreground="#CFA8FF" Margin="0,0,0,10">
+          <Grid Margin="10">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="330"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+            <Grid.RowDefinitions><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
+            <TextBlock Text="Safe pressure threshold (%)"/>
+            <TextBox x:Name="SafePressure" Grid.Column="1" Height="32"/>
+            <TextBlock Grid.Row="1" Text="Balanced pressure threshold (%)" VerticalAlignment="Center" Margin="0,8,0,0"/>
+            <TextBox x:Name="BalancedPressure" Grid.Row="1" Grid.Column="1" Height="32" Margin="0,8,0,0"/>
+            <TextBlock Grid.Row="2" Text="Aggressive pressure threshold (%)" VerticalAlignment="Center" Margin="0,8,0,0"/>
+            <TextBox x:Name="AggressivePressure" Grid.Row="2" Grid.Column="1" Height="32" Margin="0,8,0,0"/>
+            <TextBlock Grid.Row="3" Text="Safe cleanup processes per pass" VerticalAlignment="Center" Margin="0,8,0,0" TextWrapping="Wrap"/>
+            <TextBox x:Name="SafePass" Grid.Row="3" Grid.Column="1" Height="32" Margin="0,8,0,0"/>
+            <TextBlock Grid.Row="4" Text="Balanced cleanup processes per pass" VerticalAlignment="Center" Margin="0,8,0,0" TextWrapping="Wrap"/>
+            <TextBox x:Name="BalancedPass" Grid.Row="4" Grid.Column="1" Height="32" Margin="0,8,0,0"/>
+            <TextBlock Grid.Row="5" Text="Aggressive cleanup processes per pass" VerticalAlignment="Center" Margin="0,8,0,0" TextWrapping="Wrap"/>
+            <TextBox x:Name="AggressivePass" Grid.Row="5" Grid.Column="1" Height="32" Margin="0,8,0,0"/>
+          </Grid>
+        </GroupBox>
+        <GroupBox Header="Optional Background Cleanup" Foreground="#CFA8FF" Margin="0,0,0,10">
+          <StackPanel Margin="10">
+            <CheckBox x:Name="EnableOptionalBackground" Content="Allow approved optional background-app cleanup"/>
+            <CheckBox x:Name="EnableOptionalServices" Content="Allow approved optional-service cleanup" Margin="0,8,0,0"/>
+            <CheckBox x:Name="StartMonitoringAutomatically" Content="Start monitoring automatically" Margin="0,8,0,0"/>
+          </StackPanel>
+        </GroupBox>
+        <GroupBox Header="Scanner" Foreground="#CFA8FF" Margin="0,0,0,14">
+          <Grid Margin="10">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="330"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+            <Grid.RowDefinitions><RowDefinition Height="42"/><RowDefinition Height="42"/></Grid.RowDefinitions>
+            <TextBlock Grid.Row="0" Text="Maximum scan rows" VerticalAlignment="Center" Margin="0,0,10,0"/>
+            <TextBox x:Name="ScannerMaxItems" Grid.Row="0" Grid.Column="1" Height="32"/>
+            <CheckBox x:Name="EnableSystemScanner" Grid.Row="1" Grid.ColumnSpan="2" Content="Enable system inventory scanning" VerticalAlignment="Center" Margin="0,8,0,0"/>
+          </Grid>
+        </GroupBox>
+      </StackPanel>
+    </ScrollViewer>
+    <Grid Grid.Row="2" MinHeight="92" Margin="0,10,0,0">
+      <Grid.RowDefinitions><RowDefinition Height="Auto" MinHeight="34"/><RowDefinition Height="48"/></Grid.RowDefinitions>
+      <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+      <Border Grid.Row="0" Grid.ColumnSpan="2" Background="#201126" BorderBrush="#6A35A8" BorderThickness="1" CornerRadius="7" Padding="8,4" Margin="0,0,0,8"><TextBlock x:Name="Validation" Foreground="#FDE68A" TextWrapping="Wrap" VerticalAlignment="Center" MaxHeight="44"/></Border>
+      <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
+        <Button x:Name="Reset" Content="Reset Defaults" Width="120" Margin="0,0,8,0"/>
+        <Button x:Name="Apply" Content="Apply" Width="90" Margin="0,0,8,0"/>
+        <Button x:Name="Close" Content="Close" Width="90"/>
+      </StackPanel>
+    </Grid>
+  </Grid>
+</Window>
