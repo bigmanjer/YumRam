@@ -390,11 +390,3 @@ Before opening a pull request:
 YUMRAM is a system-management utility that can affect process working sets and, when explicitly configured, optional background applications/services.
 
 Use it at your own discretion. Review cleanup previews, protection settings, and optional cleanup configuration before enabling automatic behavior. The project does not guarantee improved performance on every system.
-
-## Author / project links
-
-Add your project information here before publishing:
-
-- GitHub: `https://github.com/<your-username>/<your-repository>`
-- Issues: `https://github.com/<your-username>/<your-repository>/issues`
-- Releases: `https://github.com/<your-username>/<your-repository>/releases`
