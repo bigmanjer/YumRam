@@ -106,7 +106,7 @@ function Get-YumTrimPlan {
         $allowedMB=[math]::Min([double]$MaxTrimMBPerPass,$gapMB+$overshootMB)
         if(($plannedMB + $wsMB) -gt $allowedMB){continue}
         $already=$false
-        foreach($x in @($selected)){
+        foreach($x in $selected.ToArray()){
             try { if([int]$x.Process.Id -eq [int]$entry.Candidate.Process.Id){$already=$true;break} } catch {}
         }
         if($already){continue}
@@ -136,7 +136,7 @@ function Get-YumIntelligentServiceCandidates {
             [void]$rows.Add([pscustomobject]@{Service=$svc;Name=$svc.Name;DisplayName=$svc.DisplayName;ExecutablePath=$exe;Company=$company;Product=$product;Reason='Manual-start third-party service; no running dependents; not core/security/driver/game vendor.'})
         }
     }catch{}
-    @($rows)
+    $rows.ToArray()
 }
 function Invoke-YumIntelligentServiceStops {
     param([double]$AvailableGB,[double]$TargetGB)

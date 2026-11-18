@@ -32,6 +32,9 @@ function Get-YumSafePropertyValue {
 }
 
 function Get-YumMemoryReclaimSnapshot {
+    # -Fast skips the WMI performance-counter query (100-500 ms). Use it for per-step
+    # measurements and UI refreshes; the native calls alone give Available/Cache/Commit.
+    param([switch]$Fast)
     $result=[ordered]@{
         Timestamp=Get-Date;TotalGB=0.0;AvailableGB=0.0;UsedGB=0.0;UsedPercent=0.0
         CommitGB=$null;CommitLimitGB=$null;CommitPercent=$null;CacheGB=$null
@@ -68,6 +71,10 @@ function Get-YumMemoryReclaimSnapshot {
         }
     } catch {
         if([string]::IsNullOrWhiteSpace([string]$result.ErrorCategory)){$result.ErrorCategory='GetPerformanceInfo';$result.ErrorMessage=$_.Exception.Message}
+    }
+    if($Fast){
+        if($result.MemoryStatusOk){$result.CollectionOk=$true}
+        return [pscustomobject]$result
     }
     try {
         $mem=Get-CimInstance Win32_PerfFormattedData_PerfOS_Memory -ErrorAction Stop
@@ -234,7 +241,7 @@ function Invoke-YumNativeMemoryCommand {
             if(-not $priv.Success){return [pscustomobject]@{Success=$false;Command=$Command;Status=$priv.Error;Reason=('Required privilege was not enabled (Win32 {0}).' -f $priv.Error);ErrorCategory='Privilege'}}
         }
         $r=Invoke-YumSetSystemMemoryListCommand -Command $map[$Command]
-        $reason=if($r.Success){'Native memory-list command completed.'}else{'NtSetSystemInformation returned NTSTATUS 0x{0:X8}.' -f [uint32]$r.Status}
+        $reason=if($r.Success){'Native memory-list command completed.'}else{'NtSetSystemInformation returned NTSTATUS 0x{0:X8}.' -f [BitConverter]::ToUInt32([BitConverter]::GetBytes([int32]$r.Status),0)}
         [pscustomobject]@{Success=$r.Success;Command=$Command;Status=$r.Status;Reason=$reason;ErrorCategory=if($r.Success){''}else{'NativeMemoryCommand'}}
     } catch {
         [pscustomobject]@{Success=$false;Command=$Command;Status=-1;Reason=$_.Exception.Message;ErrorCategory='NativeMemoryCommand'}
@@ -242,28 +249,43 @@ function Invoke-YumNativeMemoryCommand {
 }
 
 function Start-YumReclaimEffectivenessMonitor {
+    # 5.3.0: the 5.2.90 System.Timers.Timer verifier never ran under Windows PowerShell 5.1.
+    # Verification is now sampled lazily by Update-YumReclaimVerification, which the main UI
+    # timer and the RAM Reclaim Center refresh call; no background timer is needed.
     param([Parameter(Mandatory)]$Result)
     try {
-        if($null -ne $script:Yum.ReclaimVerificationTimer){try{$script:Yum.ReclaimVerificationTimer.Stop();$script:Yum.ReclaimVerificationTimer.Dispose()}catch{};$script:Yum.ReclaimVerificationTimer=$null}
         $Result | Add-Member -NotePropertyName Verification5sGB -NotePropertyValue $null -Force
         $Result | Add-Member -NotePropertyName Verification15sGB -NotePropertyValue $null -Force
         $Result | Add-Member -NotePropertyName Verification30sGB -NotePropertyValue $null -Force
         $Result | Add-Member -NotePropertyName RetainedGainGB -NotePropertyValue $null -Force
         $Result | Add-Member -NotePropertyName VerificationStatus -NotePropertyValue 'Pending' -Force
         $Result | Add-Member -NotePropertyName EffectivenessRatio -NotePropertyValue $null -Force
-        $started=Get-Date;$before=[double]$Result.Before.AvailableGB
-        $timer=New-Object System.Timers.Timer
-        $timer.Interval=1000;$timer.AutoReset=$true
-        $timer.Add_Elapsed({
-            try {
-                $age=((Get-Date)-$started).TotalSeconds
-                if($age -ge 4.5 -and $null -eq $Result.Verification5sGB){$s=Get-YumMemoryReclaimSnapshot;$Result.Verification5sGB=[math]::Max(0,[double]$s.AvailableGB-$before);$Result.VerificationStatus='5s measured'}
-                if($age -ge 14.5 -and $null -eq $Result.Verification15sGB){$s=Get-YumMemoryReclaimSnapshot;$Result.Verification15sGB=[math]::Max(0,[double]$s.AvailableGB-$before);$Result.VerificationStatus='15s measured'}
-                if($age -ge 29.5 -and $null -eq $Result.Verification30sGB){$s=Get-YumMemoryReclaimSnapshot;$Result.Verification30sGB=[math]::Max(0,[double]$s.AvailableGB-$before);$Result.RetainedGainGB=$Result.Verification30sGB;$Result.EffectivenessRatio=if([double]$Result.WorkingSetReducedMB -gt 0){[math]::Round((([double]$Result.RetainedGainGB*1024)/[double]$Result.WorkingSetReducedMB),3)}else{$null};$Result.VerificationStatus='Complete';$timer.Stop();$timer.Dispose();if($script:Yum.ReclaimVerificationTimer -eq $timer){$script:Yum.ReclaimVerificationTimer=$null}}
-            } catch {try{$Result.VerificationStatus='Verification error: '+$_.Exception.Message}catch{}}
-        })
-        $script:Yum.ReclaimVerificationTimer=$timer;$timer.Start()
+        $Result | Add-Member -NotePropertyName VerificationStartedUtc -NotePropertyValue ([datetime]::UtcNow) -Force
     } catch {try{$Result.VerificationStatus='Verification unavailable'}catch{}}
+}
+
+function Update-YumReclaimVerification {
+    param($Result=$script:Yum.LastReclaim)
+    try {
+        if($null -eq $Result -or $null -eq $Result.PSObject.Properties['VerificationStartedUtc']){return $false}
+        if([string]$Result.VerificationStatus -eq 'Complete'){return $false}
+        $age=([datetime]::UtcNow-[datetime]$Result.VerificationStartedUtc).TotalSeconds
+        $before=[double]$Result.Before.AvailableGB
+        $changed=$false
+        $sample={ [math]::Max(0.0,[double](Get-YumMemoryReclaimSnapshot -Fast).AvailableGB-$before) }
+        if($age -ge 5 -and $null -eq $Result.Verification5sGB){$Result.Verification5sGB=& $sample;$Result.VerificationStatus='5s measured';$changed=$true}
+        if($age -ge 15 -and $null -eq $Result.Verification15sGB){$Result.Verification15sGB=& $sample;$Result.VerificationStatus='15s measured';$changed=$true}
+        if($age -ge 30 -and $null -eq $Result.Verification30sGB){
+            $Result.Verification30sGB=& $sample
+            $Result.RetainedGainGB=$Result.Verification30sGB
+            $Result.EffectivenessRatio=if([double]$Result.WorkingSetReducedMB -gt 0){[math]::Round((([double]$Result.RetainedGainGB*1024)/[double]$Result.WorkingSetReducedMB),3)}else{$null}
+            $Result.VerificationStatus='Complete'
+            $changed=$true
+            try{Write-YumLog ('RAM reclaim verification: retained +{0:N2} GB after 30s (5s: +{1:N2}, 15s: +{2:N2}).' -f $Result.RetainedGainGB,$Result.Verification5sGB,$Result.Verification15sGB)}catch{}
+        }
+        if($changed){$script:Yum.ReclaimResultVersion++}
+        return $changed
+    } catch {try{$Result.VerificationStatus='Verification error: '+$_.Exception.Message}catch{};return $false}
 }
 
 function Invoke-YumReclaimProcessPass {
@@ -286,12 +308,12 @@ function Invoke-YumReclaimProcessPass {
         try {
             if(Test-YumProtectedProcess -Process $p -ForegroundPid $fg -GamePid $game){continue}
             if(-not $AllowActive -and [double]$candidate.CPU -ge 5.0){continue}
-            $systemBefore=Get-YumMemoryReclaimSnapshot
+            $systemBefore=Get-YumMemoryReclaimSnapshot -Fast
             $start=[int64]$p.WorkingSet64
             $r=Invoke-YumEmptyWorkingSet -Process $p
             $after=[int64]$start
             try{$p.Refresh();$after=[int64]$p.WorkingSet64}catch{}
-            $systemAfter=Get-YumMemoryReclaimSnapshot
+            $systemAfter=Get-YumMemoryReclaimSnapshot -Fast
             $reduced=[math]::Max(0,$start-$after)
             $availableGain=[math]::Max(0.0,[double]$systemAfter.AvailableGB-[double]$systemBefore.AvailableGB)
             if($r.Success){$used++}
@@ -305,8 +327,9 @@ function Invoke-YumReclaimProcessPass {
     }
     $afterSnap=Get-YumMemoryReclaimSnapshot
     $actualAvailable=[math]::Max(0.0,$afterSnap.AvailableGB-$before.AvailableGB)
-    $actualWorkingSet=(@($rows)|Measure-Object ReducedMB -Sum).Sum
-    if($null -eq $actualWorkingSet){$actualWorkingSet=0}
+    # Plain loop: Measure-Object on an empty pipeline has no .Sum under StrictMode.
+    $actualWorkingSet=0.0
+    foreach($row in $rows.ToArray()){try{$actualWorkingSet+=[double]$row.ReducedMB}catch{}}
     [pscustomobject]@{Before=$before;After=$afterSnap;Candidates=$candidates;Rows=$rows.ToArray();Actions=$used;WorkingSetReducedMB=[double]$actualWorkingSet;AvailableGainedGB=$actualAvailable}
 }
 
@@ -331,10 +354,10 @@ function Invoke-YumMemoryReclaim {
         # continue to full standby/modified-page reclamation.
         $runMemoryArea = {
             param([string]$Command,[string]$Label)
-            $areaBefore=Get-YumMemoryReclaimSnapshot
+            $areaBefore=Get-YumMemoryReclaimSnapshot -Fast
             $r=Invoke-YumNativeMemoryCommand -Command $Command
             Start-Sleep -Milliseconds 80
-            $areaAfter=Get-YumMemoryReclaimSnapshot
+            $areaAfter=Get-YumMemoryReclaimSnapshot -Fast
             $gain=[math]::Max(0.0,[double]$areaAfter.AvailableGB-[double]$areaBefore.AvailableGB)
             [void]$rows.Add([pscustomobject]@{Type='Memory Area';PID='—';Process=$Label;BeforeMB=[math]::Round([double]$areaBefore.AvailableGB*1024,0);AfterMB=[math]::Round([double]$areaAfter.AvailableGB*1024,0);ReducedMB=[math]::Round($gain*1024,0);Action='Purge';Result=if($r.Success){'Completed'}else{'Failed'};Reason=$r.Reason;CPU='—';Score=0})
             if(-not $r.Success){[void]$notes.Add(('{0} was unavailable or denied.' -f $Label))}
@@ -343,7 +366,10 @@ function Invoke-YumMemoryReclaim {
         if($Mode -eq 'Deep' -and [bool]$script:Yum.Config.ReclaimStandbyList){ & $runMemoryArea 'PurgeStandby' 'Standby list' }
         if($Mode -eq 'Deep' -and [bool]$script:Yum.Config.ReclaimModifiedPageList -and $Force -and -not $gameActive){ & $runMemoryArea 'FlushModifiedList' 'Modified page list' }
 
-        $processPass=Invoke-YumReclaimProcessPass -TopN (if($Mode -eq 'Deep'){16}else{10}) -MaxActions ([int]$script:Yum.Config.ReclaimMaxProcessActions) -MinimumWorkingSetMB ([int]$script:Yum.Config.ReclaimMinimumWorkingSetMB) -AllowActive:($Force -and $Mode -eq 'Deep')
+        # 5.3.0: was "-TopN (if(...){16}else{10})" which PowerShell runs as a command named 'if',
+        # so every Free RAM / Deep Reclaim threw here before trimming any process.
+        $topN=if($Mode -eq 'Deep'){16}else{10}
+        $processPass=Invoke-YumReclaimProcessPass -TopN $topN -MaxActions ([int]$script:Yum.Config.ReclaimMaxProcessActions) -MinimumWorkingSetMB ([int]$script:Yum.Config.ReclaimMinimumWorkingSetMB) -AllowActive:($Force -and $Mode -eq 'Deep')
         foreach($r in @($processPass.Rows)){[void]$rows.Add($r)}
 
         # A manual deep reclaim can optionally clear system working sets last.
@@ -359,7 +385,7 @@ function Invoke-YumMemoryReclaim {
         $wsReduced=[double]$processPass.WorkingSetReducedMB
         $success=($availableGain -gt 0.0 -or $wsReduced -gt 0.0 -or @($rows|Where-Object{$_.Result -eq 'Completed'}).Count -gt 0)
         $result=[pscustomobject]@{
-            Success=$success;Skipped=$false;Mode=$Mode;Before=$before;After=$after;AvailableGainGB=$availableGain;WorkingSetReducedMB=$wsReduced;Actions=@($rows).Count;Rows=$rows.ToArray();Notes=$notes.ToArray();Timestamp=Get-Date
+            Success=$success;Skipped=$false;Mode=$Mode;Before=$before;After=$after;AvailableGainGB=$availableGain;WorkingSetReducedMB=$wsReduced;Actions=$rows.Count;Rows=$rows.ToArray();Notes=$notes.ToArray();Timestamp=Get-Date
             Summary=('Available RAM {0:N2} → {1:N2} GB (+{2:N2} GB). Process working sets reduced {3:N0} MB. {4} actions completed.' -f $before.AvailableGB,$after.AvailableGB,$availableGain,$wsReduced,(@($rows|Where-Object{$_.Result -eq 'Completed'}).Count))
         }
         try {

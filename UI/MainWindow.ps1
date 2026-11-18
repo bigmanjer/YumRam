@@ -27,7 +27,7 @@ function Start-YumElevated {
         return $false
     }catch{
         Write-YumLogException -Context 'Elevation launch failed' -Exception $_.Exception
-        try{[System.Windows.MessageBox]::Show(('YUMRAM could not start the elevated instance.`n`n{0}' -f $_.Exception.Message),'YUMRAM - Startup Error','OK','Error')|Out-Null}catch{}
+        try{[System.Windows.MessageBox]::Show(("YUMRAM could not start the elevated instance.`n`n{0}" -f $_.Exception.Message),'YUMRAM - Startup Error','OK','Error')|Out-Null}catch{}
         return $false
     }
 }
@@ -233,14 +233,14 @@ function Start-YumApplicationUi {
             }
         }
     })
-    $script:Yum.Ui.PriorityBox.Add_SelectionChanged({if(-not $script:Yum.SuppressUiEvents -and $script:Yum.Ui.PriorityBox.SelectedItem){$choice=[string]$script:Yum.Ui.PriorityBox.SelectedItem.Content;if($choice -like 'High*'){$answer=[System.Windows.MessageBox]::Show($script:Yum.Window,'High priority gives the game more CPU scheduling preference. It does not increase RAM or GPU capacity, and Microsoft recommends using High with care because a CPU-bound high-priority process can consume most available CPU time.`n`nApply High priority to detected games?','YUMRAM - Game Priority','YesNo','Warning');if($answer -ne [System.Windows.MessageBoxResult]::Yes){$script:Yum.SuppressUiEvents=$true;try{$script:Yum.Ui.PriorityBox.SelectedIndex=0}catch{}finally{$script:Yum.SuppressUiEvents=$false};Update-YumConfigValue -Name GamePriority -Value 'KeepExisting';return}}$stored=switch -Regex ($choice){'^Keep Existing'{'KeepExisting'};'^Above Normal'{'AboveNormal'};'^High'{'High'};default{'Normal'}};Update-YumConfigValue -Name GamePriority -Value $stored}})
+    $script:Yum.Ui.PriorityBox.Add_SelectionChanged({if(-not $script:Yum.SuppressUiEvents -and $script:Yum.Ui.PriorityBox.SelectedItem){$choice=[string]$script:Yum.Ui.PriorityBox.SelectedItem.Content;if($choice -like 'High*'){$answer=[System.Windows.MessageBox]::Show($script:Yum.Window,"High priority gives the game more CPU scheduling preference. It does not increase RAM or GPU capacity, and Microsoft recommends using High with care because a CPU-bound high-priority process can consume most available CPU time.`n`nApply High priority to detected games?",'YUMRAM - Game Priority','YesNo','Warning');if($answer -ne [System.Windows.MessageBoxResult]::Yes){$script:Yum.SuppressUiEvents=$true;try{$script:Yum.Ui.PriorityBox.SelectedIndex=0}catch{}finally{$script:Yum.SuppressUiEvents=$false};Update-YumConfigValue -Name GamePriority -Value 'KeepExisting';return}}$stored=switch -Regex ($choice){'^Keep Existing'{'KeepExisting'};'^Above Normal'{'AboveNormal'};'^High'{'High'};default{'Normal'}};Update-YumConfigValue -Name GamePriority -Value $stored}})
     $script:Yum.Ui.AutoGame.Add_Click({if(-not $script:Yum.SuppressUiEvents){Update-YumConfigValue -Name AutoDetectGames -Value ([bool]$script:Yum.Ui.AutoGame.IsChecked)}})
     $script:Yum.Ui.ProtectGame.Add_Click({if(-not $script:Yum.SuppressUiEvents){Update-YumConfigValue -Name ProtectGame -Value ([bool]$script:Yum.Ui.ProtectGame.IsChecked)}})
     $script:Yum.Ui.AutoClean.Add_Click({if(-not $script:Yum.SuppressUiEvents){Update-YumConfigValue -Name AutoCleanOnGameStart -Value ([bool]$script:Yum.Ui.AutoClean.IsChecked)}})
     $script:Yum.Ui.Intelligence.Add_Click({try{Show-YumIntelligence}catch{Write-YumLogException -Context 'Intelligence launch failed' -Exception $_.Exception}});$script:Yum.Ui.Settings.Add_Click({Show-YumSettings});$script:Yum.Ui.About.Add_Click({Show-YumAbout})
     $script:Yum.Window.Add_SizeChanged({Update-YumGraph})
     $script:Yum.Window.Add_Closed({$script:Yum.StopRequested=$true;Stop-YumMonitoring;try{Stop-YumControllerWorker}catch{};try{if($null -ne $script:Yum.UiTimer){$script:Yum.UiTimer.Stop()}}catch{};Restart-YumOptionalServices;Write-YumLog 'YUMRAM closed.';Stop-YumSingleInstance})
-    $timer=New-Object System.Windows.Threading.DispatcherTimer;$timer.Interval=[TimeSpan]::FromSeconds([double]$script:Yum.Config.UIRefreshIntervalSeconds);$timer.Add_Tick({Update-YumUiFromSnapshot;Update-YumCleanupResultUI});$script:Yum.UiTimer=$timer;$timer.Start()
+    $timer=New-Object System.Windows.Threading.DispatcherTimer;$timer.Interval=[TimeSpan]::FromSeconds([double]$script:Yum.Config.UIRefreshIntervalSeconds);$timer.Add_Tick({Update-YumUiFromSnapshot;Update-YumCleanupResultUI;try{[void](Update-YumReclaimVerification)}catch{}});$script:Yum.UiTimer=$timer;$timer.Start()
     try{$initialMemory=Get-YumMemoryTelemetry;if($null -ne $initialMemory){Update-YumSnapshot -Changes @{Memory=$initialMemory;CPU=0.0;GPU3D=0.0;ForegroundProcessId=0;Game=[pscustomobject]@{ProcessId=0;ProcessName=$null;Detected=$false}} -CoreTelemetry}}catch{Write-YumLogException -Context 'Initial memory telemetry failed' -Exception $_.Exception}
     Update-YumUiFromSnapshot
     # The controller worker lives for the whole session so queued requests (safe optimization,

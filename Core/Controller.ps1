@@ -1,4 +1,4 @@
-#requires -Version 5.1
+﻿#requires -Version 5.1
 <#
 YUMRAM background controller worker (5.3.0).
 

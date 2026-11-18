@@ -284,7 +284,7 @@ function Show-YumSystemScan {
         Start-YumSystemScanAsync -State $state
     } catch {
         Write-YumLogException -Context 'System inventory dialog failed' -Exception $_.Exception
-        Show-YumMessage -Message ('The system inventory could not be opened.`n`n{0}' -f $_.Exception.Message) -Title 'YUMRAM - Scan Error' -Buttons 'OK' -Icon 'Error'
+        Show-YumMessage -Message ("The system inventory could not be opened.`n`n{0}" -f $_.Exception.Message) -Title 'YUMRAM - Scan Error' -Buttons 'OK' -Icon 'Error'
     }
 }
 
@@ -761,7 +761,7 @@ function Show-YumOrganizationMenuForItem {
                 $t.Item|Add-Member -NotePropertyName ManualOverride -NotePropertyValue $true -Force
                 $t.Item|Add-Member -NotePropertyName ManualOrganizationUpdated -NotePropertyValue $org.Updated -Force
                 if($t.Mode -eq 'SystemScan'){try{Update-YumSystemScanList -State $t.State}catch{}}elseif($t.Mode -eq 'Intelligence'){try{Update-YumIntelligenceList -State $t.State}catch{}}else{try{if($null -ne $t.State.ListView){$t.State.ListView.Items.Refresh()}}catch{}}
-                if($null -ne $t.State.Details){$t.State.Details.Text=('MANUAL ORGANIZATION SAVED`nName: {0}`nCategory: {1}`nPlacement: {2}`nAction Lane: {3}' -f $t.Item.Name,$org.Category,$org.Placement,$org.ActionLane)}
+                if($null -ne $t.State.Details){$t.State.Details.Text=("MANUAL ORGANIZATION SAVED`nName: {0}`nCategory: {1}`nPlacement: {2}`nAction Lane: {3}" -f $t.Item.Name,$org.Category,$org.Placement,$org.ActionLane)}
                 Set-YumFooter ('📁 Organized: {0} → {1}' -f $t.Item.Name,$org.Category)
             } catch {Write-YumLogException -Context 'Manual organization failed' -Exception $_.Exception}
         })
@@ -999,7 +999,7 @@ function Show-YumIntelligence {
                     $r=$s.SelectedItem
                     try{[void](Ensure-YumIntelligenceRecordSchema -Record $r)}catch{Write-YumLogException -Context 'Intelligence selection schema normalization failed' -Exception $_.Exception}
 $stateLabel=if($null -ne $r.StateText){[string]$r.StateText}else{if($r.Live){'LIVE'}else{'SAVED'}};$manual=if($null -ne $r.PSObject.Properties['ManualOverride'] -and [bool]$r.ManualOverride){'YES'}else{'NO'};$sources=if($null -ne $r.PSObject.Properties['ResearchSources']){(@($r.ResearchSources) -join ', ')}else{''};$links=if($null -ne $r.PSObject.Properties['ResearchLinks']){(@($r.ResearchLinks) -join '
-')}else{''};$identityState=[string]$r.IdentityState;if([string]::IsNullOrWhiteSpace($identityState)){$identityState='Not recorded'};$identityConfidence=if($null -ne $r.PSObject.Properties['IdentityConfidence']){[int]$r.IdentityConfidence}else{[int]$r.Confidence};$unknownReason=[string]$r.UnknownReason;if([string]::IsNullOrWhiteSpace($unknownReason)){$unknownReason=[string]$r.ResearchReason};$hash='';try{if($null -ne $r.PSObject.Properties['FileHash']){$hash=[string]$r.FileHash}}catch{};if([string]::IsNullOrWhiteSpace($hash)){$hash='Not calculated yet'};$signature='Unknown';try{if($null -ne $r.PSObject.Properties['Signature']){$signature=[string]$r.Signature};if([string]::IsNullOrWhiteSpace($signature) -and $null -ne $r.PSObject.Properties['SignerThumbprint']){$signature=[string]$r.SignerThumbprint}}catch{};if([string]::IsNullOrWhiteSpace($signature)){$signature='Unknown'};$ctx.Details.Text=('State: {0}`nName: {1}`nCategory: {2}`nRisk: {3}`nPlacement: {4}`nPublisher: {5}`nIdentity: {6} ({7}% confidence)`nSignature: {8}`nSHA-256: {9}`nManual override: {10}`nEvidence: {11}`nWhy Unknown: {12}`nSources: {13}' -f $stateLabel,$r.Name,$r.Category,$r.Risk,$r.Placement,$r.Publisher,$identityState,$identityConfidence,$signature,$hash,$manual,$r.Reason,$unknownReason,$sources);if($null -ne $ctx.SelectedResearch){$liveStage=if($null -ne $r.PSObject.Properties['ResearchProgressStage']){[string]$r.ResearchProgressStage}else{''};$liveMessage=if($null -ne $r.PSObject.Properties['ResearchProgressMessage']){[string]$r.ResearchProgressMessage}else{''};$liveLine=if(-not [string]::IsNullOrWhiteSpace($liveStage)){('`nLive progress: {0} — {1}' -f $liveStage,$liveMessage)}else{''};$ctx.SelectedResearch.Text=('Research: {0}`nConfidence: {1}%`nComplete: {2}`nPerformed: {3}`nExhausted: {4}`nError: {5}{6}' -f [string]$r.ResearchStatus,[string]$r.ResearchConfidence,[bool]$r.ResearchComplete,[bool]$r.ResearchPerformed,[bool]$r.ResearchExhausted,[string]$r.ResearchErrorState,$liveLine)};if($null -ne $ctx.SelectedAction){$ctx.SelectedAction.Text=('Action Lane: {0}`nRecommendation: {1}' -f [string]$r.ActionLane,[string]$r.Recommendation)}};try{if($null -ne $ctx.ManualOrganizationStatus){$ctx.ManualOrganizationStatus.Text=if([bool]$r.ManualOverride){('MANUAL OVERRIDE SAVED • ' + [string]$r.Category)}else{'No manual override selected.'}}}catch{}
+')}else{''};$identityState=[string]$r.IdentityState;if([string]::IsNullOrWhiteSpace($identityState)){$identityState='Not recorded'};$identityConfidence=if($null -ne $r.PSObject.Properties['IdentityConfidence']){[int]$r.IdentityConfidence}else{[int]$r.Confidence};$unknownReason=[string]$r.UnknownReason;if([string]::IsNullOrWhiteSpace($unknownReason)){$unknownReason=[string]$r.ResearchReason};$hash='';try{if($null -ne $r.PSObject.Properties['FileHash']){$hash=[string]$r.FileHash}}catch{};if([string]::IsNullOrWhiteSpace($hash)){$hash='Not calculated yet'};$signature='Unknown';try{if($null -ne $r.PSObject.Properties['Signature']){$signature=[string]$r.Signature};if([string]::IsNullOrWhiteSpace($signature) -and $null -ne $r.PSObject.Properties['SignerThumbprint']){$signature=[string]$r.SignerThumbprint}}catch{};if([string]::IsNullOrWhiteSpace($signature)){$signature='Unknown'};$ctx.Details.Text=("State: {0}`nName: {1}`nCategory: {2}`nRisk: {3}`nPlacement: {4}`nPublisher: {5}`nIdentity: {6} ({7}% confidence)`nSignature: {8}`nSHA-256: {9}`nManual override: {10}`nEvidence: {11}`nWhy Unknown: {12}`nSources: {13}" -f $stateLabel,$r.Name,$r.Category,$r.Risk,$r.Placement,$r.Publisher,$identityState,$identityConfidence,$signature,$hash,$manual,$r.Reason,$unknownReason,$sources);if($null -ne $ctx.SelectedResearch){$liveStage=if($null -ne $r.PSObject.Properties['ResearchProgressStage']){[string]$r.ResearchProgressStage}else{''};$liveMessage=if($null -ne $r.PSObject.Properties['ResearchProgressMessage']){[string]$r.ResearchProgressMessage}else{''};$liveLine=if(-not [string]::IsNullOrWhiteSpace($liveStage)){("`nLive progress: {0} — {1}" -f $liveStage,$liveMessage)}else{''};$ctx.SelectedResearch.Text=("Research: {0}`nConfidence: {1}%`nComplete: {2}`nPerformed: {3}`nExhausted: {4}`nError: {5}{6}" -f [string]$r.ResearchStatus,[string]$r.ResearchConfidence,[bool]$r.ResearchComplete,[bool]$r.ResearchPerformed,[bool]$r.ResearchExhausted,[string]$r.ResearchErrorState,$liveLine)};if($null -ne $ctx.SelectedAction){$ctx.SelectedAction.Text=("Action Lane: {0}`nRecommendation: {1}" -f [string]$r.ActionLane,[string]$r.Recommendation)}};try{if($null -ne $ctx.ManualOrganizationStatus){$ctx.ManualOrganizationStatus.Text=if([bool]$r.ManualOverride){('MANUAL OVERRIDE SAVED • ' + [string]$r.Category)}else{'No manual override selected.'}}}catch{}
             } catch { Write-YumLogException -Context 'Intelligence selection update failed' -Exception $_.Exception }
         })
 
@@ -1146,7 +1146,7 @@ $stateLabel=if($null -ne $r.StateText){[string]$r.StateText}else{if($r.Live){'LI
         $window.Activate()
     } catch {
         Write-YumLogException -Context 'Intelligence window failed' -Exception $_.Exception
-        try { Show-YumMessage -Message ('Smart Intelligence could not be opened.`n`n{0}' -f $_.Exception.Message) -Title 'YUMRAM - Intelligence Error' -Buttons 'OK' -Icon 'Error' } catch { Write-YumLogException -Context 'Intelligence error dialog failed' -Exception $_.Exception }
+        try { Show-YumMessage -Message ("Smart Intelligence could not be opened.`n`n{0}" -f $_.Exception.Message) -Title 'YUMRAM - Intelligence Error' -Buttons 'OK' -Icon 'Error' } catch { Write-YumLogException -Context 'Intelligence error dialog failed' -Exception $_.Exception }
     }
 }
 
@@ -1866,6 +1866,10 @@ function Get-YumLastReclaimView {
         GainGB=[double](Get-YumSafePropertyValue -Object $last -Name 'AvailableGainGB' -Default 0.0)
         WorkingSetReducedMB=[double](Get-YumSafePropertyValue -Object $last -Name 'WorkingSetReducedMB' -Default 0.0)
         Timestamp=Get-YumSafePropertyValue -Object $last -Name 'Timestamp' -Default $null
+        VerificationStatus=[string](Get-YumSafePropertyValue -Object $last -Name 'VerificationStatus' -Default 'Pending')
+        RetainedGainGB=Get-YumSafePropertyValue -Object $last -Name 'RetainedGainGB' -Default $null
+        Verification5sGB=Get-YumSafePropertyValue -Object $last -Name 'Verification5sGB' -Default $null
+        Verification15sGB=Get-YumSafePropertyValue -Object $last -Name 'Verification15sGB' -Default $null
     }
 }
 
@@ -1889,11 +1893,17 @@ function Show-YumMemoryReclaim {
         }catch{}
 
         $render={param($State)
+            # 5.3.0: sample pending 5s/15s/30s verification here (the old background timer never ran),
+            # rebuild the table only when the result changed, and use the fast (no WMI) snapshot so a
+            # 1-second UI refresh does not block the dispatcher.
+            try{[void](Update-YumReclaimVerification)}catch{}
             $view=Get-YumLastReclaimView
-            $State.Items.Items.Clear()
+            $version=[int]$script:Yum.ReclaimResultVersion
+            $rebuild=(-not $State.ContainsKey('RenderedVersion') -or [int]$State['RenderedVersion'] -ne $version -or -not $view.HasResult)
+            if($rebuild){$State.Items.Items.Clear();$State['RenderedVersion']=$version}
             if(-not $view.HasResult){
                 [void]$State.Items.Items.Add([pscustomobject]@{Type='Status';Process='No completed reclaim';PID='—';BeforeMB='—';AfterMB='—';ReducedMB='—';CPU='—';Result='Ready';Reason='Preview scanning is disabled to keep the Center responsive. Run FREE RAM NOW or DEEP RAM RECLAIM first.'})
-                $current=Get-YumMemoryReclaimSnapshot
+                $current=Get-YumMemoryReclaimSnapshot -Fast
                 $State.Available.Text='{0:N2} GB' -f $current.AvailableGB
                 $State.Cache.Text=if($null -eq $current.CacheGB){'N/A'}else{'{0:N2} GB' -f $current.CacheGB}
                 $State.Commit.Text=if($null -eq $current.CommitPercent){'N/A'}else{'{0:N1}%' -f $current.CommitPercent}
@@ -1904,15 +1914,17 @@ function Show-YumMemoryReclaim {
                 $State.Footer.Text='Ready 💜'
                 return
             }
-            foreach($row in @($view.Rows)){[void]$State.Items.Items.Add($row)}
-            $current=Get-YumMemoryReclaimSnapshot
+            if($rebuild){foreach($row in @($view.Rows)){[void]$State.Items.Items.Add($row)}}
+            $current=Get-YumMemoryReclaimSnapshot -Fast
             $State.Available.Text='{0:N2} GB' -f $current.AvailableGB
             $State.Cache.Text=if($null -eq $current.CacheGB){'N/A'}else{'{0:N2} GB' -f $current.CacheGB}
             $State.Commit.Text=if($null -eq $current.CommitPercent){'N/A'}else{'{0:N1}%' -f $current.CommitPercent}
             $State.Potential.Text='{0:N0} MB' -f $view.WorkingSetReducedMB
             $State.LastGain.Text='{0:N2} GB' -f $view.GainGB
             $State.Summary.Text=$view.Summary
-            $verify='Pending';try{$verify=[string]$view.GetType().GetProperty('VerificationStatus').GetValue($view,$null)}catch{};$retained='Pending';try{if($view.PSObject.Properties['RetainedGainGB'] -and $null -ne $view.RetainedGainGB){$retained='{0:N2} GB' -f [double]$view.RetainedGainGB}}catch{};$State.Measurement.Text=('Last actual reclaim:`nAvailable RAM gain: +{0:N2} GB`nWorking sets reduced: {1:N0} MB`nRetained gain: {2}`nVerification: {3}`nSuccessful actions: {4}' -f $view.GainGB,$view.WorkingSetReducedMB,$retained,$verify,@($view.Rows|Where-Object{$_.Result -eq 'Completed'}).Count)
+            $verify=[string]$view.VerificationStatus
+            $retained=if($null -ne $view.RetainedGainGB){'+{0:N2} GB' -f [double]$view.RetainedGainGB}elseif($null -ne $view.Verification15sGB){'+{0:N2} GB at 15s (30s pending)' -f [double]$view.Verification15sGB}elseif($null -ne $view.Verification5sGB){'+{0:N2} GB at 5s (30s pending)' -f [double]$view.Verification5sGB}else{'Pending'}
+            $State.Measurement.Text=("Last actual reclaim:`nAvailable RAM gain: +{0:N2} GB`nWorking sets reduced: {1:N0} MB`nRetained gain: {2}`nVerification: {3}`nSuccessful actions: {4}" -f $view.GainGB,$view.WorkingSetReducedMB,$retained,$verify,@($view.Rows|Where-Object{$_.Result -eq 'Completed'}).Count)
             $State.Footer.Text='Showing actual completed results — no preview scan 💜'
         }
 
@@ -1921,7 +1933,7 @@ function Show-YumMemoryReclaim {
                 $State.Progress.IsIndeterminate=$true;$State.Activity.Text=('Running {0} reclaim…' -f $Mode);$State.FreeRam.IsEnabled=$false;$State.DeepReclaim.IsEnabled=$false
                 $r=if($Mode -eq 'Deep'){Invoke-YumDeepRamReclaim}else{Invoke-YumFreeRamNow}
                 $State.Progress.IsIndeterminate=$false;$State.Progress.Value=100
-                if($r){$State.Summary.Text=[string]$r.Summary;$State.Measurement.Text=('Before: {0:N2} GB available`nAfter: {1:N2} GB available`nActual gain: +{2:N2} GB`nWorking sets reduced: {3:N0} MB' -f $r.Before.AvailableGB,$r.After.AvailableGB,$r.AvailableGainGB,$r.WorkingSetReducedMB)}
+                if($r){$State.Summary.Text=[string]$r.Summary;$State.Measurement.Text=("Before: {0:N2} GB available`nAfter: {1:N2} GB available`nActual gain: +{2:N2} GB`nWorking sets reduced: {3:N0} MB" -f $r.Before.AvailableGB,$r.After.AvailableGB,$r.AvailableGainGB,$r.WorkingSetReducedMB)}
                 & $render $State
                 $State.Activity.Text='Reclaim complete.'
             }catch{Write-YumLogException -Context 'RAM reclaim action failed' -Exception $_.Exception;$State.Progress.IsIndeterminate=$false;$State.Activity.Text='Reclaim failed.';$State.Measurement.Text='Check YUMRAM.log for the diagnostic.'}
@@ -1938,5 +1950,5 @@ function Show-YumMemoryReclaim {
         $window.Add_Closed({try{$refreshTimer.Stop()}catch{}})
         & $render $state
         [void]$window.ShowDialog()
-    } catch { Write-YumLogException -Context 'RAM Reclaim Center failed' -Exception $_.Exception; Show-YumMessage -Message ('RAM Reclaim Center could not be opened.`n`n{0}' -f $_.Exception.Message) -Title 'YUMRAM - Reclaim Error' -Buttons 'OK' -Icon 'Error' }
+    } catch { Write-YumLogException -Context 'RAM Reclaim Center failed' -Exception $_.Exception; Show-YumMessage -Message ("RAM Reclaim Center could not be opened.`n`n{0}" -f $_.Exception.Message) -Title 'YUMRAM - Reclaim Error' -Buttons 'OK' -Icon 'Error' }
 }

@@ -1,4 +1,4 @@
-#requires -Version 5.1
+﻿#requires -Version 5.1
 # Behavioral test: the background controller must actually execute.
 # 5.2.x used System.Timers.Timer scriptblock handlers, which never run in Windows PowerShell 5.1,
 # so automatic target maintenance and queued cleanup requests were silently dead.

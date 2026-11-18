@@ -121,7 +121,8 @@ function Invoke-YumSetSystemMemoryListCommand {
         $ptr=[Runtime.InteropServices.Marshal]::AllocHGlobal(4)
         [Runtime.InteropServices.Marshal]::WriteInt32($ptr,$Command)
         $status=[YumRamNative]::NtSetSystemInformation([YumRamNative]::SystemMemoryListInformation,$ptr,4)
-        [pscustomobject]@{Success=($status -ge 0);Status=$status;ErrorCode=([uint32]$status)}
+        # NTSTATUS failures are negative Int32 values; a direct [uint32] cast throws, so reinterpret the bits.
+        [pscustomobject]@{Success=($status -ge 0);Status=$status;ErrorCode=[BitConverter]::ToUInt32([BitConverter]::GetBytes([int32]$status),0)}
     } catch { [pscustomobject]@{Success=$false;Status=-1;ErrorCode=$_.Exception.HResult} }
     finally {if($ptr -ne [IntPtr]::Zero){[Runtime.InteropServices.Marshal]::FreeHGlobal($ptr)}}
 }
