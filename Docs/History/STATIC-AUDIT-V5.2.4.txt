@@ -1,0 +1,5 @@
+﻿Version: 5.2.4
+YUM helper definitions: 121
+Undefined YUM helpers: 0
+Errors: 1
+ERROR: Missing research feature: Research Status
