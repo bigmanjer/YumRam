@@ -83,11 +83,7 @@ function Stop-YumTelemetry {
 }
 
 function Start-YumControllerTimer {
-    if($null -ne $script:Yum.ControllerTimer){return}
-    $timer=New-Object System.Timers.Timer
-    $timer.Interval=1000
-    $timer.AutoReset=$true
-    $timer.Add_Elapsed({ try { Invoke-YumBackgroundController } catch { Write-YumLogException -Context 'Controller timer failed' -Exception $_.Exception } })
-    $script:Yum.ControllerTimer=$timer
-    $timer.Start()
+    # 5.3.0: System.Timers.Timer scriptblock handlers never execute in Windows PowerShell 5.1
+    # (thread-pool threads have no runspace). The controller now runs in its own runspace.
+    Start-YumControllerWorker
 }

@@ -254,7 +254,16 @@ function Update-YumSnapshotMemory {
     param([Parameter(Mandatory)]$Memory)
     [System.Threading.Monitor]::Enter($script:Yum.CacheLock)
     try {
-        if($null -ne $script:Yum.Snapshot){$script:Yum.Snapshot=[pscustomobject]@{Timestamp=Get-Date;Memory=$Memory;CPU=$script:Yum.Snapshot.CPU;GPU3D=$script:Yum.Snapshot.GPU3D;ForegroundProcessId=$script:Yum.Snapshot.ForegroundProcessId;Game=$script:Yum.Snapshot.Game};$script:Yum.SnapshotVersion++}
+        # 5.3.0: readers use Get-YumSnapshotCopy, which prefers TelemetryCache['Snapshot'].
+        # Writing only $script:Yum.Snapshot was immediately overwritten by the stale cache copy.
+        $base=$script:Yum.TelemetryCache['Snapshot'];if($null -eq $base){$base=$script:Yum.Snapshot}
+        if($null -ne $base){
+            $next=[pscustomobject]@{Timestamp=Get-Date;Memory=$Memory;CPU=$base.CPU;GPU3D=$base.GPU3D;ForegroundProcessId=$base.ForegroundProcessId;Game=$base.Game}
+        } else {
+            $next=[pscustomobject]@{Timestamp=Get-Date;Memory=$Memory;CPU=0.0;GPU3D=0.0;ForegroundProcessId=0;Game=[pscustomobject]@{ProcessId=0;ProcessName=$null;Detected=$false}}
+        }
+        $script:Yum.Snapshot=$next;$script:Yum.SnapshotVersion++
+        $script:Yum.TelemetryCache['Snapshot']=$next
     } finally {[System.Threading.Monitor]::Exit($script:Yum.CacheLock)}
 }
 
@@ -273,13 +282,11 @@ function Request-YumSafeOptimization {
         $script:Yum.CleanupRequested=$true
         $script:Yum.CleanupForceRequested=$true
         $script:Yum.CleanupSafeOnlyRequested=$true
-        $needsController=($null -eq $script:Yum.ControllerTimer)
-        $script:Yum.CleanupOneShotController=$needsController
     } finally {[System.Threading.Monitor]::Exit($script:Yum.RequestLock)}
-    if($needsController){
-        try { Start-YumControllerTimer } catch { Write-YumLogException -Context 'Safe optimization controller start failed' -Exception $_.Exception }
-    }
-    return [pscustomobject]@{Queued=$true;Success=$true;SafeOnly=$true;OneShotController=[bool]$needsController}
+    # The controller worker runs for the whole app session (started with the main UI), so a
+    # one-shot controller is no longer needed. Start it defensively if it is not running.
+    try { Start-YumControllerWorker } catch { Write-YumLogException -Context 'Safe optimization controller start failed' -Exception $_.Exception }
+    return [pscustomobject]@{Queued=$true;Success=$true;SafeOnly=$true;OneShotController=$false}
 }
 
 function Invoke-YumCleanup {
@@ -375,18 +382,18 @@ function Invoke-YumBackgroundController {
         $request=$false;$force=$false
         [System.Threading.Monitor]::Enter($script:Yum.RequestLock)
         try {$request=$script:Yum.CleanupRequested;$force=$script:Yum.CleanupForceRequested;$safeOnly=[bool]$script:Yum.CleanupSafeOnlyRequested;$script:Yum.CleanupRequested=$false;$script:Yum.CleanupForceRequested=$false;$script:Yum.CleanupSafeOnlyRequested=$false} finally {[System.Threading.Monitor]::Exit($script:Yum.RequestLock)}
-        $snapshot=Get-YumSnapshotCopy
         if($request){
+            # Explicit requests run even while monitoring is paused, so refresh memory first
+            # instead of acting on a stale telemetry snapshot.
+            try{$fresh=Get-YumMemoryTelemetry;if($fresh){Update-YumSnapshotMemory -Memory $fresh}}catch{}
             $result=Invoke-YumCleanupToTarget -Force:$force -SafeOnly:$safeOnly
             Publish-YumCleanupResult -Result $result
-            if($script:Yum.CleanupOneShotController){
-                $script:Yum.CleanupOneShotController=$false
-                $timer=$script:Yum.ControllerTimer
-                $script:Yum.ControllerTimer=$null
-                if($null -ne $timer){try{$timer.Stop();$timer.Dispose()}catch{}}
-            }
             return
         }
+        # Automatic target maintenance only while the user has monitoring switched on.
+        if(-not [bool]$script:Yum.MonitoringActive){return}
+        if($script:Yum.Config.Contains('TargetMaintenanceEnabled') -and -not [bool]$script:Yum.Config.TargetMaintenanceEnabled){return}
+        $snapshot=Get-YumSnapshotCopy
         if($null -eq $snapshot -or $null -eq $snapshot.Memory){return}
         $decision=Get-YumPressureDecision -Memory $snapshot.Memory -Mode $script:Yum.Config.Mode
         $profile=Get-YumModeProfile

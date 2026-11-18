@@ -1,0 +1,9 @@
+YUMRAM.log
+research-live-results.json
+research-live-results.tmp
+research-cache.json
+intelligence-db.json
+reclaim-learning.json
+state.json
+Tests/tmp-*
+*.tmp

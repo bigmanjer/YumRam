@@ -19,6 +19,13 @@
         GpuTimer = $null
         GameTimer = $null
         ControllerTimer = $null
+        ControllerPowerShell = $null
+        ControllerAsync = $null
+        ControllerRunspace = $null
+        ControllerStopEvent = $null
+        ControllerHeartbeatUtc = [datetime]::MinValue
+        MonitoringActive = $false
+        ReclaimVerificationTimer = $null
         UiTimer = $null
         StopRequested = $false
         LastCleanup = [datetime]::MinValue
