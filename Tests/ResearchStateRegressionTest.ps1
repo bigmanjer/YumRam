@@ -21,7 +21,13 @@ Assert-True (Test-YumResearchUnresolved -Record $review) 'Review record was not 
 $organized=New-Record -Risk Candidate -Category Apps -Status Organized -Placement 'Identified Applications' -Action 'Candidate under memory pressure'
 Assert-True (-not (Test-YumResearchUnresolved -Record $organized)) 'Organized record remained queued.'
 $unknown=New-Record -Risk Unknown -Category 'Unknown / Quarantine' -Status Unknown -Placement 'Unknown / Quarantine for Review' -Action 'Never manage automatically'
+$unknown | Add-Member -NotePropertyName ResearchEngineVersion -NotePropertyValue 'test' -Force
 Assert-True (-not (Test-YumResearchUnresolved -Record $unknown)) 'Unknown terminal record remained queued.'
+# 5.4: an Unknown decided by an older engine (or never stamped) gets one fresh attempt with the new engine.
+$staleUnknown=New-Record -Risk Unknown -Category 'Unknown / Quarantine' -Status Unknown -Placement 'Unknown / Quarantine for Review' -Action 'Never manage automatically'
+Assert-True (Test-YumResearchUnresolved -Record $staleUnknown) 'Unknown from an older research engine was not re-queued.'
+$staleUnknown | Add-Member -NotePropertyName ResearchEngineVersion -NotePropertyValue 'older' -Force
+Assert-True (Test-YumResearchUnresolved -Record $staleUnknown) 'Unknown stamped by an older engine was not re-queued.'
 $err=New-Record -Risk Review -Category Apps -Status 'Research Error' -Placement 'Review Queue' -Action 'Review before management'
 Assert-True (Test-YumResearchUnresolved -Record $err) 'Retryable Research Error was not queued.'
 # Stable vs live instance identity: same executable shares StableIdentityKey but unique live Key.

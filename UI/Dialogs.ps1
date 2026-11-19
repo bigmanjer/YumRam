@@ -399,7 +399,7 @@ function Update-YumTopProcessList {
             $protected=Test-YumProtectedProcess -Process $process -ForegroundPid $fg -GamePid $gamePid
             $processPath=''
             try{$processPath=[string]$process.MainModule.FileName}catch{}
-            [void]$List.Items.Add([pscustomobject]@{Process=$process.ProcessName;Name=$process.ProcessName;PID=$process.Id;MemoryMB=[math]::Round($process.WorkingSet64/1MB,0);Priority=$priority;Protected=$protected;ProcessObject=$process;Path=$processPath;Publisher='Unknown';Category='Apps';Risk=if($protected){'Protected'}else{'Review'};Placement='';ActionLane='Review before management'})
+            [void]$List.Items.Add([pscustomobject]@{Process=$process.ProcessName;Name=$process.ProcessName;PID=$process.Id;MemoryMB=[math]::Round($process.WorkingSet64/1MB,0);Priority=$priority;Protected=$protected;ProtectedText=$(if($protected){'Yes'}else{''});ProcessObject=$process;Path=$processPath;Publisher='Unknown';Category='Apps';Risk=if($protected){'Protected'}else{'Review'};Placement='';ActionLane='Review before management'})
         }catch{}
     }
 }

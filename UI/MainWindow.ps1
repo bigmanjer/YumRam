@@ -1,11 +1,27 @@
 ﻿#requires -Version 5.1
 
 
+function Initialize-YumTheme {
+    # 5.4: load UI\Xaml\Theme.xaml once into Application.Resources so every window shares one design
+    # system (tokens + control styles). Windows are loaded with XamlReader and never call Application.Run,
+    # but WPF still resolves StaticResource/implicit styles through Application.Current.Resources.
+    if([bool]$script:YumThemeLoaded){return}
+    $themePath=Join-Path $script:Yum.Root 'UI\Xaml\Theme.xaml'
+    if(-not(Test-Path -LiteralPath $themePath)){return}
+    $app=[System.Windows.Application]::Current
+    if($null -eq $app){$app=New-Object System.Windows.Application;$app.ShutdownMode=[System.Windows.ShutdownMode]::OnExplicitShutdown}
+    $theme=[Windows.Markup.XamlReader]::Parse([IO.File]::ReadAllText($themePath,[System.Text.UTF8Encoding]::new($false,$true)))
+    $app.Resources.MergedDictionaries.Add($theme)
+    $script:YumThemeLoaded=$true
+}
+$script:YumThemeLoaded=$false
+
 function Read-YumXamlText {
     param([Parameter(Mandatory=$true)][string]$Path)
     if (-not (Test-Path -LiteralPath $Path)) {
         throw "XAML file not found: $Path"
     }
+    try { Initialize-YumTheme } catch { try { Write-YumLogException -Context 'Theme load failed; using window styles' -Exception $_.Exception } catch {} }
     $utf8 = [System.Text.UTF8Encoding]::new($false,$true)
     return [System.IO.File]::ReadAllText($Path, $utf8)
 }
@@ -111,6 +127,27 @@ function Update-YumGraph {
     }catch{Write-YumLogException -Context 'Graph update failed' -Exception $_.Exception}
 }
 function Get-YumUiSnapshot {return Get-YumSnapshotCopy}
+function Update-YumMemoryRing {
+    # 5.4: RAM-in-use gauge. Draws an arc from 12 o'clock clockwise, sized to the ring's Grid.
+    param([double]$Percent)
+    try{
+        $ring=$script:Yum.Ui.MemoryRing;$label=$script:Yum.Ui.MemoryRingText
+        if($null -eq $ring){return}
+        $p=[math]::Min(99.99,[math]::Max(0.0,$Percent))
+        if($null -ne $label){$label.Text=('{0:N0}%' -f $Percent)}
+        $size=104.0;$thick=10.0;$r=($size-$thick)/2.0;$c=$size/2.0
+        $angle=($p/100.0)*2*[math]::PI
+        $start=New-Object System.Windows.Point($c,($c-$r))
+        $end=New-Object System.Windows.Point(($c+$r*[math]::Sin($angle)),($c-$r*[math]::Cos($angle)))
+        $fig=New-Object System.Windows.Media.PathFigure;$fig.StartPoint=$start;$fig.IsClosed=$false
+        $arc=New-Object System.Windows.Media.ArcSegment($end,(New-Object System.Windows.Size($r,$r)),0.0,($p -gt 50),[System.Windows.Media.SweepDirection]::Clockwise,$true)
+        [void]$fig.Segments.Add($arc)
+        $geo=New-Object System.Windows.Media.PathGeometry;[void]$geo.Figures.Add($fig);$geo.Freeze()
+        $ring.Data=$geo
+        # Colour by pressure: calm below 70%, amber to 85%, red above.
+        $ring.Stroke=if($Percent -ge 85){Get-YumBrush '#F87171'}elseif($Percent -ge 70){Get-YumBrush '#FBBF24'}else{Get-YumBrush '#CFA8FF'}
+    }catch{}
+}
 function Update-YumTargetUi {
     try {
         $s=Get-YumSnapshotCopy
@@ -157,6 +194,7 @@ function Update-YumUiFromSnapshot {
             $availablePct=if([double]$m.TotalGB -gt 0){([double]$m.AvailableGB/[double]$m.TotalGB)*100}else{0}
             $script:Yum.Ui.Usage.Text='{0:N2} / {1:N2} GB  •  Available {2:N2} GB ({3:N1}%)' -f $m.UsedGB,$m.TotalGB,$m.AvailableGB,$availablePct
             $script:Yum.Ui.MemoryBar.Value=[math]::Min(100,[math]::Max(0,$m.UsedPercent))
+            Update-YumMemoryRing -Percent ([double]$m.UsedPercent)
             [void]$script:Yum.GraphMemory.Add([double]$m.UsedPercent);while($script:Yum.GraphMemory.Count -gt $script:Yum.GraphPointsLimit){$script:Yum.GraphMemory.RemoveAt(0)}
             [void]$script:Yum.GraphMemoryAvailable.Add([double]$availablePct);while($script:Yum.GraphMemoryAvailable.Count -gt $script:Yum.GraphPointsLimit){$script:Yum.GraphMemoryAvailable.RemoveAt(0)}
             [void]$script:Yum.GraphCPU.Add([double]$s.CPU);while($script:Yum.GraphCPU.Count -gt $script:Yum.GraphPointsLimit){$script:Yum.GraphCPU.RemoveAt(0)}
@@ -210,7 +248,7 @@ function Invoke-YumApplyTarget {
 function Test-YumSingleInstance {try{$mutex=New-Object System.Threading.Mutex($false,'Local\YUMRAM-V5-SingleInstance');$owned=$false;try{$owned=$mutex.WaitOne(0)}catch [System.Threading.AbandonedMutexException]{$owned=$true};if(-not $owned){$mutex.Dispose();[System.Windows.MessageBox]::Show('YUMRAM is already running.','YUMRAM','OK','Information')|Out-Null;return $false};$script:Yum.SingleInstanceMutex=$mutex;$script:Yum.SingleInstanceOwned=$true;return $true}catch{Write-YumLogException -Context 'Single instance check failed' -Exception $_.Exception;return $true}}
 function Stop-YumSingleInstance {try{if($script:Yum.SingleInstanceOwned -and $script:Yum.SingleInstanceMutex){try{$script:Yum.SingleInstanceMutex.ReleaseMutex()}catch{};$script:Yum.SingleInstanceMutex.Dispose()}}catch{}finally{$script:Yum.SingleInstanceMutex=$null;$script:Yum.SingleInstanceOwned=$false}}
 function Start-YumApplicationUi {
-    $path=Join-Path $script:Yum.Root 'UI\Xaml\MainWindow.xaml';if(-not(Test-Path -LiteralPath $path)){throw "Missing main window XAML: $path"};[xml]$xaml=Read-YumXamlText -Path $path;$reader=New-Object System.Xml.XmlNodeReader $xaml;$script:Yum.Window=[Windows.Markup.XamlReader]::Load($reader);$script:Yum.Ui=[ordered]@{};foreach($n in @('Intelligence','TelemetryStatus','QuickMonitorStatus','QuickMonitorTelemetry','ModeHelp','Mode','Status','Available','Memory','CPU','GPU','Game','Usage','MemoryBar','Target','TargetStatus','TargetBar','Graph','FreeRam','DeepReclaim','ReclaimCenter','ReclaimStatus','Monitor','ModeBox','TargetBox','Apply','AutoGame','ProtectGame','AutoClean','PriorityBox','Processes','Settings','About','Footer','VersionStatus')){$script:Yum.Ui[$n]=$script:Yum.Window.FindName($n)};Apply-YumUiConfig;if($null -ne $script:Yum.Ui.VersionStatus){$script:Yum.Ui.VersionStatus.Text=('YUMRAM V{0}' -f [string]$script:Yum.Config.Version)}
+    $path=Join-Path $script:Yum.Root 'UI\Xaml\MainWindow.xaml';if(-not(Test-Path -LiteralPath $path)){throw "Missing main window XAML: $path"};[xml]$xaml=Read-YumXamlText -Path $path;$reader=New-Object System.Xml.XmlNodeReader $xaml;$script:Yum.Window=[Windows.Markup.XamlReader]::Load($reader);$script:Yum.Ui=[ordered]@{};foreach($n in @('Intelligence','TelemetryStatus','QuickMonitorStatus','QuickMonitorTelemetry','ModeHelp','Mode','Status','Available','Memory','CPU','GPU','Game','Usage','MemoryBar','Target','TargetStatus','TargetBar','Graph','FreeRam','DeepReclaim','ReclaimCenter','ReclaimStatus','Monitor','ModeBox','TargetBox','Apply','AutoGame','ProtectGame','AutoClean','PriorityBox','Processes','Settings','About','Footer','VersionStatus','MemoryRing','MemoryRingText')){$script:Yum.Ui[$n]=$script:Yum.Window.FindName($n)};Apply-YumUiConfig;if($null -ne $script:Yum.Ui.VersionStatus){$script:Yum.Ui.VersionStatus.Text=('YUMRAM V{0}' -f [string]$script:Yum.Config.Version)}
     $script:Yum.Ui.Processes.Add_Click({try{Show-YumTopProcesses}catch{Write-YumLogException -Context 'Top memory processes view failed' -Exception $_.Exception}})
     # 5.3.1: reclaim runs on the controller worker; the UI timer shows the result (Update-YumReclaimResultUI).
     $script:Yum.Ui.FreeRam.Add_Click({try{if(Request-YumMemoryReclaim -Mode Quick){Set-YumFooter '💜 Freeing RAM now… (window stays responsive)';$script:Yum.Ui.ReclaimStatus.Text='Freeing RAM… results appear in a few seconds.'}else{Set-YumFooter '💜 A reclaim is already running.'};Update-YumReclaimButtons}catch{Write-YumLogException -Context 'Free RAM action failed' -Exception $_.Exception;Set-YumFooter '⚠ Free RAM failed — check YUMRAM.log.'}})

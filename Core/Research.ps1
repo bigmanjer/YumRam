@@ -922,7 +922,15 @@ function Test-YumResearchUnresolved {
     if($null -ne $Record.PSObject.Properties['ManualOverride'] -and [bool]$Record.ManualOverride){return $false}
     $status='Not Researched'
     if($null -ne $Record.PSObject.Properties['ResearchStatus']){$status=[string]$Record.ResearchStatus}
-    if($status -in @('Organized','Unknown')){return $false}
+    if($status -eq 'Organized'){return $false}
+    if($status -eq 'Unknown'){
+        # 5.4: Unknown is final only for the engine version that decided it. Unknowns from an older engine
+        # (or with no stamp) get one fresh attempt; afterwards they are stamped and final again.
+        $decidedBy='';if($null -ne $Record.PSObject.Properties['ResearchEngineVersion']){$decidedBy=[string]$Record.ResearchEngineVersion}
+        $current='';try{$current=[string]$script:Yum.Config.ResearchEngineVersion}catch{}
+        if([string]::IsNullOrWhiteSpace($current) -or $decidedBy -eq $current){return $false}
+        return $true
+    }
     $risk=[string]$Record.Risk
     $category=[string]$Record.Category
     $placement=[string]$Record.Placement
@@ -1338,6 +1346,8 @@ function Invoke-YumResearch {
             $r|Add-Member -NotePropertyName ResearchExhausted -NotePropertyValue ([bool]$researchTerminal) -Force
             if($null -ne $cached -and $null -ne $cached.PSObject.Properties['EvidenceFingerprint']){$r|Add-Member -NotePropertyName ResearchEvidenceFingerprint -NotePropertyValue ([string]$cached.EvidenceFingerprint) -Force}
             $r|Add-Member -NotePropertyName ResearchCompletedAt -NotePropertyValue $(if($researchTerminal){(Get-Date).ToString('o')}else{''}) -Force
+            # 5.4: remember which engine decided this, so a better engine can revisit old Unknown results.
+            if($researchTerminal){$r|Add-Member -NotePropertyName ResearchEngineVersion -NotePropertyValue ([string]$script:Yum.Config.ResearchEngineVersion) -Force}
             $r|Add-Member -NotePropertyName ResearchDecision -NotePropertyValue ([string]$placement.Placement) -Force
             if($null -ne $placement.PSObject.Properties['OnlineMatchConfidence']){$r|Add-Member -NotePropertyName OnlineMatchConfidence -NotePropertyValue ([int]$placement.OnlineMatchConfidence) -Force}
             if($null -ne $placement.PSObject.Properties['VerifiedSourceCount']){$r|Add-Member -NotePropertyName VerifiedSourceCount -NotePropertyValue ([int]$placement.VerifiedSourceCount) -Force}
