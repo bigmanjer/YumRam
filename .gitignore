@@ -1,10 +1,15 @@
+# User settings and runtime data (created on first run; never publish)
+config.json
 YUMRAM.log
+*.log
+Runtime/
+state.json
+reclaim-learning.json
+intelligence-db.json
+research-cache.json
+research-history.json
+research-status.json
 research-live-results.json
 research-live-results.tmp
-research-cache.json
-intelligence-db.json
-reclaim-learning.json
-state.json
-Tests/tmp-*
 *.tmp
-research-status.json
+Tests/tmp-*
