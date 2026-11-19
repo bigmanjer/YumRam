@@ -1,13 +1,19 @@
 ﻿#requires -Version 5.1
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
-$intelligence = Join-Path $root 'Core\Intelligence.ps1'
-$scanner = Join-Path $root 'Core\Scanner.ps1'
-$safety = Join-Path $root 'Core\Safety.ps1'
-foreach($p in @($intelligence,$scanner,$safety)){if(-not(Test-Path -LiteralPath $p)){throw "Missing required source: $p"}}
-$i = Get-Content -LiteralPath $intelligence -Raw
-$s = Get-Content -LiteralPath $scanner -Raw
-$sf = Get-Content -LiteralPath $safety -Raw
-$checks = @([bool]($i -match "IdentityState='Unknown'"),[bool]($i -match "Research before automatic cleanup"),[bool]($i -match "AutoResearchEligible=\$true"),[bool]($s -match "\$classification\.Risk -eq 'Protected' -or \$classification\.Risk -eq 'Unknown'"),[bool]($s -match 'AutoResearchEligible'),[bool]($s -match 'UnknownReason'),[bool]($s -match 'IdentityConfidence'),[bool]($sf -match 'Unknown'))
-if(@($checks|Where-Object{$_ -eq $false}).Count -gt 0){throw 'Unknown identity regression contract failed.'}
+$i = Get-Content -LiteralPath (Join-Path $root 'Core\Intelligence.ps1') -Raw
+$s = Get-Content -LiteralPath (Join-Path $root 'Core\Scanner.ps1') -Raw
+$sf = Get-Content -LiteralPath (Join-Path $root 'Core\Safety.ps1') -Raw
+$checks = [ordered]@{
+    'Intelligence defines Unknown identity state' = $i.Contains("IdentityState='Unknown'")
+    'Unknown identities require research before cleanup' = $i.Contains('Research before automatic cleanup')
+    'Unknown identities are auto-research eligible' = $i.Contains('AutoResearchEligible=$true')
+    # The Protected/Unknown cleanup exclusion lives in the candidate selector (Safety.ps1).
+    'Cleanup skips Protected and Unknown' = $sf.Contains('$classification.Risk -eq ''Protected'' -or $classification.Risk -eq ''Unknown''')
+    'Scanner carries AutoResearchEligible' = $s.Contains('AutoResearchEligible')
+    'Scanner carries UnknownReason' = $s.Contains('UnknownReason')
+    'Scanner carries IdentityConfidence' = $s.Contains('IdentityConfidence')
+}
+$failed = @($checks.GetEnumerator() | Where-Object { -not $_.Value } | ForEach-Object { $_.Key })
+if($failed.Count -gt 0){throw ('Unknown identity regression contract failed: ' + ($failed -join '; '))}
 Write-Host 'Unknown identity regression test passed.'

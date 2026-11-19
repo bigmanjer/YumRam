@@ -1,4 +1,4 @@
-﻿`$version=(Get-Content -LiteralPath (Join-Path (Split-Path -Parent `$PSScriptRoot) 'VERSION') -Raw).Trim()
+﻿$version=(Get-Content -LiteralPath (Join-Path (Split-Path -Parent $PSScriptRoot) 'VERSION') -Raw).Trim()
 Set-StrictMode -Version Latest
 $root = Split-Path -Parent $PSScriptRoot
 $xaml = Join-Path $root 'UI\Xaml\Intelligence.xaml'

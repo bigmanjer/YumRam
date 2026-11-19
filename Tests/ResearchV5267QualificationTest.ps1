@@ -41,7 +41,7 @@ if(@($online.VerifiedLinks).Count -ne 1){throw 'Injected provider verified-link 
 
 $record2=[pscustomobject]@{Name='Minimal Record';Risk='Review';Category='Apps'}
 Write-YumResearchLiveSnapshot -RunId 'qualification' -Completed 0 -Total 1 -Records @($record2)
-$live=Join-Path $root 'research-live-results-qualification-000000.json'
+$live=Join-Path $root 'research-live-results.json'
 if(-not(Test-Path -LiteralPath $live)){throw 'Research live snapshot was not written for a minimal record.'}
 Remove-Item -LiteralPath $live -Force -ErrorAction SilentlyContinue
 

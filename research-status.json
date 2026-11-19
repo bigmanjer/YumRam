@@ -1,0 +1,15 @@
+﻿{
+    "Version":  "1",
+    "EngineVersion":  "5.2.90",
+    "Updated":  "2026-11-18T18:20:46.6683491-05:00",
+    "Key":  "",
+    "Name":  "Review Research Queue",
+    "Stage":  "Complete",
+    "Index":  151,
+    "Total":  151,
+    "Message":  "Research queue complete: 109 researched; 109 resolved from Review; 0 unresolved → Unknown; 0 research errors pending retry.",
+    "Confidence":  0,
+    "Placement":  "",
+    "Error":  "",
+    "Completed":  true
+}

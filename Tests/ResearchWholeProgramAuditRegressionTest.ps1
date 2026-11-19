@@ -11,7 +11,7 @@ Assert-C ([string]$config.Version -eq $version) 'Config Version must match canon
 Assert-C ([string]$config.ResearchEngineVersion -eq $version) 'ResearchEngineVersion must match canonical VERSION.'
 Assert-C ($research.Contains('$onlineOperationalError=')) 'Online no-match/error distinction missing.'
 Assert-C ($research.Contains('$strongIdentityPromotion=')) 'Strong local identity promotion missing.'
-Assert-C ($research.Contains("ResearchComplete -NotePropertyValue $true")) 'Terminal worker failure contract missing.'
+Assert-C ($research.Contains('ResearchComplete -NotePropertyValue $true')) 'Terminal worker failure contract missing.'
 Assert-C ($dialogs.Contains('Never let a transient status file regress an already terminal record.')) 'UI stale-status guard missing.'
 Assert-C ($dialogs.Contains('if($existingTerminal -and $updatedTransient){continue}')) 'Live merge stale-result guard missing.'
 Write-Output 'PASS Research whole-program audit contracts.'

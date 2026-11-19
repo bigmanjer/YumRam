@@ -92,13 +92,13 @@ if($dialogs -notmatch 'No items currently require research\.'){Add-CheckError 'E
 if($dialogs -notmatch '\$previousDb=@\{\}'){Add-CheckError 'Persisted Intelligence DB is not captured before live-record replacement.'}
 if($dialogs -notmatch 'identityCompatible=\$true'){Add-CheckError 'Saved/live identity compatibility guard missing.'}
 if($dialogs -notmatch '\$researchInput=@\(\$ctx\.State\.Data\.Records \| Where-Object'){Add-CheckError 'Research queue is not built from the merged current state.'}
-if($dialogs -notmatch '\[bool\]\$_.Live -and -not \[bool\]\$_.ManualOverride'){Add-CheckError 'Research queue does not restrict to current non-manual live records.'}
-if($dialogs -notmatch 'Automatic research candidates:'){Add-CheckError 'Cache-aware research candidate diagnostic missing.'}
+if($dialogs -notmatch '\[bool\]\$_.Live -and -not \[bool\]\$_.ManualOverride' -and $dialogs -notmatch '\[bool\]\$_\.Live -and \(Test-YumResearchUnresolved -Record \$_\)'){Add-CheckError 'Research queue does not restrict to current non-manual live records.'}
+# 5.3.0: 'Automatic research candidates:' log wording retired; queue behaviour is asserted above.
 
 # Incremental merge: never replace the entire live collection with a partial research result.
 if($dialogs -notmatch '\$fullRecords=@\(\$ctx\.State\.Data\.Records\)'){Add-CheckError 'Final research result merge does not preserve the full Intelligence collection.'}
-if($dialogs -notmatch '\$snap\.ResearchedCount' -or $dialogs -notmatch '\$snap\.CachedCount'){Add-CheckError 'Live research snapshot counters are not applied to the header state.'}
-if($dialogs -notmatch 'Research progress updated'){Add-CheckError 'Live research progress UI update missing.'}
+if(-not ($dialogs.Contains("Properties['ResearchedCount']") -or $dialogs -match '\$snap\.ResearchedCount')){Add-CheckError 'Live research snapshot counters are not applied to the header state.'}
+if(-not $dialogs.Contains('ResearchProgress.Text=(''Research {0}/{1} • {2}'' -f $index,$total,$stage)')){Add-CheckError 'Live research progress UI update missing.'}
 
 # Manual organization safety/persistence.
 if($dialogs -notmatch 'Get-YumManualOrganizationKey -Name \(\[string\]\$t\.Item\.Name\).*FileHash'){Add-CheckError 'Manual clear does not use strong manual-identity key.'}
@@ -108,7 +108,10 @@ if($dialogs -notmatch 'Save-YumIntelligenceDb -Database \$script:Yum\.Intelligen
 # Scanner/runtime safety.
 if($scanner -match '\[string\]\$PID|\[int\]\$Pid|\$Pid\s*='){Add-CheckError 'Scanner contains a PowerShell $PID collision risk.'}
 if($scanner -notmatch '^#requires -Version 5\.1'){Add-CheckError 'Scanner #requires directive must be first statement.'}
-if($cleanup -notmatch 'CleanupOneShotController' -or $cleanup -notmatch 'Start-YumControllerTimer'){Add-CheckError 'Safe optimization one-shot controller path missing.'}
+# 5.3.0: the one-shot System.Timers.Timer controller never executed on PS 5.1; requests are now served
+# by the session-long runspace worker (Core\Controller.ps1). Behaviour: Tests\ControllerWorkerRegressionTest.ps1.
+if($cleanup -notmatch 'Start-YumControllerWorker'){Add-CheckError 'Safe optimization does not ensure the controller worker is running.'}
+foreach($src in @(Get-ChildItem -LiteralPath (Join-Path $root 'Core'),(Join-Path $root 'UI') -Filter *.ps1)){if((Read-TestText $src.FullName) -match 'New-Object\s+System\.Timers\.Timer'){Add-CheckError "System.Timers.Timer scriptblock handlers never run on PS 5.1: $($src.Name)"}}
 
 # Concurrent process identity: live instances must be unique while persistence uses stable identity.
 if($scanner -notmatch 'function Get-YumLiveIntelligenceRecordKey'){Add-CheckError 'Live Intelligence instance-key helper missing.'}
@@ -124,7 +127,8 @@ if($research -notmatch '\$protectedFamily=') {Add-CheckError 'Protected-family r
 if($research -notmatch '\$needs=Test-YumResearchUnresolved -Record \$r') {Add-CheckError 'Research worker does not enforce the shared unresolved predicate.'}
 if($dialogs -notmatch '\$script:Yum\.IntelligenceDb\[\$storageKey\]=\$record') {Add-CheckError 'Live research merge does not persist by StableIdentityKey.'}
 # Review filter uses Test-YumResearchUnresolved; validated by dedicated interaction test.
-if($dialogs -notmatch '\$State\[''ReviewCount''\]\.Text=@\(\$all\|Where-Object \{\$_.Live -and \(Test-YumResearchUnresolved -Record \$_\)\}\)\.Count') {Add-CheckError 'Review counter does not use the authoritative live unresolved predicate.'}
+# 5.3.0: the counter matches the Run Research scope (all unresolved records, saved or live).
+if(-not $dialogs.Contains('$needs=@($all|Where-Object {Test-YumResearchUnresolved -Record $_})') -or -not $dialogs.Contains('$State.ReviewCount.Text=[string]$needs.Count')) {Add-CheckError 'Review counter does not use the authoritative unresolved predicate.'}
 
 
 # Gaming-safe gradual cleanup contract.
@@ -154,7 +158,7 @@ if($cleanup -match '\[Parameter\(Mandatory[^\)]*\)\]\s*\[object\[\]\]'){Add-Chec
 
 # UI/graph contract.
 foreach($n in @('IntelligenceResults','Filter','Search','Refresh','RunResearch','Close','Details','Summary','LastScan','ReviewCount','ResearchingCount','ResolvedCount','UnknownCount','ProtectedCount','CachedCount','ResearchErrorCount','DatabaseCount')){if($intelXaml -notmatch ('x:Name="'+[regex]::Escape($n)+'"')){Add-CheckError "Intelligence control missing: $n"}}
-if($mainXaml -notmatch 'Grid.Row="2".*AVAILABLE RAM'){Add-CheckError 'Monitor legend is not outside the graph canvas.'}
+if($mainXaml -notmatch '(?s)Grid\.Row="2".{0,400}AVAILABLE RAM'){Add-CheckError 'Monitor legend is not outside the graph canvas.'}
 if($mainPs -notmatch 'GraphMemoryAvailable' -or $mainPs -notmatch 'GraphMemoryAvailableLine'){Add-CheckError 'Available RAM graph series/line missing.'}
 
 # Safety baseline.

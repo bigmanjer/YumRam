@@ -269,7 +269,9 @@ function Get-YumResearchExecutablePath {
     if([string]::IsNullOrWhiteSpace($Path)){return ''}
     try {
         $expanded=[Environment]::ExpandEnvironmentVariables([string]$Path).Trim()
-        if(Test-Path -LiteralPath $expanded -PathType Leaf){return $expanded}
+        if($expanded.IndexOfAny([IO.Path]::GetInvalidPathChars()) -lt 0){
+            try{if(Test-Path -LiteralPath $expanded -PathType Leaf){return $expanded}}catch{}
+        }
         # Windows service/startup BinaryPathName values may contain an executable plus arguments.
         # Extract only the executable token before any argument text; never pass the full command
         # line to Test-Path/Get-Item/Get-AuthenticodeSignature. Microsoft documents that service
@@ -342,7 +344,7 @@ function Get-YumInstalledSoftwareResearch {
     $targetFull=if($targetExe){$targetExe.ToLowerInvariant()}else{''}
     $targetDir='';if($targetExe){try{$targetDir=(Split-Path -Parent $targetExe).ToLowerInvariant()}catch{}}
     $nameNorm=([string]$Name).Trim();$publisherNorm=([string]$Publisher).Trim()
-    foreach($item in $script:YumResearchRegistryInventory){
+    foreach($item in $script:YumResearchRegistryInventory.ToArray()){
         $pathScore=0
         foreach($candidate in @([string]$item.InstallLocation,[string]$item.DisplayIcon,[string]$item.UninstallString)|Where-Object{$_}){
             $cExe=Get-YumResearchExecutablePath -Path $candidate;$cNorm=if($cExe){$cExe.ToLowerInvariant()}else{''}
@@ -394,7 +396,7 @@ function Get-YumAppxResearch {
     $rows=New-Object System.Collections.Generic.List[object]
     $targetExe=Get-YumResearchExecutablePath -Path $Path;$targetDir='';if($targetExe){try{$targetDir=(Split-Path -Parent $targetExe).ToLowerInvariant()}catch{}}
     $nameNorm=([string]$Name).Trim()
-    foreach($pkg in $script:YumResearchAppxInventory){
+    foreach($pkg in $script:YumResearchAppxInventory.ToArray()){
         $n=if($nameNorm){Get-YumResearchTokenOverlap -Left $nameNorm -Right ($pkg.Name+' '+$pkg.PackageFullName)}else{0};$p=if($Publisher){Get-YumResearchTokenOverlap -Left $Publisher -Right $pkg.Publisher}else{0}
         $pathScore=0;if($targetDir -and $pkg.InstallLocation -and $targetDir.StartsWith($pkg.InstallLocation.TrimEnd('\').ToLowerInvariant())){$pathScore=100}
         $score=[int][math]::Min(100,$pathScore+($n*0.45)+($p*0.15))
@@ -516,7 +518,7 @@ function Get-YumOnlineResearch {
             $errorText='';try{$errorText=[string](Get-YumResearchSafeProperty -Object $provided -Name 'Error' -Default '')}catch{}
             return [pscustomobject]@{Success=$success;Disabled=$false;Error=$errorText;Query=($Name);Results=$results;BestScore=$bestScore;Titles=$titles;Links=$links;VerifiedLinks=$verifiedLinks;VerifiedCount=$verifiedCount;GitHubCount=$githubCount;RedditCount=$redditCount;CommunityContext=$community;ResearchedAt=(Get-Date).ToString('o');Provider='Injected'}
         }
-        $identity=@($Publisher,$Product,$Name)|Where-Object{ -not [string]::IsNullOrWhiteSpace($_)}|ForEach-Object{$_.Trim()}|Select-Object -Unique
+        $identity=@(@($Publisher,$Product,$Name)|Where-Object{ -not [string]::IsNullOrWhiteSpace($_)}|ForEach-Object{$_.Trim()}|Select-Object -Unique)
         if($identity.Count -eq 0){$empty.Success=$true;$empty.Error='No searchable identity terms';return $empty}
         $version='';try{$version=[string]$script:Yum.Config.Version}catch{}
         $timeout=[int]$script:Yum.Config.ResearchRequestTimeoutSeconds
@@ -594,7 +596,7 @@ function Get-YumServiceResearch {
     }
     $rows=New-Object System.Collections.Generic.List[object]
     $targetExe=Get-YumResearchExecutablePath -Path $Path;$targetFull=if($targetExe){$targetExe.ToLowerInvariant()}else{''}
-    foreach($svc in $script:YumResearchServiceInventory){
+    foreach($svc in $script:YumResearchServiceInventory.ToArray()){
         $exe=Get-YumResearchExecutablePath -Path $svc.PathName;$exeNorm=if($exe){$exe.ToLowerInvariant()}else{''}
         $nameScore=if($Name){Get-YumResearchTokenOverlap -Left $Name -Right ($svc.Name+' '+$svc.DisplayName)}else{0};$pathScore=0
         if($targetFull -and $exeNorm -and $targetFull -eq $exeNorm){$pathScore=100}elseif($targetFull -and $exeNorm -and (Split-Path -Parent $targetFull) -eq (Split-Path -Parent $exeNorm)){$pathScore=85}elseif($Path -and $svc.PathName -and $svc.PathName -like ('*'+$Name+'*')){$pathScore=45}

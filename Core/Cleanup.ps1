@@ -88,7 +88,9 @@ function Get-YumTrimPlan {
             $idleScore=[math]::Max(0,15-[math]::Min(15,$cpu))
             $safety=[double]$item.Score
             [pscustomobject]@{Candidate=$item;Priority=$safety+$idleScore;WorkingSetMB=$wsMB}
-        } | Sort-Object WorkingSetMB,Priority -Ascending)
+        } | Sort-Object WorkingSetMB,@{Expression='Priority';Descending=$true})
+        # 5.3.0: was "Sort-Object WorkingSetMB,Priority -Ascending"; -Ascending does not exist, so every
+        # adaptive trim plan threw and automatic cleanup could never select a process.
     }
 
     foreach($entry in @($ranked)){
@@ -103,7 +105,10 @@ function Get-YumTrimPlan {
         # provided it stays inside the per-pass safety budget. After that,
         # keep the normal gap-aware selection rule to limit overshoot.
         $overshootMB=128.0; try{$overshootMB=[math]::Max(32,[double]$script:Yum.Config.CleanupTargetOvershootMB)}catch{}
-        $allowedMB=[math]::Min([double]$MaxTrimMBPerPass,$gapMB+$overshootMB)
+        # 5.3.0: the first candidate is bounded only by the per-pass safety budget, as described above.
+        # Previously it was also capped at gap+overshoot, so one large idle process could never be
+        # chosen when Available RAM was only slightly below target.
+        $allowedMB=if($selected.Count -eq 0){[double]$MaxTrimMBPerPass}else{[math]::Min([double]$MaxTrimMBPerPass,$gapMB+$overshootMB)}
         if(($plannedMB + $wsMB) -gt $allowedMB){continue}
         $already=$false
         foreach($x in $selected.ToArray()){
@@ -236,7 +241,7 @@ function Invoke-YumCleanupCore {
             $current=Get-YumSnapshotCopy
             if($current -and $current.Memory.AvailableGB -ge [double]$decision.StopTargetGB){break}
             $r=Invoke-YumEmptyWorkingSet -Process $item.Process
-            if($r.Success){$reduced+=[int64]$r.Reduced;$used++;[void]$rows.Add([pscustomobject]@{Time=(Get-Date).ToString('HH:mm:ss.fff');Type='Process';PID=$item.Process.Id;Process=$item.Process.ProcessName;BeforeMB=[math]::Round($r.Before/1MB);AfterMB=[math]::Round($r.After/1MB);ReducedMB=[math]::Round($r.Reduced/1MB);Action='Trimmed';Result=if($r.Success){'Completed'}else{'Failed'}});Write-YumLog ("Trimmed {0} PID {1}: {2:N0} MB -> {3:N0} MB; reduced {4:N0} MB" -f $item.Process.ProcessName,$item.Process.Id,$r.Before/1MB,$r.After/1MB,$r.Reduced/1MB)}else{Write-YumLog ("Trim failed for {0} PID {1}; Win32Error={2}" -f $item.Process.ProcessName,$item.Process.Id,$r.Win32Error)}
+            if($r.Success){$reduced+=[int64]$r.Reduced;$used++;[void]$rows.Add([pscustomobject]@{Time=(Get-Date).ToString('HH:mm:ss.fff');Type='Process';PID=$item.Process.Id;Process=$item.Process.ProcessName;BeforeMB=[math]::Round($r.Before/1MB);AfterMB=[math]::Round($r.After/1MB);ReducedMB=[math]::Round($r.Reduced/1MB);Action='Trimmed';Result=if($r.Success){'Completed'}else{'Failed'}});Write-YumLog ("Trimmed {0} PID {1}: {2:N0} MB -> {3:N0} MB; reduced {4:N0} MB" -f $item.Process.ProcessName,$item.Process.Id,($r.Before/1MB),($r.After/1MB),($r.Reduced/1MB))}else{Write-YumLog ("Trim failed for {0} PID {1}; Win32Error={2}" -f $item.Process.ProcessName,$item.Process.Id,$r.Win32Error)}
             Start-Sleep -Milliseconds ([int]$profile.StepDelayMs)
             $fresh=Get-YumMemoryTelemetry
             if($fresh){Update-YumSnapshotMemory -Memory $fresh}

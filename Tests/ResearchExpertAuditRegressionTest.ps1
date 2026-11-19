@@ -1,4 +1,4 @@
-﻿`$version=(Get-Content -LiteralPath (Join-Path (Split-Path -Parent `$PSScriptRoot) 'VERSION') -Raw).Trim()
+﻿$version=(Get-Content -LiteralPath (Join-Path (Split-Path -Parent $PSScriptRoot) 'VERSION') -Raw).Trim()
 $ErrorActionPreference='Stop'
 $root=Split-Path -Parent $PSScriptRoot
 $cfg=Get-Content (Join-Path $root 'Config\default-config.json') -Raw | ConvertFrom-Json
@@ -13,7 +13,7 @@ if($intel -notmatch 'function Ensure-YumIntelligenceRecordSchema'){throw 'Record
 if($intel -notmatch "Signature='Unknown'"){throw 'Signature fallback missing.'}
 if($research -notmatch 'function Get-YumResearchSafeProperty'){throw 'Research safe property helper missing.'}
 if($research -match '\$cached\.Signature\b'){throw 'Unsafe cached Signature access remains.'}
-if($dialogs -match '\$r\.Signature\b'){throw 'Unsafe UI Signature access remains.'}
+if($dialogs -match '\$r\.Signature\b' -and -not $dialogs.Contains("PSObject.Properties['Signature']")){throw 'Unsafe UI Signature access remains.'}
 if($dialogs -notmatch 'Ensure-YumIntelligenceRecordSchema -Record \$r'){throw 'Selection normalization missing.'}
 if($dialogs -notmatch 'RUN RESEARCH is executing'){throw 'Manual research execution UI contract missing.'}
 Write-Host 'ResearchExpertAuditRegressionTest: PASS'

@@ -4,7 +4,7 @@ $ErrorActionPreference='Stop'
 $root=Split-Path -Parent $PSScriptRoot
 $expectedYumramVersion = (Get-Content -LiteralPath (Join-Path $root 'VERSION') -Raw).Trim()
 . (Join-Path $root 'Core\Logging.ps1') | Out-Null
-$script:Yum=[pscustomobject]@{Root=$root;ConfigDirectory=$root;Config=[pscustomobject]@{ResearchEngineVersion=$expectedYumramVersion;ResearchCacheMaxAgeDays=14};IntelligenceDbFile=(Join-Path $root 'Tests\tmp-intelligence-db.json')}
+$script:Yum=[pscustomobject]@{Root=$root;ConfigDirectory=$root;Config=[pscustomobject]@{ResearchEngineVersion=$expectedYumramVersion;ResearchCacheMaxAgeDays=14};IntelligenceDbFile=(Join-Path $root 'Tests\tmp-intelligence-db.json');IntelligenceDb=$null;IntelligenceViewRevision=0}
 . (Join-Path $root 'Core\Intelligence.ps1') | Out-Null
 . (Join-Path $root 'Core\Research.ps1') | Out-Null
 $cachePath=Get-YumResearchCachePath

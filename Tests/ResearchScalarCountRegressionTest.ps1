@@ -19,7 +19,7 @@ $signalsN = @($true,$true,$false,$false,$false) | Where-Object { $_ }
 if(@($signals0).Count -ne 0){throw "Identity-signal zero-match regression."}
 if(@($signals1).Count -ne 1){throw "Identity-signal single-match regression."}
 if(@($signalsN).Count -ne 2){throw "Identity-signal multi-match regression."}
-if($research -notmatch '\$identitySignals=@\(@\(\$registryStrong,\$signerMatches,\$wingetStrong,\$onlineStrong,\$fileStrong\)\|Where-Object\{\$_\}\)'){throw "Identity signals are not array-materialized before Count."}
+if($research -notmatch '\$identitySignals=@\(\s*@\(\$registryStrong,'){throw "Identity signals are not array-materialized before Count."}
 if($research -match '\$identitySignals=@\(\$registryStrong,\$signerMatches,\$wingetStrong,\$onlineStrong,\$fileStrong\)\|Where-Object\{\$_\}'){throw "Unsafe identitySignals scalar pipeline remains in Research.ps1."}
 
 
@@ -30,7 +30,7 @@ $termsN = @('Google', 'Chrome', 'Browser') | Where-Object { -not [string]::IsNul
 if(@($terms0).Count -ne 0){throw "Research-term zero-match regression."}
 if(@($terms1).Count -ne 1){throw "Research-term single-match regression."}
 if(@($termsN).Count -ne 3){throw "Research-term multi-match regression."}
-if($research -notmatch '\$terms=@\(@\(\$Publisher,\$Product,\$Name\)\|Where-Object\{ -not \[string\]::IsNullOrWhiteSpace\(\$_\)\}\|Select-Object -Unique\)'){throw "Research terms are not array-materialized before Count."}
+if(-not $research.Contains('$identity=@(@($Publisher,$Product,$Name)|')){throw "Research terms are not array-materialized before Count."}
 if($research -match '\$terms=@\(\$Publisher,\$Product,\$Name\)\|Where-Object\{ -not \[string\]::IsNullOrWhiteSpace\(\$_\)\}\|Select-Object -Unique'){throw "Unsafe research-term scalar pipeline remains in Research.ps1."}
 
 

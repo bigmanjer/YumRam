@@ -1192,7 +1192,7 @@ function Get-YumResearchStatusForUi {
             }
             if($null -ne $State.ResearchProgress){
                 if($stage -eq 'Complete'){ $State.ResearchProgress.Text=('Complete • {0}' -f $message); try{$State.ActivityStatus.Text='RESEARCH COMPLETE';$State.ActivityDetail.Text=$message;$State.ActivityProgress.IsIndeterminate=$false;$State.ActivityProgress.Value=100}catch{} } elseif($stage -eq 'Research Error'){ $State.ResearchProgress.Text=('Research ERROR {0}/{1} • {2} • {3}' -f $index,$total,$name,$message); try{$State.ActivityStatus.Text='RESEARCH ERROR';$State.ActivityDetail.Text=$message;$State.ActivityProgress.IsIndeterminate=$false;$State.ActivityProgress.Value=([math]::Min(100,[math]::Max(0,($index / [double][math]::Max(1,$total))*100)))}catch{} }
-                elseif($total -gt 0){ $State.ResearchProgress.Text=('Research {0}/{1} • {2}' -f $index,$stage); try{$State.ActivityStatus.Text=('RESEARCHING • {0}/{1}' -f $index,$total);$State.ActivityDetail.Text=('{0} • {1}' -f $stage,$name);$State.ActivityProgress.IsIndeterminate=$false;$State.ActivityProgress.Value=[math]::Min(100,[math]::Max(0,($index / [double]$total)*100))}catch{} }
+                elseif($total -gt 0){ $State.ResearchProgress.Text=('Research {0}/{1} • {2}' -f $index,$total,$stage); try{$State.ActivityStatus.Text=('RESEARCHING • {0}/{1}' -f $index,$total);$State.ActivityDetail.Text=('{0} • {1}' -f $stage,$name);$State.ActivityProgress.IsIndeterminate=$false;$State.ActivityProgress.Value=[math]::Min(100,[math]::Max(0,($index / [double]$total)*100))}catch{} }
                 else { $State.ResearchProgress.Text=('Research • {0}' -f $stage) }
             }
             if($stage -in @('Organized','Unknown','Research Error','Error','Complete','Skipped')){
