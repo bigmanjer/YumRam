@@ -50,6 +50,13 @@ $script:YumControllerWorkerScript = {
                 if($null -ne $snap){ Update-YumGameState -Snapshot $snap }
             }
             Invoke-YumBackgroundController
+            # 5.3.2: refresh the "reachable Available RAM" estimate: once at start, every 30 s while
+            # monitoring, and right after a manual reclaim. ~0.5 s CPU (identities are cached).
+            $estimateAge=([datetime]::UtcNow-[datetime]$script:Yum.ReachableEstimateUtc).TotalSeconds
+            if(-not [bool]$script:Yum.CleanupRunning -and ($null -eq $script:Yum.ReachableEstimate -or $null -ne $reclaimMode -or ([bool]$script:Yum.MonitoringActive -and $estimateAge -ge 30))){
+                $script:Yum.ReachableEstimateUtc=[datetime]::UtcNow
+                try{ $script:Yum.ReachableEstimate=Get-YumReachableEstimate }catch{ try{Write-YumLogException -Context 'Reachable estimate failed' -Exception $_.Exception}catch{} }
+            }
             $script:Yum.ControllerHeartbeatUtc = [datetime]::UtcNow
         } catch {
             try { Write-YumLogException -Context 'Controller worker tick failed' -Exception $_.Exception } catch {}

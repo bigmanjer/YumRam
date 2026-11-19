@@ -1,6 +1,6 @@
-# YUMRAM 5.3.1 — Alpha
+# YUMRAM 5.3.2 — Alpha
 
-Version: 5.3.1
+Version: 5.3.2
 Stage: alpha
 Previous release: 5.2.90 ("Startup Fixed" / "UI-Telemetry-Verified")
 Earlier build reviewed: 5.2.74 ("GUI Refined Classification Fix")

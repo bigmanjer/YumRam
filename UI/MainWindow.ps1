@@ -119,10 +119,22 @@ function Update-YumTargetUi {
         $target=[double]$script:Yum.Config.MinimumAvailableGB
         if($target -le 0){$target=0.1}
         $ratio=[math]::Min(100,([double]$m.AvailableGB/$target)*100)
-        $script:Yum.Ui.Target.Text='Available: {0:N1} GB / Target: {1:N1} GB ({2:N0}%)' -f $m.AvailableGB,$target,$ratio
+        $text='Available: {0:N1} GB / Target: {1:N1} GB ({2:N0}%)' -f $m.AvailableGB,$target,$ratio
+        # 5.3.2: show what this PC can realistically reach right now (current Available + what the
+        # current mode may trim x the retention learned on this machine).
+        $est=$script:Yum.ReachableEstimate
+        $outOfReach=$false
+        if($null -ne $est){
+            $reachable=[double]$m.AvailableGB+[double]$est.ReclaimableGB
+            $outOfReach=($m.AvailableGB -lt $target -and $reachable -lt ($target-0.1))
+            $text+=(' • reachable ≈ {0:N1} GB' -f $reachable)
+            $learned=if([int]$est.RetentionSamples -ge 2){'learned on this PC from {0} reclaims' -f [int]$est.RetentionSamples}else{'default until YUMRAM has measured this PC'}
+            $script:Yum.Ui.Target.ToolTip=("Reachable now ≈ {0:N1} GB = Available {1:N1} GB + {2:N1} GB that {3} mode may reclaim.`n{4} trimmable processes ({5:N0} MB) × {6:P0} retention ({7}).`nOnly part of trimmed memory becomes Available; Windows needs it for active apps." -f $reachable,$m.AvailableGB,[double]$est.ReclaimableGB,$est.Mode,[int]$est.CandidateCount,[double]$est.CandidateMB,[double]$est.Retention,$learned)
+        }
+        $script:Yum.Ui.Target.Text=$text
         $script:Yum.Ui.TargetBar.Value=$ratio
-        $script:Yum.Ui.TargetStatus.Text=if($m.AvailableGB -ge $target){'[OK]'}else{'[LOW]'}
-        if($m.AvailableGB -ge $target){$brush='#86EFAC'}elseif($m.AvailableGB -ge ($target*.75)){$brush='#FDE68A'}else{$brush='#FCA5A5'}
+        $script:Yum.Ui.TargetStatus.Text=if($m.AvailableGB -ge $target){'[OK]'}elseif($outOfReach){'[OUT OF REACH]'}else{'[LOW]'}
+        if($m.AvailableGB -ge $target){$brush='#86EFAC'}elseif($outOfReach -or $m.AvailableGB -ge ($target*.75)){$brush='#FDE68A'}else{$brush='#FCA5A5'}
         $script:Yum.Ui.TargetStatus.Foreground=Get-YumBrush $brush
         $script:Yum.Ui.TargetBar.Foreground=Get-YumBrush $brush
     } catch { Write-YumLogException -Context 'Target UI update failed' -Exception $_.Exception }
@@ -193,7 +205,7 @@ function Stop-YumMonitoring {
     Stop-YumTelemetry;$script:Yum.Ui.Monitor.Content='▶ Start Monitoring';$script:Yum.Ui.Status.Text='● Paused';if($null -ne $script:Yum.Ui.QuickMonitorStatus){$script:Yum.Ui.QuickMonitorStatus.Text='PAUSED';$script:Yum.Ui.QuickMonitorStatus.Foreground=Get-YumBrush '#FDE68A'};$script:Yum.Ui.Status.Foreground=Get-YumBrush '#FDE68A';Write-YumLog 'Monitoring stopped.'
 }
 function Invoke-YumApplyTarget {
-    try{$v=0.0;$ok=[double]::TryParse($script:Yum.Ui.TargetBox.Text.Trim(),[Globalization.NumberStyles]::Float,[Globalization.CultureInfo]::InvariantCulture,[ref]$v);if(-not $ok -or $v -le 0){Show-YumMessage -Message 'Enter a valid Available RAM target greater than 0 GB.' -Title 'YUMRAM - Invalid Target' -Buttons 'OK' -Icon 'Warning';return};$s=Get-YumSnapshotCopy;$m=if($s){$s.Memory}else{Get-YumMemoryTelemetry};if($null -eq $m -or $v -gt $m.TotalGB){Show-YumMessage -Message 'The target must be greater than 0 and no more than installed RAM.' -Title 'YUMRAM - Invalid Target' -Buttons 'OK' -Icon 'Warning';return};$v=[math]::Round($v,1);Update-YumConfigValue -Name MinimumAvailableGB -Value $v;Update-YumConfigValue -Name CleanupTargetAvailableGB -Value $v;$script:Yum.Ui.TargetBox.Text=$v.ToString('0.##');Update-YumTargetUi;Set-YumFooter "Target updated to $v GB 💜";Write-YumLog "Minimum Available RAM target changed to $v GB."}catch{Write-YumLogException -Context 'Target apply failed' -Exception $_.Exception}
+    try{$v=0.0;$ok=[double]::TryParse($script:Yum.Ui.TargetBox.Text.Trim(),[Globalization.NumberStyles]::Float,[Globalization.CultureInfo]::InvariantCulture,[ref]$v);if(-not $ok -or $v -le 0){Show-YumMessage -Message 'Enter a valid Available RAM target greater than 0 GB.' -Title 'YUMRAM - Invalid Target' -Buttons 'OK' -Icon 'Warning';return};$s=Get-YumSnapshotCopy;$m=if($s){$s.Memory}else{Get-YumMemoryTelemetry};if($null -eq $m -or $v -gt $m.TotalGB){Show-YumMessage -Message 'The target must be greater than 0 and no more than installed RAM.' -Title 'YUMRAM - Invalid Target' -Buttons 'OK' -Icon 'Warning';return};$v=[math]::Round($v,1);Update-YumConfigValue -Name MinimumAvailableGB -Value $v;Update-YumConfigValue -Name CleanupTargetAvailableGB -Value $v;$script:Yum.Ui.TargetBox.Text=$v.ToString('0.##');$script:Yum.ControllerBackoffSeconds=0.0;Update-YumTargetUi;$est=$script:Yum.ReachableEstimate;if($null -ne $est -and $v -gt ([double]$m.AvailableGB+[double]$est.ReclaimableGB+0.1)){Set-YumFooter ("Target set to {0} GB 💜 — note: about {1:N1} GB is reachable right now on this PC; YUMRAM will keep working toward it and back off between attempts." -f $v,([double]$m.AvailableGB+[double]$est.ReclaimableGB))}else{Set-YumFooter "Target updated to $v GB 💜"};Write-YumLog "Minimum Available RAM target changed to $v GB."}catch{Write-YumLogException -Context 'Target apply failed' -Exception $_.Exception}
 }
 function Test-YumSingleInstance {try{$mutex=New-Object System.Threading.Mutex($false,'Local\YUMRAM-V5-SingleInstance');$owned=$false;try{$owned=$mutex.WaitOne(0)}catch [System.Threading.AbandonedMutexException]{$owned=$true};if(-not $owned){$mutex.Dispose();[System.Windows.MessageBox]::Show('YUMRAM is already running.','YUMRAM','OK','Information')|Out-Null;return $false};$script:Yum.SingleInstanceMutex=$mutex;$script:Yum.SingleInstanceOwned=$true;return $true}catch{Write-YumLogException -Context 'Single instance check failed' -Exception $_.Exception;return $true}}
 function Stop-YumSingleInstance {try{if($script:Yum.SingleInstanceOwned -and $script:Yum.SingleInstanceMutex){try{$script:Yum.SingleInstanceMutex.ReleaseMutex()}catch{};$script:Yum.SingleInstanceMutex.Dispose()}}catch{}finally{$script:Yum.SingleInstanceMutex=$null;$script:Yum.SingleInstanceOwned=$false}}

@@ -123,7 +123,57 @@ function Load-YumReclaimLearning {
         if(-not(Test-Path -LiteralPath $path)){return}
         $obj=(Get-Content -LiteralPath $path -Raw -ErrorAction Stop)|ConvertFrom-Json -ErrorAction Stop
         foreach($p in @($obj.Items.PSObject.Properties)){$script:Yum.ReclaimLearning[[string]$p.Name]=$p.Value}
+        if($null -ne $obj.PSObject.Properties['Global'] -and $null -ne $obj.Global){
+            $script:Yum.GlobalRetention=@{Ratio=[double]$obj.Global.Ratio;Samples=[int]$obj.Global.Samples;Updated=[string]$obj.Global.Updated}
+        }
     }catch{try{Write-YumLogException -Context 'Reclaim learning load failed' -Exception $_.Exception}catch{}}
+}
+
+# 5.3.2: per-PC learned retention. Only part of a trimmed working set becomes Available RAM, and how
+# much depends on the machine (memory compression, pagefile speed, what the apps are doing).
+# Measured 0.38-0.40 on a 16 GB Windows 11 PC. Every settled reclaim/cleanup pass that trims a
+# meaningful amount (>= 200 MB) updates an EWMA, so the trim planner and the "reachable" estimate
+# adapt to whatever PC YUMRAM runs on.
+function Get-YumRetentionRatio {
+    $fallback=0.4
+    try{ if($null -ne $script:Yum.Config['CleanupExpectedRetention']){ $fallback=[double]$script:Yum.Config['CleanupExpectedRetention'] } }catch{}
+    try{
+        Load-YumReclaimLearning
+        $g=$script:Yum.GlobalRetention
+        if($null -ne $g -and [int]$g.Samples -ge 2){ return [math]::Min(0.9,[math]::Max(0.15,[double]$g.Ratio)) }
+    }catch{}
+    return [math]::Min(0.9,[math]::Max(0.15,$fallback))
+}
+
+function Update-YumGlobalRetention {
+    param([double]$AvailableGainGB,[double]$TrimmedMB)
+    try{
+        if($TrimmedMB -lt 200){return}
+        Load-YumReclaimLearning
+        $ratio=[math]::Min(1.0,[math]::Max(0.0,($AvailableGainGB*1024.0)/$TrimmedMB))
+        $g=$script:Yum.GlobalRetention
+        if($null -eq $g -or [int]$g.Samples -le 0){$new=$ratio;$n=1}else{$new=(0.3*$ratio)+(0.7*[double]$g.Ratio);$n=[int]$g.Samples+1}
+        $script:Yum.GlobalRetention=@{Ratio=[math]::Round($new,4);Samples=$n;Updated=(Get-Date).ToString('o')}
+        try{Write-YumLog ('Learned retention sample: {0:N0} MB trimmed -> +{1:N0} MB Available ({2:P0}); running estimate {3:P0} over {4} samples.' -f $TrimmedMB,($AvailableGainGB*1024),$ratio,$new,$n)}catch{}
+    }catch{}
+}
+
+function Get-YumReachableEstimate {
+    # Realistic Available RAM right now = current Available + (working sets this mode is allowed to trim
+    # x learned retention). Uses the same safety filter and score floor as automatic cleanup.
+    param([string]$Mode=[string]$script:Yum.Config.Mode)
+    $m=Get-YumMemoryTelemetry
+    if($null -eq $m){return $null}
+    $snap=Get-YumSnapshotCopy
+    $fg=if($snap){[int]$snap.ForegroundProcessId}else{0}
+    $gamePid=if($snap -and $snap.Game -and $snap.Game.Detected){[int]$snap.Game.ProcessId}else{0}
+    $profile=Get-YumModeProfile
+    $eligible=@(Get-YumCandidateProcesses -ForegroundPid $fg -GamePid $gamePid -Mode $Mode | Where-Object {$_.Score -ge $profile.CandidateScoreMinimum})
+    $wsMB=0.0;foreach($c in $eligible){$wsMB+=[double]$c.WorkingSet/1MB}
+    $retention=Get-YumRetentionRatio
+    $samples=0;try{if($null -ne $script:Yum.GlobalRetention){$samples=[int]$script:Yum.GlobalRetention.Samples}}catch{}
+    $reclaimGB=($wsMB*$retention)/1024.0
+    [pscustomobject]@{Timestamp=Get-Date;Mode=$Mode;AvailableGB=[double]$m.AvailableGB;TotalGB=[double]$m.TotalGB;CandidateCount=$eligible.Count;CandidateMB=[math]::Round($wsMB);Retention=$retention;RetentionSamples=$samples;ReclaimableGB=[math]::Round($reclaimGB,2);ReachableGB=[math]::Round([double]$m.AvailableGB+$reclaimGB,2)}
 }
 
 function Save-YumReclaimLearning {
@@ -140,7 +190,7 @@ function Save-YumReclaimLearning {
             for($i=0;$i -lt $removeCount;$i++){[void]$items.Remove([string]$ordered[$i].Key)}
         }
         $tmp="$path.tmp"
-        [ordered]@{Version='1';Updated=(Get-Date).ToString('o');Items=$items}|ConvertTo-Json -Depth 8|Set-Content -LiteralPath $tmp -Encoding UTF8
+        [ordered]@{Version='1';Updated=(Get-Date).ToString('o');Global=$script:Yum.GlobalRetention;Items=$items}|ConvertTo-Json -Depth 8|Set-Content -LiteralPath $tmp -Encoding UTF8
         Move-Item -LiteralPath $tmp -Destination $path -Force
         return $true
     }catch{try{Write-YumLogException -Context 'Reclaim learning save failed' -Exception $_.Exception}catch{};return $false}
@@ -360,6 +410,10 @@ function Invoke-YumReclaimProcessPass {
     }
     $afterSnap=Get-YumMemoryReclaimSnapshot
     $actualAvailable=[math]::Max(0.0,$afterSnap.AvailableGB-$before.AvailableGB)
+    if($trimmed.Count -gt 0){
+        $trimmedMBTotal=0.0;foreach($t in $trimmed.ToArray()){$trimmedMBTotal+=[math]::Max(0.0,[double]($t.Start-$t.AfterTrim)/1MB)}
+        Update-YumGlobalRetention -AvailableGainGB ([double]$afterSnap.AvailableGB-[double]$before.AvailableGB) -TrimmedMB $trimmedMBTotal
+    }
     # Plain loop: Measure-Object on an empty pipeline has no .Sum under StrictMode.
     $actualWorkingSet=0.0
     foreach($row in $rows.ToArray()){try{$actualWorkingSet+=[double]$row.ReducedMB}catch{}}

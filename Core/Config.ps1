@@ -26,6 +26,9 @@
         ControllerHeartbeatUtc = [datetime]::MinValue
         MonitoringActive = $false
         ControllerBackoffSeconds = 0.0
+        GlobalRetention = $null
+        ReachableEstimate = $null
+        ReachableEstimateUtc = [datetime]::MinValue
         ControllerWakeEvent = (New-Object System.Threading.AutoResetEvent($false))
         ReclaimRequest = $null
         ReclaimRequestedAt = [datetime]::MinValue

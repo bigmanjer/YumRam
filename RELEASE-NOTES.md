@@ -1,3 +1,15 @@
+# YUMRAM 5.3.2 — Alpha: learns each PC, shows what is reachable
+
+- **Per-PC learned retention.** Only part of a trimmed working set becomes Available RAM, and the
+  share differs per machine. Every settled reclaim/cleanup pass that trims >= 200 MB updates a
+  running average saved in `reclaim-learning.json` (bounded 15-90%; default 40% until 2 samples).
+  First real run here: samples 45/42/28/38/35% -> 38%, matching the hand measurement (38-40%).
+- **Trim planner uses the learned ratio** instead of a fixed 40%.
+- **"Reachable ≈ X GB"** on the target line: current Available + (memory the current mode may trim
+  x learned retention). The status shows **[OUT OF REACH]** when the target is above it, and the
+  tooltip explains the numbers. Setting a target above it shows a note and resets the back-off.
+- Tests: 42/42 (new RetentionLearningTest).
+
 # YUMRAM 5.3.1 — Alpha: lag, settings, and reclaim strength
 
 Measured on the developer's 16 GB Windows 11 PC with the real program running.

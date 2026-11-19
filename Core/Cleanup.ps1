@@ -62,7 +62,9 @@ function Get-YumTrimPlan {
     # 5.3.1: plan in working-set MB, not Available MB. Measured: trimming 726 MB of working set
     # raised Available RAM by ~280-315 MB (~40%) after it settled, so planning working-set MB equal
     # to the Available gap always under-trimmed and the controller stalled into fallback churn.
+    # 5.3.2: use the ratio learned on this PC (Get-YumRetentionRatio) when available.
     $retention=0.4; try{ if($null -ne $script:Yum.Config['CleanupExpectedRetention']){ $retention=[double]$script:Yum.Config['CleanupExpectedRetention'] } }catch{}
+    try{ if(Get-Command Get-YumRetentionRatio -ErrorAction SilentlyContinue){ $retention=Get-YumRetentionRatio } }catch{}
     $retention=[math]::Min(1.0,[math]::Max(0.15,$retention))
     $gapMB=$gapMB/$retention
     $selected=New-Object System.Collections.Generic.List[object]
@@ -362,6 +364,7 @@ function Invoke-YumCleanupToTarget {
         $fresh=Get-YumMemoryTelemetry
         if($fresh){Update-YumSnapshotMemory -Memory $fresh}
         $current=if($fresh){[double]$fresh.AvailableGB}else{$previous}
+        if([int]$last.Processes -gt 0 -and (Get-Command Update-YumGlobalRetention -ErrorAction SilentlyContinue)){Update-YumGlobalRetention -AvailableGainGB ($current-$previous) -TrimmedMB ([double]$last.WorkingSetReduced/1MB)}
         if($current -ge $target){$stopReason='Target reached during adaptive cleanup.';break}
         $gain=$current-$previous
         if($gain -le 0.01){$stalled++}else{$stalled=0}
@@ -408,6 +411,7 @@ function Invoke-YumCleanupToTarget {
     $final=Get-YumMemoryTelemetry
     if($final){Update-YumSnapshotMemory -Memory $final}
     $after=if($final){[double]$final.AvailableGB}else{$previous}
+    if($totalProcesses -gt 0){try{if(Get-Command Save-YumReclaimLearning -ErrorAction SilentlyContinue){[void](Save-YumReclaimLearning)}}catch{}}
     $reason=if($after -ge $target){if($fallbackUsed){'Target reached using adaptive cleanup + legacy fallback'}else{'Target reached'}}elseif($fallbackUsed){'Target not reached after adaptive cleanup and legacy fallback; no meaningful further reclaim was observed'}else{'Adaptive cleanup stalled before target'}
     $shortfall=[math]::Max(0,$target-$after)
     return [pscustomobject]@{Success=$true;Skipped=$false;Preview=$false;Reason=$reason;StopReason=$stopReason;TargetShortfallGB=$shortfall;BeforeAvailableGB=$before;AfterAvailableGB=$after;TargetGB=$target;TargetReached=($after -ge $target);AvailableImprovementGB=[math]::Max(0,$after-$before);WorkingSetReduced=$totalReduced;Processes=$totalProcesses;ServiceStops=$serviceStops;FallbackUsed=$fallbackUsed;Candidates=$allRows.ToArray()}
