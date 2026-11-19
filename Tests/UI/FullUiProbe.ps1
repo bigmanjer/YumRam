@@ -15,7 +15,7 @@ New-Item -ItemType Directory -Path $Out -Force | Out-Null
 $tmp=Join-Path $env:TEMP ('yum-full-'+[guid]::NewGuid().ToString('N'));New-Item -ItemType Directory $tmp|Out-Null
 Get-ChildItem $Root -Filter *.json | Copy-Item -Destination $tmp
 $script:Yum.ConfigDirectory=$tmp;$script:Yum.ConfigFile=(Join-Path $tmp 'config.json');$script:Yum.Config.LogFileName=(Join-Path $tmp 'probe.log')
-$script:Yum.Config.StartMonitoringAutomatically=$false
+$script:Yum.Config.StartMonitoringAutomatically=$false; $script:Yum.Config['UpdateCheckEnabled']=$false
 $script:R=New-Object System.Collections.Generic.List[string];$script:Fails=0
 function Check([bool]$c,[string]$m){ if($c){$script:R.Add("PASS  $m")}else{$script:R.Add("FAIL  $m");$script:Fails++} }
 function Note([string]$m){ $script:R.Add("      $m") }

@@ -2,7 +2,7 @@
 
 **Yumes Ultimate Memory Reclaim & Monitor**
 
-Version: 5.9.0
+Version: 5.10.0
 Stage: alpha
 
 **YUMRAM keeps Windows responsive by keeping Available RAM above a target you choose.** It trims the
@@ -53,9 +53,21 @@ It is a single-folder Windows PowerShell 5.1 + WPF app: no installer, no runtime
 
 ## Getting started
 
-1. Download or clone this repository into any folder.
-2. Double-click **`Launch-YUMRAM.cmd`** (or `Launch-YUMRAM.vbs` to start without a console window).
-3. Accept the administrator prompt.
+1. Download the latest release zip from GitHub (or clone this repository) into any folder.
+2. Double-click **`YUMRAM.exe`**. It is a small launcher (source in `Launcher\`, built by
+   `Tools\Build-Launcher.ps1` with the C# compiler that ships with Windows) that starts the readable
+   scripts next to it with no console window. `Launch-YUMRAM.cmd` still works too.
+3. Accept the administrator prompt (it says "YUMRAM").
+
+**Updates:** YUMRAM checks GitHub Releases once a day (Settings › General to turn it off; nothing about
+you or your PC is sent). When a new version is out, the Overview shows *Install and restart*. The
+download is verified against its published SHA-256 before anything is installed, your settings and
+statistics are kept, and the previous version is kept in `.previous` (`YUMRAM.exe --rollback` to go
+back). Maintainers: `Tools\Build-Release.ps1` builds `dist\YUMRAM-<version>.zip` and `SHA256SUMS.txt`
+to attach to a GitHub Release tagged `v<version>`.
+
+The exe is not code-signed yet, so Windows SmartScreen may say "Windows protected your PC" the first
+time (More info › Run anyway).
 4. Set your **Available RAM target** and press **Start Monitoring**.
 
 Your settings are saved in `config.json` next to the program (created on first launch).

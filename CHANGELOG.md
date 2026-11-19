@@ -1,5 +1,31 @@
 # Changelog
 
+# YUMRAM 5.10.0 — YUMRAM.exe and updates from GitHub (branch `visual-overhaul`)
+
+Research: PS2EXE builds (script wrapped in its own PowerShell host) are repeatedly flagged by antivirus
+ML engines, per file hash, so every release again; established updaters check GitHub Releases, verify
+a SHA-256 before replacing anything, use a separate updater process, and keep the old version.
+
+- **YUMRAM.exe** (25 KB, `Launcher\YumramLauncher.cs`, built by `Tools\Build-Launcher.ps1` with the
+  .NET Framework C# compiler — no SDK). Starts the readable scripts with no console window, asks for
+  administrator itself (the UAC prompt says "YUMRAM"), has the YUMRAM icon. Not code-signed yet.
+- **Updates:** once a day in the background (Settings › General, on by default, can be turned off)
+  YUMRAM asks `api.github.com/repos/bigmanjer/YumRam/releases/latest` (generic User-Agent, nothing about
+  you). An *Update available* banner on the Overview and a *Check for updates* button in About.
+  *Install and restart*: download → **SHA-256 must match** (GitHub's asset digest or `SHA256SUMS.txt`;
+  no hash = no install) → package VERSION must match the tag → the new YUMRAM.exe waits for YUMRAM to
+  close, backs up program files to `.previous`, copies the update in (config, statistics, learned data
+  and logs are never touched; a failed copy restores the old files) and starts YUMRAM again.
+  `YUMRAM.exe --rollback` goes back.
+- **Releases:** `Tools\Build-Release.ps1` → `dist\YUMRAM-<version>.zip` (program files + exe, never user
+  data) + `SHA256SUMS.txt`. Today the repo has no release, so the check says so.
+- **Fixed:** starting with monitoring paused left the Overview at "--" (target, stats, graph) — the first
+  snapshot never bumped the version counter. Runtime files `stats.json` / `cpu-balance.json` were
+  accidentally committed in 5.8/5.9; now untracked and ignored.
+- Tests: new `Release510UpdateTest` builds a real 9.9.9 package and installs it over a temporary copy
+  through the real checker, verifier and exe: 5.10.0 → 9.9.9 → rollback → 5.10.0, tampered download
+  refused, user data unchanged. 52/52 pass; full UI probe 53 steps, 0 failures.
+
 # YUMRAM 5.9.0 — Lighter YUMRAM, CPU you can see (branch `visual-overhaul`)
 
 A RAM tool should not be heavy itself. Measured YUMRAM's own cost at idle (goal met, monitoring on,

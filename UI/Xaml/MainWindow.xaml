@@ -134,6 +134,7 @@
         <Grid.RowDefinitions>
           <RowDefinition Height="Auto"/>
           <RowDefinition Height="Auto"/>
+          <RowDefinition Height="Auto"/>
           <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
@@ -146,8 +147,22 @@
                      ToolTip="Global shortcut for Free RAM now. Works even when YUMRAM is hidden in the tray. Change it in Settings."/>
         </DockPanel>
 
+        <!-- 5.10: update banner (hidden until a verified update is available) -->
+        <Border x:Name="UpdateBanner" Grid.Row="1" Visibility="Collapsed" Background="{StaticResource AccentSoft}" BorderBrush="{StaticResource Accent}" BorderThickness="1" CornerRadius="10" Padding="14,10" Margin="0,0,0,12" VerticalAlignment="Top">
+          <DockPanel>
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+              <Button x:Name="UpdateNotes" Content="What's new" Style="{StaticResource GhostButton}" Margin="0,0,8,0"/>
+              <Button x:Name="UpdateInstall" Content="Install and restart" Style="{StaticResource PrimaryButton}" MinWidth="150"/>
+            </StackPanel>
+            <StackPanel VerticalAlignment="Center">
+              <TextBlock x:Name="UpdateTitle" Text="Update available" FontWeight="SemiBold"/>
+              <TextBlock x:Name="UpdateText" Text="" Style="{StaticResource Caption}" TextWrapping="Wrap"/>
+            </StackPanel>
+          </DockPanel>
+        </Border>
+
         <!-- Top row: status + primary actions -->
-        <Grid Grid.Row="1" Margin="0,0,0,14">
+        <Grid Grid.Row="2" Margin="0,0,0,14">
           <Grid.ColumnDefinitions>
             <ColumnDefinition Width="*" MinWidth="360"/>
             <ColumnDefinition Width="250"/>
@@ -211,7 +226,7 @@
         </Grid>
 
         <!-- Body: graph + side panel -->
-        <Grid Grid.Row="2">
+        <Grid Grid.Row="3">
           <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="320"/></Grid.ColumnDefinitions>
 
           <!-- Live graph -->

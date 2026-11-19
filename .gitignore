@@ -14,3 +14,8 @@ research-live-results.tmp
 *.tmp
 Tests/tmp-*
 manual-organizations.json
+stats.json
+cpu-balance.json
+.previous/
+dist/
+YUMRAM.exe.old

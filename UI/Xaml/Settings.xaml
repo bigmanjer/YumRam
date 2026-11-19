@@ -32,6 +32,7 @@
             <CheckBox x:Name="ShowTrayIcon" Content="Show RAM % in the notification area (tray icon)" Margin="0,8,0,0"/>
             <CheckBox x:Name="MinimizeToTray" Content="Minimize to the notification area instead of the taskbar" Margin="0,8,0,0"/>
             <TextBlock Text="Changes apply as soon as you press Apply." Style="{StaticResource Caption}" Margin="27,2,0,0"/>
+            <CheckBox x:Name="UpdateCheckEnabled" Content="Check GitHub for a new YUMRAM once a day (you choose when to install)" Margin="0,10,0,0"/>
             <CheckBox x:Name="GlobalHotkeyEnabled" Content="Global shortcut for Free RAM now (works even from a game or the tray)" Margin="0,10,0,0"/>
             <Grid Margin="27,6,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="160"/><ColumnDefinition/></Grid.ColumnDefinitions>
               <TextBox x:Name="GlobalHotkey" ToolTip="For example Ctrl+Alt+R or Ctrl+Shift+F9. Needs at least one of Ctrl, Alt, Shift or Win." AutomationProperties.Name="Global shortcut"/>

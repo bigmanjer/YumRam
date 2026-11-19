@@ -16,6 +16,10 @@
         <TextBlock Text="YUMRAM" Style="{StaticResource AppTitle}"/>
         <TextBlock x:Name="Version" Text="Version" Style="{StaticResource Caption}"/>
         <TextBlock Text="Your ultimate memory reclaim &amp; monitor for Windows" Style="{StaticResource Caption}"/>
+        <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+          <Button x:Name="CheckUpdates" Content="⟳  Check for updates" Style="{StaticResource GhostButton}" Padding="8,3" ToolTip="Ask GitHub whether a newer YUMRAM release exists. Nothing about you or your PC is sent."/>
+          <TextBlock x:Name="UpdateStatus" Text="" Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="8,0,0,0" TextWrapping="Wrap" MaxWidth="520"/>
+        </StackPanel>
       </StackPanel>
     </StackPanel>
 
