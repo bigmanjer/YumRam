@@ -32,6 +32,10 @@
             <CheckBox x:Name="ShowTrayIcon" Content="Show RAM % in the notification area (tray icon)" Margin="0,8,0,0"/>
             <CheckBox x:Name="MinimizeToTray" Content="Minimize to the notification area instead of the taskbar" Margin="0,8,0,0"/>
             <TextBlock Text="Tray changes apply the next time YUMRAM opens." Style="{StaticResource Caption}" Margin="27,2,0,0"/>
+            <CheckBox x:Name="GlobalHotkeyEnabled" Content="Global shortcut for Free RAM now (works even from a game or the tray)" Margin="0,10,0,0"/>
+            <Grid Margin="27,6,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="160"/><ColumnDefinition/></Grid.ColumnDefinitions>
+              <TextBox x:Name="GlobalHotkey" ToolTip="For example Ctrl+Alt+R or Ctrl+Shift+F9. Needs at least one of Ctrl, Alt, Shift or Win." AutomationProperties.Name="Global shortcut"/>
+              <TextBlock x:Name="HotkeyState" Grid.Column="1" Text="" Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="10,0,0,0" TextWrapping="Wrap"/></Grid>
             <Grid Style="{StaticResource Row}" Margin="0,14,0,0"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="240"/></Grid.ColumnDefinitions>
               <StackPanel><TextBlock Text="Cleanup target (GB)" Style="{StaticResource RowLabel}" Foreground="{StaticResource TextMuted}"/><TextBlock Text="Read-only: always equal to the memory goal." Style="{StaticResource RowHint}"/></StackPanel>
               <TextBox x:Name="CleanupTarget" Grid.Column="1" IsReadOnly="True" Foreground="{StaticResource TextMuted}" VerticalAlignment="Top" ToolTip="Kept for compatibility. The memory goal is the single source of truth."/></Grid>

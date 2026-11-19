@@ -1,5 +1,5 @@
 ﻿{
-  "Version": "5.5.0",
+  "Version": "5.6.0",
   "TelemetryIntervalSeconds": 0.5,
   "UIRefreshIntervalSeconds": 0.25,
   "GPUIntervalSeconds": 5.0,
@@ -339,6 +339,8 @@
   "EnableOnlineResearch": true,
   "ShowTrayIcon": true,
   "MinimizeToTray": true,
+  "GlobalHotkeyEnabled": true,
+  "GlobalHotkey": "Ctrl+Alt+R",
   "ResearchMaxItemsPerScan": 999999,
   "ResearchMaxOnlineItemsPerScan": 8,
   "ResearchCacheMaxAgeDays": 14,
@@ -356,7 +358,7 @@
     "GitHub Repository Corroboration",
     "Reddit Community Context"
   ],
-  "ResearchEngineVersion": "5.5.0",
+  "ResearchEngineVersion": "5.6.0",
   "CleanupStepDelayMs": 200,
   "CleanupMaxPassMilliseconds": 750,
   "CleanupMaxTrimMBPerPass": 384,

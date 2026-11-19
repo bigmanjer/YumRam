@@ -2,7 +2,7 @@
 
 **Yumes Ultimate Memory Reclaim & Monitor**
 
-Version: 5.5.0
+Version: 5.6.0
 Stage: alpha
 
 **YUMRAM keeps Windows responsive by keeping Available RAM above a target you choose.** It trims the
@@ -15,7 +15,13 @@ It is a single-folder Windows PowerShell 5.1 + WPF app: no installer, no runtime
 
 ## Features
 
-- **Live dashboard**: Available RAM, memory use, CPU, GPU 3D and a 60-sample history graph.
+- **One window**: a sidebar (like Windows 11 Task Manager) opens Overview, What's using RAM, Reclaim
+  Center, Intelligence, Settings and About as pages in the same window. `Ctrl+1`…`Ctrl+6` jump
+  between them, and the sidebar shrinks to icons when the window is narrow.
+- **Live dashboard**: Available RAM, memory use, CPU, GPU 3D and a 60-sample history graph, plus how
+  much RAM YUMRAM has freed today and in total (measured Available gain, not trimmed memory).
+- **Global shortcut**: `Ctrl+Alt+R` runs Free RAM now from anywhere, even when YUMRAM is in the tray
+  (change or turn it off in Settings).
 - **Automatic target maintenance**: while monitoring is on, YUMRAM trims eligible idle processes
   in small paced passes until Available RAM is back above your target.
 - **Knows what is reachable**: it learns, on your PC, how much trimmed memory Windows actually turns

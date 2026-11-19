@@ -577,26 +577,28 @@ function Show-YumTopProcesses {
         $window.Add_Closed({param($s,$e)try{$s.Tag.Timer.Stop()}catch{}})
         Update-YumProcessRows -State $state
         $timer.Start()
-        $window.Owner=$script:Yum.Window
-        [void]$window.ShowDialog()
+        if(-not (Enter-YumPage -Key 'Processes' -Window $window)){
+            $window.Owner=$script:Yum.Window
+            [void]$window.ShowDialog()
+        }
     } catch { Write-YumLogException -Context 'Top processes dialog failed' -Exception $_.Exception; Show-YumMessage -Message $_.Exception.Message -Title 'YUMRAM - Error' -Buttons 'OK' -Icon 'Error' }
 }
 
 function Show-YumSettings {
     try {
         $path=Join-Path $script:Yum.Root 'UI\Xaml\Settings.xaml';[xml]$xaml=Read-YumXamlText -Path $path;$reader=New-Object System.Xml.XmlNodeReader $xaml;$window=[Windows.Markup.XamlReader]::Load($reader)
-        $names=@('MinimumAvailable','CleanupTarget','Hysteresis','CleanInterval','ProcessCooldown','Mode','TelemetryInterval','GpuInterval','GameInterval','SafePressure','BalancedPressure','AggressivePressure','SafePass','BalancedPass','AggressivePass','AutoDetectGames','ProtectGame','AutoCleanOnGameStart','GamePriority','EnableOptionalBackground','EnableOptionalServices','StartMonitoringAutomatically','ScannerMaxItems','EnableSystemScanner','EnableOnlineResearch','ShowTrayIcon','MinimizeToTray','Validation','Apply','Reset','Close')
+        $names=@('MinimumAvailable','CleanupTarget','Hysteresis','CleanInterval','ProcessCooldown','Mode','TelemetryInterval','GpuInterval','GameInterval','SafePressure','BalancedPressure','AggressivePressure','SafePass','BalancedPass','AggressivePass','AutoDetectGames','ProtectGame','AutoCleanOnGameStart','GamePriority','EnableOptionalBackground','EnableOptionalServices','StartMonitoringAutomatically','ScannerMaxItems','EnableSystemScanner','EnableOnlineResearch','ShowTrayIcon','MinimizeToTray','GlobalHotkeyEnabled','GlobalHotkey','HotkeyState','Validation','Apply','Reset','Close')
         $ui=@{};foreach($n in $names){$ui[$n]=$window.FindName($n)}
         $cfg=$script:Yum.Config
         foreach($pair in @(
             @('MinimumAvailable','MinimumAvailableGB'),@('CleanupTarget','CleanupTargetAvailableGB'),@('Hysteresis','TargetHysteresisGB'),@('CleanInterval','MinimumCleanIntervalSeconds'),@('ProcessCooldown','ProcessCooldownSeconds'),@('TelemetryInterval','TelemetryIntervalSeconds'),@('GpuInterval','GPUIntervalSeconds'),@('GameInterval','GameDetectionIntervalSeconds'),@('SafePressure','SafePressurePercent'),@('BalancedPressure','BalancedPressurePercent'),@('AggressivePressure','AggressivePressurePercent'),@('SafePass','SafeProcessesPerPass'),@('BalancedPass','BalancedProcessesPerPass'),@('AggressivePass','AggressiveProcessesPerPass'),@('ScannerMaxItems','ScannerMaxItems')
         )){$ui[$pair[0]].Text=[string]$cfg[$pair[1]]}
-        $ui.AutoDetectGames.IsChecked=[bool]$cfg.AutoDetectGames;$ui.ProtectGame.IsChecked=[bool]$cfg.ProtectGame;$ui.AutoCleanOnGameStart.IsChecked=[bool]$cfg.AutoCleanOnGameStart;$ui.EnableOptionalBackground.IsChecked=[bool]$cfg.EnableOptionalBackgroundCleanup;$ui.EnableOptionalServices.IsChecked=[bool]$cfg.EnableOptionalServiceCleanup;$ui.StartMonitoringAutomatically.IsChecked=[bool]$cfg.StartMonitoringAutomatically;$ui.EnableOnlineResearch.IsChecked=[bool]$cfg.EnableOnlineResearch;$ui.ShowTrayIcon.IsChecked=[bool]$cfg['ShowTrayIcon'];$ui.MinimizeToTray.IsChecked=[bool]$cfg['MinimizeToTray'];$ui.EnableSystemScanner.IsChecked=[bool]$cfg.EnableSystemScanner;$modeItems=@($ui.Mode.Items);for($i=0;$i -lt $modeItems.Count;$i++){if([string]$modeItems[$i].Tag -eq [string]$cfg.Mode){$ui.Mode.SelectedIndex=$i;break}};$display=@('Keep Existing','Normal (Default)','Above Normal (Game Preference)','High (Advanced)');$stored=[string]$cfg.GamePriority;$label=switch($stored){'KeepExisting'{'Keep Existing'};'AboveNormal'{'Above Normal (Game Preference)'};'High'{'High (Advanced)'};default{'Normal (Default)'}};$ui.GamePriority.SelectedIndex=[array]::IndexOf($display,$label)
+        $ui.AutoDetectGames.IsChecked=[bool]$cfg.AutoDetectGames;$ui.ProtectGame.IsChecked=[bool]$cfg.ProtectGame;$ui.AutoCleanOnGameStart.IsChecked=[bool]$cfg.AutoCleanOnGameStart;$ui.EnableOptionalBackground.IsChecked=[bool]$cfg.EnableOptionalBackgroundCleanup;$ui.EnableOptionalServices.IsChecked=[bool]$cfg.EnableOptionalServiceCleanup;$ui.StartMonitoringAutomatically.IsChecked=[bool]$cfg.StartMonitoringAutomatically;$ui.EnableOnlineResearch.IsChecked=[bool]$cfg.EnableOnlineResearch;$ui.ShowTrayIcon.IsChecked=[bool]$cfg['ShowTrayIcon'];$ui.MinimizeToTray.IsChecked=[bool]$cfg['MinimizeToTray'];if($null -ne $ui.GlobalHotkeyEnabled){$ui.GlobalHotkeyEnabled.IsChecked=[bool]$cfg['GlobalHotkeyEnabled'];$ui.GlobalHotkey.Text=[string]$cfg['GlobalHotkey'];$ui.HotkeyState.Text=[string]$script:Yum.HotkeyStatus};$ui.EnableSystemScanner.IsChecked=[bool]$cfg.EnableSystemScanner;$modeItems=@($ui.Mode.Items);for($i=0;$i -lt $modeItems.Count;$i++){if([string]$modeItems[$i].Tag -eq [string]$cfg.Mode){$ui.Mode.SelectedIndex=$i;break}};$display=@('Keep Existing','Normal (Default)','Above Normal (Game Preference)','High (Advanced)');$stored=[string]$cfg.GamePriority;$label=switch($stored){'KeepExisting'{'Keep Existing'};'AboveNormal'{'Above Normal (Game Preference)'};'High'{'High (Advanced)'};default{'Normal (Default)'}};$ui.GamePriority.SelectedIndex=[array]::IndexOf($display,$label)
         $state=@{Window=$window;Ui=$ui};$ui.Apply.Tag=$state;$ui.Reset.Tag=$state;$ui.Close.Tag=$state
         $ui.Close.Add_Click({param($sender,$e)$sender.Tag.Window.Close()})
         $loadDefaults={param($u)
             $d=@{MinimumAvailable='4.0';CleanupTarget='4.0';Hysteresis='0.3';CleanInterval='15';ProcessCooldown='60';TelemetryInterval='0.5';GpuInterval='3';GameInterval='2';SafePressure='92';BalancedPressure='85';AggressivePressure='78';SafePass='6';BalancedPass='10';AggressivePass='16';ScannerMaxItems='80'}
-            foreach($k in $d.Keys){$u.$k.Text=$d[$k]};$modeItems=@($u.Mode.Items);for($i=0;$i -lt $modeItems.Count;$i++){if([string]$modeItems[$i].Tag -eq 'Balanced'){$u.Mode.SelectedIndex=$i;break}};$u.GamePriority.SelectedIndex=0;$u.AutoDetectGames.IsChecked=$true;$u.ProtectGame.IsChecked=$true;$u.AutoCleanOnGameStart.IsChecked=$false;$u.EnableOptionalBackground.IsChecked=$true;$u.EnableOptionalServices.IsChecked=$false;$u.StartMonitoringAutomatically.IsChecked=$false;$u.EnableSystemScanner.IsChecked=$true;$u.EnableOnlineResearch.IsChecked=$true;$u.ShowTrayIcon.IsChecked=$true;$u.MinimizeToTray.IsChecked=$true;$u.Validation.Foreground=Get-YumBrush '#FDE68A';$u.Validation.Text='Defaults loaded. Click Apply to save.'
+            foreach($k in $d.Keys){$u.$k.Text=$d[$k]};$modeItems=@($u.Mode.Items);for($i=0;$i -lt $modeItems.Count;$i++){if([string]$modeItems[$i].Tag -eq 'Balanced'){$u.Mode.SelectedIndex=$i;break}};$u.GamePriority.SelectedIndex=0;$u.AutoDetectGames.IsChecked=$true;$u.ProtectGame.IsChecked=$true;$u.AutoCleanOnGameStart.IsChecked=$false;$u.EnableOptionalBackground.IsChecked=$true;$u.EnableOptionalServices.IsChecked=$false;$u.StartMonitoringAutomatically.IsChecked=$false;$u.EnableSystemScanner.IsChecked=$true;$u.EnableOnlineResearch.IsChecked=$true;$u.ShowTrayIcon.IsChecked=$true;$u.MinimizeToTray.IsChecked=$true;if($null -ne $u.GlobalHotkeyEnabled){$u.GlobalHotkeyEnabled.IsChecked=$true;$u.GlobalHotkey.Text='Ctrl+Alt+R'};$u.Validation.Foreground=Get-YumBrush '#FDE68A';$u.Validation.Text='Defaults loaded. Click Apply to save.'
         }
         $ui.Reset.Add_Click({param($sender,$e)& $loadDefaults $sender.Tag.Ui})
         $ui.Apply.Add_Click({param($sender,$e)
@@ -608,10 +610,19 @@ function Show-YumSettings {
                 foreach($kv in $fields.GetEnumerator()){$d=0.0;if(-not [double]::TryParse([string]$kv.Value[0],[Globalization.NumberStyles]::Float,[Globalization.CultureInfo]::InvariantCulture,[ref]$d)){throw "Invalid value: $($kv.Key)."};if($d -lt $kv.Value[1] -or $d -gt $kv.Value[2]){throw "$($kv.Key) must be between $($kv.Value[1]) and $($kv.Value[2])."};$val=if($kv.Key -match 'Pass|Items'){[int][math]::Round($d)}elseif($kv.Key -match 'Seconds|Interval'){[math]::Round($d,2)}else{[math]::Round($d,1)};Update-YumConfigValue -Name $kv.Key -Value $val};Update-YumConfigValue -Name CleanupTargetAvailableGB -Value ([double]$script:Yum.Config.MinimumAvailableGB)
                 if([double]$cfg.SafePressurePercent -lt [double]$cfg.BalancedPressurePercent){throw 'Safe pressure should be at least as high as Balanced pressure.'};if([double]$cfg.BalancedPressurePercent -lt [double]$cfg.AggressivePressurePercent){throw 'Balanced pressure should be at least as high as Aggressive pressure.'}
                 foreach($pair in @(@('Mode',[string]$u.Mode.SelectedItem.Tag),@('AutoDetectGames',[bool]$u.AutoDetectGames.IsChecked),@('ProtectGame',[bool]$u.ProtectGame.IsChecked),@('AutoCleanOnGameStart',[bool]$u.AutoCleanOnGameStart.IsChecked),@('EnableOptionalBackgroundCleanup',[bool]$u.EnableOptionalBackground.IsChecked),@('EnableOptionalServiceCleanup',[bool]$u.EnableOptionalServices.IsChecked),@('StartMonitoringAutomatically',[bool]$u.StartMonitoringAutomatically.IsChecked),@('EnableOnlineResearch',[bool]$u.EnableOnlineResearch.IsChecked),@('ShowTrayIcon',[bool]$u.ShowTrayIcon.IsChecked),@('MinimizeToTray',[bool]$u.MinimizeToTray.IsChecked),@('EnableSystemScanner',[bool]$u.EnableSystemScanner.IsChecked))){Update-YumConfigValue -Name $pair[0] -Value $pair[1]};$choice=[string]$u.GamePriority.SelectedItem.Content;$stored=switch -Regex ($choice){'^Keep Existing'{'KeepExisting'};'^Above Normal'{'AboveNormal'};'^High'{'High'};default{'Normal'}};Update-YumConfigValue -Name GamePriority -Value $stored
+                if($null -ne $u.GlobalHotkeyEnabled){
+                    $hkOn=[bool]$u.GlobalHotkeyEnabled.IsChecked
+                    $hkSpec=ConvertFrom-YumHotkeyText -Text ([string]$u.GlobalHotkey.Text)
+                    if($hkOn -and $null -eq $hkSpec){throw 'The global shortcut is not valid. Use something like Ctrl+Alt+R (at least one of Ctrl, Alt, Shift or Win, plus one key).'}
+                    Update-YumConfigValue -Name GlobalHotkeyEnabled -Value $hkOn
+                    if($null -ne $hkSpec){Update-YumConfigValue -Name GlobalHotkey -Value ([string]$hkSpec.Text);$u.GlobalHotkey.Text=[string]$hkSpec.Text}
+                    Register-YumGlobalHotkey
+                    $u.HotkeyState.Text=[string]$script:Yum.HotkeyStatus
+                }
                 $u.Validation.Foreground=Get-YumBrush '#86EFAC';$u.Validation.Text='Settings saved. Restart Monitoring to apply changed telemetry timing. Memory target and safety switches apply immediately.';Apply-YumUiConfig
             }catch{$u.Validation.Foreground=Get-YumBrush '#FCA5A5';$u.Validation.Text=$_.Exception.Message;Write-YumLogException -Context 'Settings apply failed' -Exception $_.Exception}
         })
-        $window.Owner=$script:Yum.Window;[void]$window.ShowDialog()
+        if(-not (Enter-YumPage -Key 'Settings' -Window $window)){$window.Owner=$script:Yum.Window;[void]$window.ShowDialog()}
     }catch{Write-YumLogException -Context 'Settings dialog failed' -Exception $_.Exception;Show-YumMessage -Message $_.Exception.Message -Title 'YUMRAM - Settings Error' -Buttons 'OK' -Icon 'Error'}
 }
 
@@ -622,12 +633,16 @@ function Show-YumAbout {
         $window=[Windows.Markup.XamlReader]::Load((New-Object System.Xml.XmlNodeReader $xaml))
         $admin=if(Test-YumIsElevated){'running as administrator'}else{'not running as administrator'}
         $window.FindName('Version').Text=('Version {0}  •  {1}' -f [string]$script:Yum.Config.Version,$admin)
-        $window.FindName('Close').Add_Click({param($s,$e)[System.Windows.Window]::GetWindow($s).Close()})
+        # The button's own window is the main window when About is hosted as a page, so close via Tag.
+        $closeButton=$window.FindName('Close');$closeButton.Tag=$window
+        $closeButton.Add_Click({param($s,$e)try{$s.Tag.Close()}catch{}})
         $window.FindName('OpenFolder').Add_Click({try{Start-Process -FilePath 'explorer.exe' -ArgumentList ('"{0}"' -f [string]$script:Yum.ConfigDirectory)}catch{Write-YumLogException -Context 'Open YUMRAM folder failed' -Exception $_.Exception}})
         $window.FindName('OpenLog').Add_Click({try{$log=[string](Get-YumLogPath);if(Test-Path -LiteralPath $log){Start-Process -FilePath 'notepad.exe' -ArgumentList ('"{0}"' -f $log)}else{Start-Process -FilePath 'explorer.exe' -ArgumentList ('"{0}"' -f [string]$script:Yum.ConfigDirectory)}}catch{Write-YumLogException -Context 'Open log failed' -Exception $_.Exception}})
         $window.FindName('OpenProject').Add_Click({try{Start-Process 'https://github.com/bigmanjer/YumRam'}catch{}})
-        $window.Owner=$script:Yum.Window
-        [void]$window.ShowDialog()
+        if(-not (Enter-YumPage -Key 'About' -Window $window)){
+            $window.Owner=$script:Yum.Window
+            [void]$window.ShowDialog()
+        }
     }catch{
         Write-YumLogException -Context 'About window failed' -Exception $_.Exception
         Show-YumInfoWindow -Title 'About YUMRAM' -Subtitle ([string]$script:Yum.Config.Version) -Lines @('YUMRAM — memory reclaim & monitor for Windows.')
@@ -1114,12 +1129,12 @@ function Show-YumIntelligence {
     try {
         if($null -ne $script:Yum.IntelligenceWindow){
             try {
-                if($script:Yum.IntelligenceWindow.IsVisible){
+                if(Test-YumPageAlive -Window $script:Yum.IntelligenceWindow){
                     $existing=$script:Yum.IntelligenceWindow.Tag
                     $desired = switch($InitialFilter){'Apps'{'Apps'};'Background'{'Apps'};'Games'{'Games'};'Protected'{'Protected'};'Services'{'Services'};'Review'{'Review'};'Unknown'{'Unknown'};default{'All Items'}}
                     for($i=0;$i -lt $existing.Filter.Items.Count;$i++){if([string]$existing.Filter.Items[$i].Content -eq $desired){$existing.Filter.SelectedIndex=$i;break}}
                     $script:Yum.IntelligenceWindow.Title = if($InitialFilter -eq 'All'){'YUMRAM - Intelligence'}else{('YUMRAM - Intelligence — {0}' -f $InitialFilter)}
-                    $script:Yum.IntelligenceWindow.Activate()
+                    if($script:Yum.IntelligenceWindow.IsVisible){$script:Yum.IntelligenceWindow.Activate()}else{Open-YumPage -Key 'Intelligence'}
                     return
                 }
             } catch { $script:Yum.IntelligenceWindow=$null }
@@ -1301,7 +1316,7 @@ $stateLabel=if($null -ne $r.StateText){[string]$r.StateText}else{if($r.Live){'LI
             try {
                 # Intelligence owns its own UI refresh loop. The main-window timer cannot refresh
                 # this dialog because it is a separate WPF window with its own state snapshot.
-                if($null -ne $ctx -and $ctx.Window.IsVisible){
+                if($null -ne $ctx -and (Test-YumPageShowing -Window $ctx.Window)){
                     try { Get-YumResearchStatusForUi -State $ctx | Out-Null } catch {}
                     try { if((-not $ctx.Busy -and -not $ctx.ResearchBusy) -and ((@($ctx.Data.Records)).Count -eq 0)){[void](Refresh-YumIntelligenceView -State $ctx)} else { Update-YumIntelligenceList -State $ctx } } catch { Write-YumLogException -Context 'Intelligence live UI refresh failed' -Exception $_.Exception }
                 }
@@ -1356,8 +1371,11 @@ $stateLabel=if($null -ne $r.StateText){[string]$r.StateText}else{if($r.Live){'LI
 
         # RUN SCAN is the single normal workflow; unresolved records are automatically researched after inventory is built.
         try{if(-not $state.ResearchBusy){$state.ActivityStatus.Text='READY';$state.ActivityDetail.Text=('Saved knowledge loaded • unresolved items are researched automatically during Run Scan.' -f @($state.Data.Records|Where-Object{Test-YumResearchUnresolved -Record $_}).Count);$state.ActivityProgress.IsIndeterminate=$false;$state.ActivityProgress.Value=0}}catch{}
-        [void]$window.Show()
-        $window.Activate()
+        # 5.6: hosted as a persistent page (keeps scanning/researching while other pages are open).
+        if(-not (Enter-YumPage -Key 'Intelligence' -Window $window -Persistent)){
+            [void]$window.Show()
+            $window.Activate()
+        }
     } catch {
         Write-YumLogException -Context 'Intelligence window failed' -Exception $_.Exception
         try { Show-YumMessage -Message ("Smart Intelligence could not be opened.`n`n{0}" -f $_.Exception.Message) -Title 'YUMRAM - Intelligence Error' -Buttons 'OK' -Icon 'Error' } catch { Write-YumLogException -Context 'Intelligence error dialog failed' -Exception $_.Exception }
@@ -2193,6 +2211,6 @@ function Show-YumMemoryReclaim {
         $refreshTimer.Start()
         $window.Add_Closed({try{$refreshTimer.Stop()}catch{}})
         & $render $state
-        [void]$window.ShowDialog()
+        if(-not (Enter-YumPage -Key 'ReclaimCenter' -Window $window)){[void]$window.ShowDialog()}
     } catch { Write-YumLogException -Context 'RAM Reclaim Center failed' -Exception $_.Exception; Show-YumMessage -Message ("RAM Reclaim Center could not be opened.`n`n{0}" -f $_.Exception.Message) -Title 'YUMRAM - Reclaim Error' -Buttons 'OK' -Icon 'Error' }
 }

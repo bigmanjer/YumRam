@@ -1,5 +1,27 @@
 # Changelog
 
+# YUMRAM 5.6.0 — One window, global shortcut, freed-RAM counter (branch `visual-overhaul`)
+
+Compared against IObit Advanced SystemCare / Smart RAM, Wise Memory Optimizer, Mem Reduct, Process
+Lasso and Razer Cortex; this release closes the gaps that mattered for everyday use.
+
+- **One window with a sidebar.** Overview, What's using RAM, Reclaim Center, Intelligence, Settings
+  and About are pages in the main window instead of separate pop-ups (the Windows 11 Task Manager /
+  Fluent NavigationView pattern: left pane for 5–10 equal sections, Settings at the bottom). The
+  sidebar always shows mode, monitoring state and RAM in use, shrinks to icons below 1240 px (or with
+  the ☰ button), and `Ctrl+1`…`Ctrl+6` switch pages. Done/Close on a page returns to Overview.
+  Intelligence stays alive in the background, so scans and research keep running while you look at
+  other pages and it reopens instantly.
+- **Global shortcut for Free RAM now** (Mem Reduct has one): `Ctrl+Alt+R` by default, works while
+  YUMRAM is minimised to the tray or a game is in front; a tray notice reports the result. Change or
+  turn it off in Settings › General. If another program already owns the shortcut, Settings says so.
+- **RAM freed by YUMRAM** card (IObit / Wise show this): today and all-time totals, counted from the
+  measured Available RAM gain after Windows settles — not trimmed working set, which overstates it.
+  Saved in `stats.json`.
+- Already on par: free-when-below-threshold (memory goal), skip-when-CPU-busy (`MaxCPUPercent`),
+  memory-area choice and game-aware protection.
+- Tests: new `Release56ShellTest`; 47/47 pass.
+
 # YUMRAM 5.5.0 — Stays at target, no more Unknowns, plain-language process view (branch `visual-overhaul`)
 
 Memory (from the 5.4 field test: Deep gained +1.2 to +3.5 GB, Free RAM Now +0.3 GB, and automatic

@@ -196,6 +196,7 @@ function Update-YumUiFromSnapshot {
             $script:Yum.Ui.MemoryBar.Value=[math]::Min(100,[math]::Max(0,$m.UsedPercent))
             Update-YumMemoryRing -Percent ([double]$m.UsedPercent)
             Update-YumTray -Percent ([double]$m.UsedPercent) -AvailableGB ([double]$m.AvailableGB)
+            Update-YumSidebarStatus -UsedPercent ([double]$m.UsedPercent) -AvailableGB ([double]$m.AvailableGB) -TotalGB ([double]$m.TotalGB)
             [void]$script:Yum.GraphMemory.Add([double]$m.UsedPercent);while($script:Yum.GraphMemory.Count -gt $script:Yum.GraphPointsLimit){$script:Yum.GraphMemory.RemoveAt(0)}
             [void]$script:Yum.GraphMemoryAvailable.Add([double]$availablePct);while($script:Yum.GraphMemoryAvailable.Count -gt $script:Yum.GraphPointsLimit){$script:Yum.GraphMemoryAvailable.RemoveAt(0)}
             [void]$script:Yum.GraphCPU.Add([double]$s.CPU);while($script:Yum.GraphCPU.Count -gt $script:Yum.GraphPointsLimit){$script:Yum.GraphCPU.RemoveAt(0)}
@@ -249,12 +250,12 @@ function Invoke-YumApplyTarget {
 function Test-YumSingleInstance {try{$mutex=New-Object System.Threading.Mutex($false,'Local\YUMRAM-V5-SingleInstance');$owned=$false;try{$owned=$mutex.WaitOne(0)}catch [System.Threading.AbandonedMutexException]{$owned=$true};if(-not $owned){$mutex.Dispose();[System.Windows.MessageBox]::Show('YUMRAM is already running.','YUMRAM','OK','Information')|Out-Null;return $false};$script:Yum.SingleInstanceMutex=$mutex;$script:Yum.SingleInstanceOwned=$true;return $true}catch{Write-YumLogException -Context 'Single instance check failed' -Exception $_.Exception;return $true}}
 function Stop-YumSingleInstance {try{if($script:Yum.SingleInstanceOwned -and $script:Yum.SingleInstanceMutex){try{$script:Yum.SingleInstanceMutex.ReleaseMutex()}catch{};$script:Yum.SingleInstanceMutex.Dispose()}}catch{}finally{$script:Yum.SingleInstanceMutex=$null;$script:Yum.SingleInstanceOwned=$false}}
 function Start-YumApplicationUi {
-    $path=Join-Path $script:Yum.Root 'UI\Xaml\MainWindow.xaml';if(-not(Test-Path -LiteralPath $path)){throw "Missing main window XAML: $path"};[xml]$xaml=Read-YumXamlText -Path $path;$reader=New-Object System.Xml.XmlNodeReader $xaml;$script:Yum.Window=[Windows.Markup.XamlReader]::Load($reader);$script:Yum.Ui=[ordered]@{};foreach($n in @('Intelligence','TelemetryStatus','QuickMonitorStatus','QuickMonitorTelemetry','ModeHelp','Mode','Status','Available','Memory','CPU','GPU','Game','Usage','MemoryBar','Target','TargetStatus','TargetBar','Graph','FreeRam','DeepReclaim','ReclaimCenter','ReclaimStatus','Monitor','ModeBox','TargetBox','Apply','AutoGame','ProtectGame','AutoClean','PriorityBox','Processes','Settings','About','Footer','VersionStatus','MemoryRing','MemoryRingText')){$script:Yum.Ui[$n]=$script:Yum.Window.FindName($n)};Apply-YumUiConfig;if($null -ne $script:Yum.Ui.VersionStatus){$script:Yum.Ui.VersionStatus.Text=('YUMRAM V{0}' -f [string]$script:Yum.Config.Version)}
-    $script:Yum.Ui.Processes.Add_Click({try{Show-YumTopProcesses}catch{Write-YumLogException -Context 'Top memory processes view failed' -Exception $_.Exception}})
+    $path=Join-Path $script:Yum.Root 'UI\Xaml\MainWindow.xaml';if(-not(Test-Path -LiteralPath $path)){throw "Missing main window XAML: $path"};[xml]$xaml=Read-YumXamlText -Path $path;$reader=New-Object System.Xml.XmlNodeReader $xaml;$script:Yum.Window=[Windows.Markup.XamlReader]::Load($reader);$script:Yum.Ui=[ordered]@{};foreach($n in @('Intelligence','TelemetryStatus','QuickMonitorStatus','QuickMonitorTelemetry','ModeHelp','Mode','Status','Available','Memory','CPU','GPU','Game','Usage','MemoryBar','Target','TargetStatus','TargetBar','Graph','FreeRam','DeepReclaim','ReclaimCenter','ReclaimStatus','Monitor','ModeBox','TargetBox','Apply','AutoGame','ProtectGame','AutoClean','PriorityBox','Processes','Settings','About','Footer','VersionStatus','MemoryRing','MemoryRingText','NavOverview','PageHost','OverviewPage','Sidebar','SidebarToggle','SideBrand','SideVersion','SideStatusPanel','SideRamText','SideRamBar','SideRamCompact','HotkeyHint','FreedToday','FreedTodayRuns','FreedTotal','FreedTotalRuns')){$script:Yum.Ui[$n]=$script:Yum.Window.FindName($n)};Apply-YumUiConfig;if($null -ne $script:Yum.Ui.VersionStatus){$script:Yum.Ui.VersionStatus.Text=('YUMRAM V{0}' -f [string]$script:Yum.Config.Version)};if($null -ne $script:Yum.Ui.SideVersion){$script:Yum.Ui.SideVersion.Text=('version {0}' -f [string]$script:Yum.Config.Version)}
+    # 5.6: one window - the sidebar opens every tool as a page (UI\Shell.ps1).
+    Initialize-YumShell
     # 5.3.1: reclaim runs on the controller worker; the UI timer shows the result (Update-YumReclaimResultUI).
     $script:Yum.Ui.FreeRam.Add_Click({try{if(Request-YumMemoryReclaim -Mode Quick){Set-YumFooter '💜 Freeing RAM now… (window stays responsive)';$script:Yum.Ui.ReclaimStatus.Text='Freeing RAM… results appear in a few seconds.'}else{Set-YumFooter '💜 A reclaim is already running.'};Update-YumReclaimButtons}catch{Write-YumLogException -Context 'Free RAM action failed' -Exception $_.Exception;Set-YumFooter '⚠ Free RAM failed — check YUMRAM.log.'}})
     $script:Yum.Ui.DeepReclaim.Add_Click({try{if(Request-YumMemoryReclaim -Mode Deep){Set-YumFooter '💜 Deep reclaim running… (window stays responsive)';$script:Yum.Ui.ReclaimStatus.Text='Deep reclaim running… results appear in a few seconds.'}else{Set-YumFooter '💜 A reclaim is already running.'};Update-YumReclaimButtons}catch{Write-YumLogException -Context 'Deep RAM reclaim failed' -Exception $_.Exception;Set-YumFooter '⚠ Deep reclaim failed — check YUMRAM.log.'}})
-    $script:Yum.Ui.ReclaimCenter.Add_Click({try{Show-YumMemoryReclaim}catch{Write-YumLogException -Context 'RAM Reclaim Center launch failed' -Exception $_.Exception;Set-YumFooter '⚠ RAM Reclaim Center failed — check YUMRAM.log.'}})
     $script:Yum.Ui.Monitor.Add_Click({if($null -eq $script:Yum.TelemetryTimer){Start-YumMonitoring}else{Stop-YumMonitoring}})
     $script:Yum.Ui.Apply.Add_Click({Invoke-YumApplyTarget})
     $script:Yum.Ui.TargetBox.Add_KeyDown({param($s,$e)if($e.Key -eq [System.Windows.Input.Key]::Enter){Invoke-YumApplyTarget;$e.Handled=$true}})
@@ -289,12 +290,11 @@ function Start-YumApplicationUi {
     $script:Yum.Ui.AutoGame.Add_Click({if(-not $script:Yum.SuppressUiEvents){Update-YumConfigValue -Name AutoDetectGames -Value ([bool]$script:Yum.Ui.AutoGame.IsChecked)}})
     $script:Yum.Ui.ProtectGame.Add_Click({if(-not $script:Yum.SuppressUiEvents){Update-YumConfigValue -Name ProtectGame -Value ([bool]$script:Yum.Ui.ProtectGame.IsChecked)}})
     $script:Yum.Ui.AutoClean.Add_Click({if(-not $script:Yum.SuppressUiEvents){Update-YumConfigValue -Name AutoCleanOnGameStart -Value ([bool]$script:Yum.Ui.AutoClean.IsChecked)}})
-    $script:Yum.Ui.Intelligence.Add_Click({try{Show-YumIntelligence}catch{Write-YumLogException -Context 'Intelligence launch failed' -Exception $_.Exception}});$script:Yum.Ui.Settings.Add_Click({Show-YumSettings});$script:Yum.Ui.About.Add_Click({Show-YumAbout})
     $script:Yum.Window.Add_SizeChanged({Update-YumGraph})
     # 5.4: the main window runs with Show() + a DispatcherFrame instead of ShowDialog(), because hiding a
     # ShowDialog window (minimize to tray) ends the dialog and would quit YUMRAM.
     $script:Yum.MainFrame=New-Object System.Windows.Threading.DispatcherFrame
-    $script:Yum.Window.Add_Closed({try{Remove-YumTray}catch{};$script:Yum.StopRequested=$true;Stop-YumMonitoring;try{Stop-YumControllerWorker}catch{};try{if($null -ne $script:Yum.UiTimer){$script:Yum.UiTimer.Stop()}}catch{};Restart-YumOptionalServices;Write-YumLog 'YUMRAM closed.';Stop-YumSingleInstance;try{$script:Yum.MainFrame.Continue=$false}catch{}})
+    $script:Yum.Window.Add_Closed({try{if($null -ne $script:Yum.PageFrame){$script:Yum.PageFrame.Continue=$false}}catch{};try{if($null -ne $script:Yum.Hotkey){$script:Yum.Hotkey.Dispose();$script:Yum.Hotkey=$null}}catch{};try{Remove-YumTray}catch{};$script:Yum.StopRequested=$true;Stop-YumMonitoring;try{Stop-YumControllerWorker}catch{};try{if($null -ne $script:Yum.UiTimer){$script:Yum.UiTimer.Stop()}}catch{};Restart-YumOptionalServices;Write-YumLog 'YUMRAM closed.';Stop-YumSingleInstance;try{$script:Yum.MainFrame.Continue=$false}catch{}})
     $script:Yum.Window.Add_StateChanged({
         try{ if($script:Yum.Window.WindowState -eq [System.Windows.WindowState]::Minimized -and $null -ne $script:Yum.TrayIcon -and [bool]$script:Yum.Config['MinimizeToTray']){ Hide-YumToTray } }catch{}
     })
@@ -307,6 +307,8 @@ function Start-YumApplicationUi {
     try{Start-YumControllerWorker}catch{Write-YumLogException -Context 'Controller worker start failed' -Exception $_.Exception}
     if([bool]$script:Yum.Config.StartMonitoringAutomatically){Start-YumMonitoring}
     $script:Yum.Window.Show()
+    try{ Register-YumGlobalHotkey }catch{}
+    try{ Update-YumFreedStatsUi }catch{}
     [System.Windows.Threading.Dispatcher]::PushFrame($script:Yum.MainFrame)   # returns when the window closes
 }
 function Update-YumReclaimButtons {
@@ -326,6 +328,8 @@ function Update-YumReclaimResultUI {
         $r=$script:Yum.LastReclaim
         if($null -eq $r -or $null -eq $r.PSObject.Properties['Summary']){return}
         $text=[string]$r.Summary
+        # 5.6: count the measured Available gain once per reclaim (verification updates reuse the version counter).
+        try{$key=if($r.PSObject.Properties['Timestamp']){([datetime]$r.Timestamp).Ticks.ToString()}else{$text};if($key -ne [string]$script:Yum.LastStatReclaimKey -and $r.PSObject.Properties['AvailableGainGB']){$script:Yum.LastStatReclaimKey=$key;Add-YumFreedStat -GainGB ([double]$r.AvailableGainGB) -Source 'Reclaim'}}catch{}
         if($r.PSObject.Properties['RetainedGainGB'] -and $null -ne $r.RetainedGainGB){$text+=(' Retained after 30s: +{0:N2} GB.' -f [double]$r.RetainedGainGB)}
         $script:Yum.Ui.ReclaimStatus.Text=$text
         Set-YumFooter ('💜 '+$text)
@@ -342,6 +346,7 @@ function Update-YumReclaimResultUI {
 function Update-YumCleanupResultUI {
     $v=0;$r=$null;[System.Threading.Monitor]::Enter($script:Yum.CacheLock);try{$v=$script:Yum.CleanupResultVersion;$r=$script:Yum.CleanupResult}finally{[System.Threading.Monitor]::Exit($script:Yum.CacheLock)}
     if($v -le $script:Yum.LastUiCleanupResultVersion -or $null -eq $r){return};$script:Yum.LastUiCleanupResultVersion=$v
+    try{if($r.Success -and $r.PSObject.Properties['AvailableImprovementGB']){Add-YumFreedStat -GainGB ([double]$r.AvailableImprovementGB) -Source 'Automatic'}}catch{}
     if($r.Success -and $r.TargetReached){$suffix=if($r.PSObject.Properties['StopReason']){' • '+[string]$r.StopReason}else{''};Set-YumFooter ('🎯 Target reached: {0:N2} GB available | reclaimed {1:N0} MB | Available +{2:N2} GB{3}' -f $r.AfterAvailableGB,(($r.WorkingSetReduced)/1MB),[double]$r.AvailableImprovementGB,$suffix)}elseif($r.Success -and $r.WorkingSetReduced -gt 0){$suffix=if($r.PSObject.Properties['StopReason']){' • '+[string]$r.StopReason}else{''};Set-YumFooter ('✨ Cleanup: {0:N0} MB WS reduced | Available +{1:N2} GB | Target {2:N2} GB | Shortfall {3:N2} GB{4}' -f (($r.WorkingSetReduced)/1MB),$r.AvailableImprovementGB,$r.TargetGB,[double]$r.TargetShortfallGB,$suffix)}elseif($r.Skipped){Set-YumFooter "Cleanup skipped — $($r.Reason)."}elseif($r.Success){$suffix=if($r.PSObject.Properties['StopReason']){' • '+[string]$r.StopReason}else{''};Set-YumFooter ('Cleanup completed — target shortfall {0:N2} GB{1}' -f [double]$r.TargetShortfallGB,$suffix)}else{Set-YumFooter "Cleanup failed — $($r.Reason)."}
 }
 function Start-YumRamApplication {
