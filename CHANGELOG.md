@@ -11,6 +11,16 @@ guidance; see `Docs/COMPETITIVE-REVIEW.md`, screenshots in `Docs/Screenshots/bef
   "Free RAM now" at the top; graph plus side panel below; no overlapping labels.
 - Reclaim Center, Settings (now in tabs), Top Processes, About and Intelligence reorganized.
 
+Tray icon (new, `UI/Tray.ps1`):
+- The notification-area icon shows live RAM in use as a number, coloured like the main ring
+  (purple, amber from 70 %, red from 85 %); tooltip shows % used and GB free.
+- Right-click: Open YUMRAM, Free RAM now (result shown as a notification), Start/Stop monitoring,
+  Exit. Left-click opens the window.
+- Minimizing hides YUMRAM to the tray (Settings → General: "Show RAM % in the notification area",
+  "Minimize to the notification area"; both on by default). The main window now runs its own
+  message loop instead of `ShowDialog()`, which would have exited YUMRAM when hidden.
+- Icon redraws only when the rounded % changes; tested for GDI/USER handle leaks.
+
 Research:
 - All 6 previous Unknowns on the test PC resolve: Store/System packages now use Windows' own
   publisher and signature data (the scanner stored the publisher ID hash before).
@@ -22,7 +32,7 @@ Research:
 - Unknown results are re-checked once when the research engine improves.
 - Game detection no longer matches "EA" inside words like "Search".
 
-Tests: 44/44 (new ResearchSpeedAndIdentityTest; pitfall scan flags assignments to automatic variables).
+Tests: 45/45 (new ResearchSpeedAndIdentityTest, TrayIconTest; pitfall scan flags assignments to automatic variables).
 
 # YUMRAM 5.3.3 — Alpha: GitHub-ready
 

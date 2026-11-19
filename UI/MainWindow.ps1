@@ -195,6 +195,7 @@ function Update-YumUiFromSnapshot {
             $script:Yum.Ui.Usage.Text='{0:N2} / {1:N2} GB  •  Available {2:N2} GB ({3:N1}%)' -f $m.UsedGB,$m.TotalGB,$m.AvailableGB,$availablePct
             $script:Yum.Ui.MemoryBar.Value=[math]::Min(100,[math]::Max(0,$m.UsedPercent))
             Update-YumMemoryRing -Percent ([double]$m.UsedPercent)
+            Update-YumTray -Percent ([double]$m.UsedPercent) -AvailableGB ([double]$m.AvailableGB)
             [void]$script:Yum.GraphMemory.Add([double]$m.UsedPercent);while($script:Yum.GraphMemory.Count -gt $script:Yum.GraphPointsLimit){$script:Yum.GraphMemory.RemoveAt(0)}
             [void]$script:Yum.GraphMemoryAvailable.Add([double]$availablePct);while($script:Yum.GraphMemoryAvailable.Count -gt $script:Yum.GraphPointsLimit){$script:Yum.GraphMemoryAvailable.RemoveAt(0)}
             [void]$script:Yum.GraphCPU.Add([double]$s.CPU);while($script:Yum.GraphCPU.Count -gt $script:Yum.GraphPointsLimit){$script:Yum.GraphCPU.RemoveAt(0)}
@@ -290,7 +291,14 @@ function Start-YumApplicationUi {
     $script:Yum.Ui.AutoClean.Add_Click({if(-not $script:Yum.SuppressUiEvents){Update-YumConfigValue -Name AutoCleanOnGameStart -Value ([bool]$script:Yum.Ui.AutoClean.IsChecked)}})
     $script:Yum.Ui.Intelligence.Add_Click({try{Show-YumIntelligence}catch{Write-YumLogException -Context 'Intelligence launch failed' -Exception $_.Exception}});$script:Yum.Ui.Settings.Add_Click({Show-YumSettings});$script:Yum.Ui.About.Add_Click({Show-YumAbout})
     $script:Yum.Window.Add_SizeChanged({Update-YumGraph})
-    $script:Yum.Window.Add_Closed({$script:Yum.StopRequested=$true;Stop-YumMonitoring;try{Stop-YumControllerWorker}catch{};try{if($null -ne $script:Yum.UiTimer){$script:Yum.UiTimer.Stop()}}catch{};Restart-YumOptionalServices;Write-YumLog 'YUMRAM closed.';Stop-YumSingleInstance})
+    # 5.4: the main window runs with Show() + a DispatcherFrame instead of ShowDialog(), because hiding a
+    # ShowDialog window (minimize to tray) ends the dialog and would quit YUMRAM.
+    $script:Yum.MainFrame=New-Object System.Windows.Threading.DispatcherFrame
+    $script:Yum.Window.Add_Closed({try{Remove-YumTray}catch{};$script:Yum.StopRequested=$true;Stop-YumMonitoring;try{Stop-YumControllerWorker}catch{};try{if($null -ne $script:Yum.UiTimer){$script:Yum.UiTimer.Stop()}}catch{};Restart-YumOptionalServices;Write-YumLog 'YUMRAM closed.';Stop-YumSingleInstance;try{$script:Yum.MainFrame.Continue=$false}catch{}})
+    $script:Yum.Window.Add_StateChanged({
+        try{ if($script:Yum.Window.WindowState -eq [System.Windows.WindowState]::Minimized -and $null -ne $script:Yum.TrayIcon -and [bool]$script:Yum.Config['MinimizeToTray']){ Hide-YumToTray } }catch{}
+    })
+    if([bool]$script:Yum.Config['ShowTrayIcon']){ try{ Initialize-YumTray }catch{ Write-YumLogException -Context 'Tray icon failed; continuing without it' -Exception $_.Exception } }
     $timer=New-Object System.Windows.Threading.DispatcherTimer;$timer.Interval=[TimeSpan]::FromSeconds([double]$script:Yum.Config.UIRefreshIntervalSeconds);$timer.Add_Tick({Update-YumUiFromSnapshot;Update-YumCleanupResultUI;try{[void](Update-YumReclaimVerification)}catch{};Update-YumReclaimResultUI});$script:Yum.UiTimer=$timer;$timer.Start()
     try{$initialMemory=Get-YumMemoryTelemetry;if($null -ne $initialMemory){Update-YumSnapshot -Changes @{Memory=$initialMemory;CPU=0.0;GPU3D=0.0;ForegroundProcessId=0;Game=[pscustomobject]@{ProcessId=0;ProcessName=$null;Detected=$false}} -CoreTelemetry}}catch{Write-YumLogException -Context 'Initial memory telemetry failed' -Exception $_.Exception}
     Update-YumUiFromSnapshot
@@ -298,7 +306,8 @@ function Start-YumApplicationUi {
     # auto-clean on game start) are processed; automatic maintenance still waits for monitoring.
     try{Start-YumControllerWorker}catch{Write-YumLogException -Context 'Controller worker start failed' -Exception $_.Exception}
     if([bool]$script:Yum.Config.StartMonitoringAutomatically){Start-YumMonitoring}
-    [void]$script:Yum.Window.ShowDialog()
+    $script:Yum.Window.Show()
+    [System.Windows.Threading.Dispatcher]::PushFrame($script:Yum.MainFrame)   # returns when the window closes
 }
 function Update-YumReclaimButtons {
     try{
@@ -320,6 +329,14 @@ function Update-YumReclaimResultUI {
         if($r.PSObject.Properties['RetainedGainGB'] -and $null -ne $r.RetainedGainGB){$text+=(' Retained after 30s: +{0:N2} GB.' -f [double]$r.RetainedGainGB)}
         $script:Yum.Ui.ReclaimStatus.Text=$text
         Set-YumFooter ('💜 '+$text)
+        # A reclaim started from the tray reports back there while the window is hidden.
+        if([bool]$script:Yum.TrayReclaimPending -and -not (Test-YumReclaimBusy)){
+            $script:Yum.TrayReclaimPending=$false
+            if(-not $script:Yum.Window.IsVisible){
+                $gain=if($r.PSObject.Properties['AvailableGainGB']){[double]$r.AvailableGainGB}else{0.0}
+                Show-YumTrayNotice -Title 'YUMRAM freed RAM' -Text ('Available RAM +{0:N2} GB. {1}' -f $gain,[string]$r.Summary)
+            }
+        }
     }catch{Write-YumLogException -Context 'Reclaim result UI failed' -Exception $_.Exception}
 }
 function Update-YumCleanupResultUI {

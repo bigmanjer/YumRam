@@ -32,6 +32,15 @@
         ControllerWakeEvent = (New-Object System.Threading.AutoResetEvent($false))
         ReclaimRequest = $null
         ReclaimRequestedAt = [datetime]::MinValue
+        MainFrame = $null
+        TrayIcon = $null
+        TrayMenu = $null
+        TrayMenuMonitor = $null
+        TrayMenuFreeRam = $null
+        TrayIconHandle = [IntPtr]::Zero
+        TrayLastKey = ''
+        TrayHintShown = $false
+        TrayReclaimPending = $false
         LastUiReclaimResultVersion = 0
         ReclaimVerificationTimer = $null
         UiTimer = $null

@@ -29,6 +29,9 @@
               <StackPanel><TextBlock Text="Mode" Style="{StaticResource RowLabel}"/><TextBlock Text="Safe trims only low-risk idle apps; Balanced adds signed apps; Aggressive adds other identified apps." Style="{StaticResource RowHint}"/></StackPanel>
               <ComboBox x:Name="Mode" Grid.Column="1" VerticalAlignment="Top"><ComboBoxItem Content="Safe — minimal intervention" Tag="Safe"/><ComboBoxItem Content="Balanced — recommended" Tag="Balanced"/><ComboBoxItem Content="Aggressive — maximum reclaim" Tag="Aggressive"/></ComboBox></Grid>
             <CheckBox x:Name="StartMonitoringAutomatically" Content="Start monitoring automatically when YUMRAM opens"/>
+            <CheckBox x:Name="ShowTrayIcon" Content="Show RAM % in the notification area (tray icon)" Margin="0,8,0,0"/>
+            <CheckBox x:Name="MinimizeToTray" Content="Minimize to the notification area instead of the taskbar" Margin="0,8,0,0"/>
+            <TextBlock Text="Tray changes apply the next time YUMRAM opens." Style="{StaticResource Caption}" Margin="27,2,0,0"/>
             <Grid Style="{StaticResource Row}" Margin="0,14,0,0"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="240"/></Grid.ColumnDefinitions>
               <StackPanel><TextBlock Text="Cleanup target (GB)" Style="{StaticResource RowLabel}" Foreground="{StaticResource TextMuted}"/><TextBlock Text="Read-only: always equal to the memory goal." Style="{StaticResource RowHint}"/></StackPanel>
               <TextBox x:Name="CleanupTarget" Grid.Column="1" IsReadOnly="True" Foreground="{StaticResource TextMuted}" VerticalAlignment="Top" ToolTip="Kept for compatibility. The memory goal is the single source of truth."/></Grid>

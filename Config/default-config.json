@@ -337,6 +337,8 @@
   "ProcessCpuSampleIntervalSeconds": 1.0,
   "IntelligenceResearchEnabled": true,
   "EnableOnlineResearch": true,
+  "ShowTrayIcon": true,
+  "MinimizeToTray": true,
   "ResearchMaxItemsPerScan": 999999,
   "ResearchMaxOnlineItemsPerScan": 8,
   "ResearchCacheMaxAgeDays": 14,
