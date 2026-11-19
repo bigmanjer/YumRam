@@ -19,7 +19,10 @@ page faults and I/O immediately afterward.
 
 function Get-YumSafePropertyValue {
     param(
-        [Parameter(Mandatory=$true)]$Object,
+        # 5.3.1: was Mandatory, which rejects $null before the function body runs. Every process
+        # with no reclaim-learning history therefore threw, was skipped, and Free RAM / Deep Reclaim
+        # never trimmed a single process (so learning history was never created either).
+        [AllowNull()]$Object,
         [Parameter(Mandatory=$true)][string]$Name,
         $Default=$null
     )
@@ -194,6 +197,7 @@ function Get-YumFastReclaimCandidates {
         $processes=@(Get-Process -ErrorAction SilentlyContinue | Sort-Object WorkingSet64 -Descending | Select-Object -First ([math]::Max($TopN*4,$TopN)))
         foreach($p in $processes){
             try {
+                $path=''
                 $name=([string]$p.ProcessName -replace '\.exe$','')
                 $nameKey=$name.ToLowerInvariant()
                 $ws=[int64]$p.WorkingSet64
@@ -218,6 +222,19 @@ function Get-YumFastReclaimCandidates {
                     }
                 } catch {}
                 if($manual -match '(?i)security|driver|gaming|games|protected|unknown|quarantine'){continue}
+                # 5.3.1: apply the same Intelligence classification automatic cleanup uses. Before this,
+                # Free RAM / Deep Reclaim only checked a name list and trimmed e.g. steamwebhelper,
+                # which Intelligence classifies as a Protected game launcher (overlay hitches).
+                # Identity results are cached per executable, and this now runs on the worker thread.
+                if([string]::IsNullOrWhiteSpace($manual) -and (Get-Command Get-YumIntelligenceClassification -ErrorAction SilentlyContinue)){
+                    try {
+                        if(-not $path){try{$path=$p.MainModule.FileName}catch{}}
+                        $identity=if(Get-Command Get-YumCachedExecutableIdentity -ErrorAction SilentlyContinue){Get-YumCachedExecutableIdentity -Path $path -VerifySignature}else{$null}
+                        $cls=Get-YumIntelligenceClassification -Process $p -Identity $identity -ForegroundPid $ForegroundPid -GamePid $GamePid -Cpu $cpu -MemoryMB ([math]::Round($wsMB))
+                        if([string]$cls.Risk -in @('Protected','Unknown')){continue}
+                        if([string]$cls.Category -match '(?i)security|driver|hardware|game|launcher|overlay|anti-?cheat'){continue}
+                    } catch {}
+                }
                 $idleScore=[math]::Max(0,20.0-[math]::Min(20.0,$cpu))
                 $sizeScore=[math]::Min(45.0,$wsMB/64.0)
                 $optionalBonus=if($optionalNames -contains $nameKey){15.0}else{0.0}
@@ -301,6 +318,7 @@ function Invoke-YumReclaimProcessPass {
     $game=if($snapshot -and $snapshot.Game -and $snapshot.Game.Detected){[int]$snapshot.Game.ProcessId}else{0}
     $candidates=@(Get-YumFastReclaimCandidates -TopN $TopN -ForegroundPid $fg -GamePid $game -MinimumWorkingSetMB $MinimumWorkingSetMB)
     $rows=New-Object System.Collections.Generic.List[object]
+    $trimmed=New-Object System.Collections.Generic.List[object]
     $used=0
     foreach($candidate in $candidates){
         if($used -ge $MaxActions){break}
@@ -308,21 +326,36 @@ function Invoke-YumReclaimProcessPass {
         try {
             if(Test-YumProtectedProcess -Process $p -ForegroundPid $fg -GamePid $game){continue}
             if(-not $AllowActive -and [double]$candidate.CPU -ge 5.0){continue}
-            $systemBefore=Get-YumMemoryReclaimSnapshot -Fast
             $start=[int64]$p.WorkingSet64
             $r=Invoke-YumEmptyWorkingSet -Process $p
             $after=[int64]$start
             try{$p.Refresh();$after=[int64]$p.WorkingSet64}catch{}
-            $systemAfter=Get-YumMemoryReclaimSnapshot -Fast
             $reduced=[math]::Max(0,$start-$after)
-            $availableGain=[math]::Max(0.0,[double]$systemAfter.AvailableGB-[double]$systemBefore.AvailableGB)
-            if($r.Success){$used++}
-            if($r.Success){Update-YumReclaimLearning -Process $p -AvailableGainGB $availableGain -WorkingSetReducedMB ($reduced/1MB)}
-            [void]$rows.Add([pscustomobject]@{
-                Type='Process';PID=[int]$p.Id;Process=[string]$p.ProcessName;BeforeMB=[math]::Round($start/1MB,0);AfterMB=[math]::Round($after/1MB,0);ReducedMB=[math]::Round($reduced/1MB,0);AvailableGainMB=[math]::Round($availableGain*1024,0);Action='Trim working set';Result=if($r.Success){'Completed'}else{'Failed'};Reason=if($r.Success){$candidate.Reason}else{$r.Reason};CPU=$candidate.CPU;Score=$candidate.Score;HistoricalEffectiveness=$candidate.HistoricalEffectiveness;HistoricalSamples=$candidate.HistoricalSamples
-            })
+            $row=[pscustomobject]@{
+                Type='Process';PID=[int]$p.Id;Process=[string]$p.ProcessName;BeforeMB=[math]::Round($start/1MB,0);AfterMB=[math]::Round($after/1MB,0);ReducedMB=[math]::Round($reduced/1MB,0);AvailableGainMB=0;Action='Trim working set';Result=if($r.Success){'Completed'}else{'Failed'};Reason=if($r.Success){$candidate.Reason}else{$r.Reason};CPU=$candidate.CPU;Score=$candidate.Score;HistoricalEffectiveness=$candidate.HistoricalEffectiveness;HistoricalSamples=$candidate.HistoricalSamples
+            }
+            [void]$rows.Add($row)
+            if($r.Success){$used++;[void]$trimmed.Add([pscustomobject]@{Process=$p;Start=$start;AfterTrim=$after;Row=$row})}
         } catch {
             [void]$rows.Add([pscustomobject]@{Type='Process';PID=$candidate.PID;Process=$candidate.ProcessName;BeforeMB=$candidate.WorkingSetMB;AfterMB='—';ReducedMB=0;Action='Trim working set';Result='Failed';Reason=$_.Exception.Message;CPU=$candidate.CPU;Score=$candidate.Score})
+        }
+    }
+    # 5.3.1: measure after the trimmed pages settle (~1-2 s on Windows 10/11; memory compression and
+    # the modified-page writer move them into Available). Per-process learning records how much of
+    # each trim was still trimmed after settling: hot processes that immediately fault their pages
+    # back in get deprioritized. The old per-trim Available delta was ~0 for every process, which
+    # made learning penalize everything after two samples.
+    if($trimmed.Count -gt 0){
+        $settleMs=1500;try{if($null -ne $script:Yum.Config['ReclaimSettleMilliseconds']){$settleMs=[int]$script:Yum.Config['ReclaimSettleMilliseconds']}}catch{}
+        Start-Sleep -Milliseconds ([math]::Min(5000,[math]::Max(0,$settleMs)))
+        foreach($t in $trimmed.ToArray()){
+            try{
+                $t.Process.Refresh();$nowWs=[int64]$t.Process.WorkingSet64
+                $trimmedBytes=[math]::Max(1,[double]($t.Start-$t.AfterTrim))
+                $retainedBytes=[math]::Max(0.0,[math]::Min($trimmedBytes,[double]($t.Start-$nowWs)))
+                $t.Row.AvailableGainMB=[math]::Round($retainedBytes/1MB,0)
+                Update-YumReclaimLearning -Process $t.Process -AvailableGainGB ($retainedBytes/1GB) -WorkingSetReducedMB ($trimmedBytes/1MB)
+            }catch{}
         }
     }
     $afterSnap=Get-YumMemoryReclaimSnapshot
@@ -349,9 +382,11 @@ function Invoke-YumMemoryReclaim {
         $gameActive=$false
         try{$s=Get-YumSnapshotCopy;$gameActive=[bool]($s -and $s.Game -and $s.Game.Detected)}catch{}
 
-        # Manual Quick and Deep reclaim both use the lowest-priority standby lane
-        # first. Quick then trims only low-activity process working sets; Deep can
-        # continue to full standby/modified-page reclamation.
+        # 5.3.1 order: low-priority standby -> trim processes (and let them settle) -> Deep only:
+        # flush the modified list (turns trimmed dirty pages into Available) -> purge standby ->
+        # system working sets. 5.2.x flushed/purged *before* trimming, so the pages released by the
+        # trims were never flushed, and purging standby first does not raise Available at all
+        # (standby pages already count as Available).
         $runMemoryArea = {
             param([string]$Command,[string]$Label)
             $areaBefore=Get-YumMemoryReclaimSnapshot -Fast
@@ -363,14 +398,15 @@ function Invoke-YumMemoryReclaim {
             if(-not $r.Success){[void]$notes.Add(('{0} was unavailable or denied.' -f $Label))}
         }
         if([bool]$script:Yum.Config.ReclaimLowPriorityStandby){ & $runMemoryArea 'PurgeLowPriorityStandby' 'Low-priority standby list' }
-        if($Mode -eq 'Deep' -and [bool]$script:Yum.Config.ReclaimStandbyList){ & $runMemoryArea 'PurgeStandby' 'Standby list' }
-        if($Mode -eq 'Deep' -and [bool]$script:Yum.Config.ReclaimModifiedPageList -and $Force -and -not $gameActive){ & $runMemoryArea 'FlushModifiedList' 'Modified page list' }
 
-        # 5.3.0: was "-TopN (if(...){16}else{10})" which PowerShell runs as a command named 'if',
-        # so every Free RAM / Deep Reclaim threw here before trimming any process.
-        $topN=if($Mode -eq 'Deep'){16}else{10}
-        $processPass=Invoke-YumReclaimProcessPass -TopN $topN -MaxActions ([int]$script:Yum.Config.ReclaimMaxProcessActions) -MinimumWorkingSetMB ([int]$script:Yum.Config.ReclaimMinimumWorkingSetMB) -AllowActive:($Force -and $Mode -eq 'Deep')
+        # 5.3.0: was "-TopN (if(...){16}else{10})" which PowerShell runs as a command named 'if'.
+        $maxActions=[math]::Max(1,[int]$script:Yum.Config.ReclaimMaxProcessActions)
+        if($Mode -eq 'Deep'){$topN=32;$maxActions=[math]::Max(16,$maxActions*2)}else{$topN=16;$maxActions=[math]::Max(8,$maxActions)}
+        $processPass=Invoke-YumReclaimProcessPass -TopN $topN -MaxActions $maxActions -MinimumWorkingSetMB ([int]$script:Yum.Config.ReclaimMinimumWorkingSetMB) -AllowActive:($Force -and $Mode -eq 'Deep')
         foreach($r in @($processPass.Rows)){[void]$rows.Add($r)}
+
+        if($Mode -eq 'Deep' -and [bool]$script:Yum.Config.ReclaimModifiedPageList -and $Force -and -not $gameActive){ & $runMemoryArea 'FlushModifiedList' 'Modified page list' }
+        if($Mode -eq 'Deep' -and [bool]$script:Yum.Config.ReclaimStandbyList){ & $runMemoryArea 'PurgeStandby' 'Standby list' }
 
         # A manual deep reclaim can optionally clear system working sets last.
         # It is intentionally not part of automatic monitoring because it is more

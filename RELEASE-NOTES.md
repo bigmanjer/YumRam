@@ -1,3 +1,49 @@
+# YUMRAM 5.3.1 — Alpha: lag, settings, and reclaim strength
+
+Measured on the developer's 16 GB Windows 11 PC with the real program running.
+
+## Lag
+| While monitoring | 5.3.0 | 5.3.1 |
+|---|---|---|
+| YUMRAM CPU (idle) | 77% of a core | 14% of a core |
+| UI work per refresh | 25 ms avg, 298 ms worst | 4.6 ms avg, 24 ms worst |
+| Free RAM / Deep Reclaim | froze the window | runs on the background worker |
+
+- GPU usage was read with `Get-Counter`, costing ~1.4 s of CPU every 3 s. Now read directly
+  (~0.27 s) and at most every 5 s.
+- The telemetry aux loop republished a snapshot every 200 ms, so the UI redrew the graph ~4x/s and
+  the graph only held ~15 s of history. It now publishes only when GPU/game data changes.
+- Game detection uses a hash-set lookup (~6x less CPU).
+- Automatic maintenance backs off (30 s, doubling to 2 min) when the target cannot be reached,
+  instead of re-scanning every 1-4 s forever.
+- Per-process cooldown actually works now (it was checked but never recorded), so a busy app is
+  no longer trimmed on every pass and immediately paged back in.
+
+## Settings
+- **Saved settings were ignored at every launch** (present since 5.2.x): the config merge bound an
+  ordered dictionary to a `[hashtable]` parameter, which made a copy, so the app always started on
+  defaults (e.g. a 10 GB target came back as 4 GB). Fixed, with a regression test.
+- Modes retuned. Safe mode could never trim anything (score floor 65 was unreachable); Balanced
+  skipped most mid-size apps. New floors: Safe 34, Balanced 24, Aggressive 12; larger per-pass
+  budgets. Balanced now also trims "Review" processes with a valid publisher signature.
+- Old default values are migrated (2/3/5 processes per pass -> 3/5/8, Free RAM actions 3 -> 8,
+  GPU interval 3 s -> 5 s); values you changed yourself are kept.
+
+## Reclaim strength
+- **Free RAM Now / Deep Reclaim never trimmed a process** in 5.3.0: a helper rejected `$null`
+  (no reclaim history yet), so every candidate was skipped. Now: +0.45 to +0.90 GB per click here.
+- Trimmed memory reaches "Available" 1-2 s later and only ~40% of it (measured). Cleanup now
+  plans with that ratio and waits 1.5 s before judging a pass, instead of seeing ~0 gain and
+  escalating into fallback churn.
+- Learning now records how much of each trim stayed trimmed, deprioritizing apps that page
+  straight back in (it previously penalized every process after two samples).
+- Deep reclaim flushes the modified list *after* trimming (5.3.0 flushed first, too early).
+- Free RAM Now uses the Intelligence classifier, so it no longer trims protected items such as
+  Steam's web helper (game overlay).
+
+Result with Balanced + 10 GB target: automatic maintenance gained +0.74 GB (was +0.07 GB).
+Tests: 41/41 (new: ConfigPersistenceTest; reclaim test now checks real candidates).
+
 # YUMRAM 5.3.0 — Alpha (consolidated from 5.2.74 and 5.2.90)
 
 5.2.90 is the base. 5.2.74's only unique feature (the Cleanup Preview window) was intentionally

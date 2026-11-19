@@ -27,11 +27,16 @@ function Publish-Aux {
     try {
         $old=$Cache['Snapshot']
         if($null -eq $old){ return }
+        # 5.3.1: publish only when something was sampled, and never bump SnapshotVersion here.
+        # The aux loop used to republish every 200 ms, so the UI redrew the graph ~4x/s and the
+        # 60-point graph filled with duplicate memory points (only ~15 s of history).
+        # The next core sample (every TelemetryIntervalSeconds) carries GPU/game into the UI.
+        if(-not $GpuSampled -and -not $GameSampled){ return }
         $now=Get-Date
         $Cache['Snapshot']=[pscustomobject]@{Timestamp=$old.Timestamp;Memory=$old.Memory;CPU=$old.CPU;GPU3D=[double]$Gpu;ForegroundProcessId=[int]$ForegroundPid;Game=$Game}
         if($GpuSampled){$Cache['LastGpu']=$now}
         if($GameSampled){$Cache['LastGame']=$now}
-        $Cache['AuxCount']=[int]$Cache['AuxCount']+1; $Cache['SnapshotVersion']=[int]$Cache['SnapshotVersion']+1
+        $Cache['AuxCount']=[int]$Cache['AuxCount']+1
     } finally { [System.Threading.Monitor]::Exit($Cache.SyncRoot) }
 }
 
@@ -75,14 +80,19 @@ function Get-ForegroundPid {
     return 0
 }
 
+$script:KnownGameSet=$null
 function Get-GameSnapshot {
-    $known=@($Config.KnownGames)
+    # 5.3.1: one case-insensitive HashSet lookup per process instead of a nested loop with a
+    # regex -replace per (process x game) pair (~6x less CPU).
+    if($null -eq $script:KnownGameSet){
+        $script:KnownGameSet=New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
+        foreach($g in @($Config.KnownGames)){ if(-not [string]::IsNullOrWhiteSpace([string]$g)){ [void]$script:KnownGameSet.Add(([string]$g -replace '\.exe$','')) } }
+    }
     try {
-        foreach($p in @(Get-Process -ErrorAction SilentlyContinue)){
+        foreach($p in [System.Diagnostics.Process]::GetProcesses()){
             try {
                 if($p.Id -eq $PID){continue}
-                $clean=$p.ProcessName -replace '\.exe$',''
-                foreach($g in $known){ if($clean -ieq ([string]$g -replace '\.exe$','')) { return [pscustomobject]@{ProcessId=[int]$p.Id;ProcessName=$p.ProcessName;Detected=$true} } }
+                if($script:KnownGameSet.Contains($p.ProcessName)){ return [pscustomobject]@{ProcessId=[int]$p.Id;ProcessName=$p.ProcessName;Detected=$true} }
             } catch {}
         }
     } catch {}
@@ -126,14 +136,34 @@ if($Mode -eq 'Core'){
     }
 } else {
     $lastGpu=Get-Date '2000-01-01'; $lastGame=Get-Date '2000-01-01'; $gpu=0.0; $game=[pscustomobject]@{ProcessId=0;ProcessName=$null;Detected=$false}; $fg=0
+    # 5.3.1: Get-Counter '\GPU Engine(*)\...' cost ~1.4 s of CPU per call (about half a core at a
+    # 3 s interval). Read the category directly and compute utilization from two raw samples
+    # (~0.25 s CPU), and never sample more often than every 5 s.
+    $gpuCategory=$null; try{$gpuCategory=New-Object System.Diagnostics.PerformanceCounterCategory('GPU Engine')}catch{}
+    $gpuPrev=@{}
+    $gpuInterval=[math]::Max(5.0,[double]$Config.GPUIntervalSeconds)
     while(-not $StopEvent.IsSet){
         try {
             $now=Get-Date; $gpuSampled=$false; $gameSampled=$false
-            if(($now-$lastGpu).TotalSeconds -ge [double]$Config.GPUIntervalSeconds){
+            if($null -ne $gpuCategory -and ($now-$lastGpu).TotalSeconds -ge $gpuInterval){
                 try {
-                    $counter=Get-Counter '\GPU Engine(*)\Utilization Percentage' -ErrorAction Stop
-                    $max=0.0
-                    foreach($sample in $counter.CounterSamples){ if(([string]$sample.InstanceName -match 'engtype_3D')){ $max=[math]::Max($max,[double]$sample.CookedValue) } }
+                    $data=$gpuCategory.ReadCategory()['Utilization Percentage']
+                    $engineTotals=@{}
+                    $next=@{}
+                    foreach($key in $data.Keys){
+                        $name=[string]$key
+                        if($name -notmatch 'engtype_3D$'){continue}
+                        $sample=$data[$key].Sample
+                        $next[$name]=$sample
+                        if($gpuPrev.ContainsKey($name)){
+                            $value=[System.Diagnostics.CounterSample]::Calculate($gpuPrev[$name],$sample)
+                            $engine=if($name -match '(luid_.*)$'){$Matches[1]}else{$name}
+                            if(-not $engineTotals.ContainsKey($engine)){$engineTotals[$engine]=0.0}
+                            $engineTotals[$engine]+=[double]$value
+                        }
+                    }
+                    $gpuPrev=$next
+                    $max=0.0; foreach($v in $engineTotals.Values){ if($v -gt $max){$max=$v} }
                     $gpu=[math]::Round([math]::Min(100,$max),1)
                 } catch { $gpu=0.0 }
                 $lastGpu=$now; $gpuSampled=$true
@@ -141,6 +171,6 @@ if($Mode -eq 'Core'){
             if(($now-$lastGame).TotalSeconds -ge [double]$Config.GameDetectionIntervalSeconds){ $game=Get-GameSnapshot; $fg=Get-ForegroundPid; $lastGame=$now; $gameSampled=$true }
             Publish-Aux -Gpu $gpu -Game $game -ForegroundPid $fg -GpuSampled:$gpuSampled -GameSampled:$gameSampled
         } catch { Fail-Worker $_.Exception }
-        Start-Sleep -Milliseconds 200
+        [void]$StopEvent.Wait(250)
     }
 }

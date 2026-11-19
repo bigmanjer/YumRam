@@ -1929,15 +1929,24 @@ function Show-YumMemoryReclaim {
         }
 
         $run={param($State,$Mode)
+            # 5.3.1: queue the reclaim on the controller worker; the 1 s refresh below shows progress
+            # and the result, so the window never freezes.
             try{
-                $State.Progress.IsIndeterminate=$true;$State.Activity.Text=('Running {0} reclaim…' -f $Mode);$State.FreeRam.IsEnabled=$false;$State.DeepReclaim.IsEnabled=$false
-                $r=if($Mode -eq 'Deep'){Invoke-YumDeepRamReclaim}else{Invoke-YumFreeRamNow}
-                $State.Progress.IsIndeterminate=$false;$State.Progress.Value=100
-                if($r){$State.Summary.Text=[string]$r.Summary;$State.Measurement.Text=("Before: {0:N2} GB available`nAfter: {1:N2} GB available`nActual gain: +{2:N2} GB`nWorking sets reduced: {3:N0} MB" -f $r.Before.AvailableGB,$r.After.AvailableGB,$r.AvailableGainGB,$r.WorkingSetReducedMB)}
-                & $render $State
-                $State.Activity.Text='Reclaim complete.'
+                if(Request-YumMemoryReclaim -Mode $Mode){
+                    $State['Waiting']=$true
+                    $State.Progress.IsIndeterminate=$true;$State.Activity.Text=('Running {0} reclaim… (settling memory, a few seconds)' -f $Mode)
+                }else{$State.Activity.Text='A reclaim is already running.'}
+                $State.FreeRam.IsEnabled=$false;$State.DeepReclaim.IsEnabled=$false
             }catch{Write-YumLogException -Context 'RAM reclaim action failed' -Exception $_.Exception;$State.Progress.IsIndeterminate=$false;$State.Activity.Text='Reclaim failed.';$State.Measurement.Text='Check YUMRAM.log for the diagnostic.'}
-            finally{$State.FreeRam.IsEnabled=$true;$State.DeepReclaim.IsEnabled=$true}
+        }
+        $busyRefresh={param($State)
+            $busy=Test-YumReclaimBusy
+            $State.FreeRam.IsEnabled=-not $busy;$State.DeepReclaim.IsEnabled=-not $busy
+            if(-not $busy -and $State.ContainsKey('Waiting') -and [bool]$State['Waiting']){
+                $State['Waiting']=$false
+                $State.Progress.IsIndeterminate=$false;$State.Progress.Value=100
+                $State.Activity.Text='Reclaim complete.'
+            }
         }
         $state.FreeRam.Add_Click({param($s,$e)& $run $reclaimState 'Quick'})
         $state.DeepReclaim.Add_Click({param($s,$e)& $run $reclaimState 'Deep'})
@@ -1945,7 +1954,7 @@ function Show-YumMemoryReclaim {
         $window.Owner=$script:Yum.Window
         $refreshTimer=New-Object System.Windows.Threading.DispatcherTimer
         $refreshTimer.Interval=[TimeSpan]::FromSeconds(1)
-        $refreshTimer.Add_Tick({try{& $render $reclaimState}catch{}})
+        $refreshTimer.Add_Tick({try{& $render $reclaimState}catch{};try{& $busyRefresh $reclaimState}catch{}})
         $refreshTimer.Start()
         $window.Add_Closed({try{$refreshTimer.Stop()}catch{}})
         & $render $state

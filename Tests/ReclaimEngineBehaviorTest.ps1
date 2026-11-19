@@ -9,6 +9,7 @@ $root=Split-Path -Parent $PSScriptRoot
 Initialize-YumConfig
 $script:Yum.Config.Logging=$false
 $script:Yum.Config.ReclaimLearningEnabled=$false
+$script:Yum.Config.ReclaimSettleMilliseconds=0
 
 $script:FakeCalls=New-Object System.Collections.Generic.List[string]
 function Invoke-YumNativeMemoryCommand { param([string]$Command) $script:FakeCalls.Add("native:$Command"); [pscustomobject]@{Success=$true;Command=$Command;Status=0;Reason='fake';ErrorCategory=''} }
@@ -36,6 +37,16 @@ if(Update-YumReclaimVerification){throw 'Completed verification sampled again.'}
 # Reclaim Center view must expose verification fields (5.2.90 used reflection on a PSCustomObject and always showed Pending).
 $view=Get-YumLastReclaimView
 if([string]$view.VerificationStatus -ne 'Complete'){throw 'Reclaim view does not surface verification status.'}
+
+# 5.3.1 regression: Get-YumSafePropertyValue had a Mandatory $Object, so a process with no learning
+# history threw, every candidate was skipped, and Free RAM / Deep Reclaim never trimmed anything.
+if((Get-YumSafePropertyValue -Object $null -Name 'Samples' -Default 7) -ne 7){throw 'Get-YumSafePropertyValue does not accept $null.'}
+$script:Yum.ReclaimLearningLoaded=$true;$script:Yum.ReclaimLearning=@{}
+$noHistory=Get-YumReclaimLearningForProcess -Process (Get-Process -Id $PID)
+if([int]$noHistory.Samples -ne 0 -or [double]$noHistory.HistoricalBonus -ne 0){throw 'Learning lookup for a process with no history is wrong.'}
+$realCandidates=@(Get-YumFastReclaimCandidates -TopN 40 -MinimumWorkingSetMB 1)
+if($realCandidates.Count -eq 0){throw 'Free RAM NOW found no candidates at all on this machine (candidate loop is swallowing errors).'}
+if(@($realCandidates | Where-Object { $_.ProcessName -in @('MsMpEng','explorer','csrss','lsass','dwm') }).Count -gt 0){throw 'Free RAM NOW selected a protected/core process.'}
 
 # NTSTATUS failures are negative; formatting them must not throw.
 $hex='0x{0:X8}' -f [BitConverter]::ToUInt32([BitConverter]::GetBytes([int32]-1073741727),0)

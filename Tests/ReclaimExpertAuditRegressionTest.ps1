@@ -20,8 +20,10 @@ if($memory -notmatch 'Update-YumReclaimLearning'){throw 'Reclaim learning update
 if($memory -notmatch 'HistoricalBonus'){throw 'Historical reclaim effectiveness is not part of candidate scoring.'}
 if(-not $memory.Contains('ReclaimSystemWorkingSet -and $Force -and -not $gameActive')){throw 'System working-set pass is not controlled by ReclaimSystemWorkingSet.'}
 if($memory -match 'ReclaimModifiedPageList -and \$Force -and -not \$gameActive\)\{\s*\$r2=Invoke-YumNativeMemoryCommand -Command EmptyWorkingSets'){throw 'System working-set pass is incorrectly tied to ReclaimModifiedPageList.'}
-if($memory -notmatch 'if\(\$r\.Success\)\{\$used\+\+\}'){throw 'Failed process actions still consume successful-action quota.'}
-if($memory -notmatch 'systemBefore=Get-YumMemoryReclaimSnapshot' -or $memory -notmatch 'systemAfter=Get-YumMemoryReclaimSnapshot'){throw 'Per-process available-RAM verification missing.'}
+if($memory -notmatch 'if\(\$r\.Success\)\{\$used\+\+[;}]'){throw 'Failed process actions still consume successful-action quota.'}
+# 5.3.1: per-process gain is measured after a settle delay (trimmed pages reach Available ~1-2 s
+# later), as retained working-set reduction, instead of an instant system Available delta (~0).
+if($memory -notmatch 'ReclaimSettleMilliseconds' -or $memory -notmatch '\$retainedBytes='){throw 'Per-process settled reclaim verification missing.'}
 foreach($label in @('💜 FREE RAM NOW','💜 DEEP RAM RECLAIM')){if($xaml -notmatch [regex]::Escape($label)){throw "Missing requested label: $label"}}
 if($xaml -notmatch 'No preview scan'){throw 'RAM Reclaim Center does not document preview removal.'}
 if($xaml -match 'x:Name="Refresh"'){throw 'Refresh control regressed.'}

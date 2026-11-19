@@ -200,8 +200,9 @@ function Stop-YumSingleInstance {try{if($script:Yum.SingleInstanceOwned -and $sc
 function Start-YumApplicationUi {
     $path=Join-Path $script:Yum.Root 'UI\Xaml\MainWindow.xaml';if(-not(Test-Path -LiteralPath $path)){throw "Missing main window XAML: $path"};[xml]$xaml=Read-YumXamlText -Path $path;$reader=New-Object System.Xml.XmlNodeReader $xaml;$script:Yum.Window=[Windows.Markup.XamlReader]::Load($reader);$script:Yum.Ui=[ordered]@{};foreach($n in @('Intelligence','TelemetryStatus','QuickMonitorStatus','QuickMonitorTelemetry','ModeHelp','Mode','Status','Available','Memory','CPU','GPU','Game','Usage','MemoryBar','Target','TargetStatus','TargetBar','Graph','FreeRam','DeepReclaim','ReclaimCenter','ReclaimStatus','Monitor','ModeBox','TargetBox','Apply','AutoGame','ProtectGame','AutoClean','PriorityBox','Processes','Settings','About','Footer','VersionStatus')){$script:Yum.Ui[$n]=$script:Yum.Window.FindName($n)};Apply-YumUiConfig;if($null -ne $script:Yum.Ui.VersionStatus){$script:Yum.Ui.VersionStatus.Text=('YUMRAM V{0}' -f [string]$script:Yum.Config.Version)}
     $script:Yum.Ui.Processes.Add_Click({try{Show-YumTopProcesses}catch{Write-YumLogException -Context 'Top memory processes view failed' -Exception $_.Exception}})
-    $script:Yum.Ui.FreeRam.Add_Click({try{Set-YumFooter '💜 Freeing RAM now…';$r=Invoke-YumFreeRamNow;if($r -and $r.Summary){$script:Yum.Ui.ReclaimStatus.Text=$r.Summary;Set-YumFooter ('💜 '+$r.Summary)}else{Set-YumFooter '⚠ RAM reclaim did not return a result.'}}catch{Write-YumLogException -Context 'Free RAM action failed' -Exception $_.Exception;Set-YumFooter '⚠ Free RAM failed — check YUMRAM.log.'}})
-    $script:Yum.Ui.DeepReclaim.Add_Click({try{Set-YumFooter '💜 Deep reclaim running…';$r=Invoke-YumDeepRamReclaim;if($r -and $r.Summary){$script:Yum.Ui.ReclaimStatus.Text=$r.Summary;Set-YumFooter ('💜 '+$r.Summary)}else{Set-YumFooter '⚠ Deep reclaim did not return a result.'}}catch{Write-YumLogException -Context 'Deep RAM reclaim failed' -Exception $_.Exception;Set-YumFooter '⚠ Deep reclaim failed — check YUMRAM.log.'}})
+    # 5.3.1: reclaim runs on the controller worker; the UI timer shows the result (Update-YumReclaimResultUI).
+    $script:Yum.Ui.FreeRam.Add_Click({try{if(Request-YumMemoryReclaim -Mode Quick){Set-YumFooter '💜 Freeing RAM now… (window stays responsive)';$script:Yum.Ui.ReclaimStatus.Text='Freeing RAM… results appear in a few seconds.'}else{Set-YumFooter '💜 A reclaim is already running.'};Update-YumReclaimButtons}catch{Write-YumLogException -Context 'Free RAM action failed' -Exception $_.Exception;Set-YumFooter '⚠ Free RAM failed — check YUMRAM.log.'}})
+    $script:Yum.Ui.DeepReclaim.Add_Click({try{if(Request-YumMemoryReclaim -Mode Deep){Set-YumFooter '💜 Deep reclaim running… (window stays responsive)';$script:Yum.Ui.ReclaimStatus.Text='Deep reclaim running… results appear in a few seconds.'}else{Set-YumFooter '💜 A reclaim is already running.'};Update-YumReclaimButtons}catch{Write-YumLogException -Context 'Deep RAM reclaim failed' -Exception $_.Exception;Set-YumFooter '⚠ Deep reclaim failed — check YUMRAM.log.'}})
     $script:Yum.Ui.ReclaimCenter.Add_Click({try{Show-YumMemoryReclaim}catch{Write-YumLogException -Context 'RAM Reclaim Center launch failed' -Exception $_.Exception;Set-YumFooter '⚠ RAM Reclaim Center failed — check YUMRAM.log.'}})
     $script:Yum.Ui.Monitor.Add_Click({if($null -eq $script:Yum.TelemetryTimer){Start-YumMonitoring}else{Stop-YumMonitoring}})
     $script:Yum.Ui.Apply.Add_Click({Invoke-YumApplyTarget})
@@ -240,7 +241,7 @@ function Start-YumApplicationUi {
     $script:Yum.Ui.Intelligence.Add_Click({try{Show-YumIntelligence}catch{Write-YumLogException -Context 'Intelligence launch failed' -Exception $_.Exception}});$script:Yum.Ui.Settings.Add_Click({Show-YumSettings});$script:Yum.Ui.About.Add_Click({Show-YumAbout})
     $script:Yum.Window.Add_SizeChanged({Update-YumGraph})
     $script:Yum.Window.Add_Closed({$script:Yum.StopRequested=$true;Stop-YumMonitoring;try{Stop-YumControllerWorker}catch{};try{if($null -ne $script:Yum.UiTimer){$script:Yum.UiTimer.Stop()}}catch{};Restart-YumOptionalServices;Write-YumLog 'YUMRAM closed.';Stop-YumSingleInstance})
-    $timer=New-Object System.Windows.Threading.DispatcherTimer;$timer.Interval=[TimeSpan]::FromSeconds([double]$script:Yum.Config.UIRefreshIntervalSeconds);$timer.Add_Tick({Update-YumUiFromSnapshot;Update-YumCleanupResultUI;try{[void](Update-YumReclaimVerification)}catch{}});$script:Yum.UiTimer=$timer;$timer.Start()
+    $timer=New-Object System.Windows.Threading.DispatcherTimer;$timer.Interval=[TimeSpan]::FromSeconds([double]$script:Yum.Config.UIRefreshIntervalSeconds);$timer.Add_Tick({Update-YumUiFromSnapshot;Update-YumCleanupResultUI;try{[void](Update-YumReclaimVerification)}catch{};Update-YumReclaimResultUI});$script:Yum.UiTimer=$timer;$timer.Start()
     try{$initialMemory=Get-YumMemoryTelemetry;if($null -ne $initialMemory){Update-YumSnapshot -Changes @{Memory=$initialMemory;CPU=0.0;GPU3D=0.0;ForegroundProcessId=0;Game=[pscustomobject]@{ProcessId=0;ProcessName=$null;Detected=$false}} -CoreTelemetry}}catch{Write-YumLogException -Context 'Initial memory telemetry failed' -Exception $_.Exception}
     Update-YumUiFromSnapshot
     # The controller worker lives for the whole session so queued requests (safe optimization,
@@ -248,6 +249,28 @@ function Start-YumApplicationUi {
     try{Start-YumControllerWorker}catch{Write-YumLogException -Context 'Controller worker start failed' -Exception $_.Exception}
     if([bool]$script:Yum.Config.StartMonitoringAutomatically){Start-YumMonitoring}
     [void]$script:Yum.Window.ShowDialog()
+}
+function Update-YumReclaimButtons {
+    try{
+        $busy=Test-YumReclaimBusy
+        $script:Yum.Ui.FreeRam.IsEnabled=-not $busy
+        $script:Yum.Ui.DeepReclaim.IsEnabled=-not $busy
+    }catch{}
+}
+function Update-YumReclaimResultUI {
+    # Shows the result of a reclaim the controller worker finished (and later verification updates).
+    try{
+        Update-YumReclaimButtons
+        $v=[int]$script:Yum.ReclaimResultVersion
+        if($v -eq [int]$script:Yum.LastUiReclaimResultVersion){return}
+        $script:Yum.LastUiReclaimResultVersion=$v
+        $r=$script:Yum.LastReclaim
+        if($null -eq $r -or $null -eq $r.PSObject.Properties['Summary']){return}
+        $text=[string]$r.Summary
+        if($r.PSObject.Properties['RetainedGainGB'] -and $null -ne $r.RetainedGainGB){$text+=(' Retained after 30s: +{0:N2} GB.' -f [double]$r.RetainedGainGB)}
+        $script:Yum.Ui.ReclaimStatus.Text=$text
+        Set-YumFooter ('💜 '+$text)
+    }catch{Write-YumLogException -Context 'Reclaim result UI failed' -Exception $_.Exception}
 }
 function Update-YumCleanupResultUI {
     $v=0;$r=$null;[System.Threading.Monitor]::Enter($script:Yum.CacheLock);try{$v=$script:Yum.CleanupResultVersion;$r=$script:Yum.CleanupResult}finally{[System.Threading.Monitor]::Exit($script:Yum.CacheLock)}

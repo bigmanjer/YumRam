@@ -61,7 +61,14 @@ function Get-YumCandidateProcesses {
                 } catch {}
                 if($classification.Risk -eq 'Protected' -or $classification.Risk -eq 'Unknown'){continue}
                 if($Mode -eq 'Safe' -and $classification.Risk -notin @('Safe to Manage','Candidate')){continue}
-                if($Mode -eq 'Balanced' -and $classification.Risk -notin @('Safe to Manage','Candidate')){continue}
+                # 5.3.1: Balanced also trims 'Review' processes whose executable carries a valid Authenticode
+                # signature from a named publisher (e.g. Chrome renderer/utility processes). A working-set
+                # trim never closes anything, so a verified identity is enough; unsigned/unknown Review
+                # items remain Aggressive-only. Measured: Balanced previously skipped most browser memory.
+                if($Mode -eq 'Balanced' -and $classification.Risk -notin @('Safe to Manage','Candidate')){
+                    $verified=($classification.Risk -eq 'Review' -and $null -ne $identity -and [string]$identity.Signature -eq 'Valid' -and -not [string]::IsNullOrWhiteSpace([string]$identity.Publisher) -and [string]$identity.Publisher -ne 'Unknown')
+                    if(-not $verified){continue}
+                }
                 if($Mode -eq 'Aggressive' -and $classification.Risk -eq 'Review'){if($identity.Signature -eq 'Unknown' -and [string]::IsNullOrWhiteSpace($identity.Company)){continue}}
                 $optionalBonus=if(Test-YumOptionalBackgroundProcess -Name $p.ProcessName){10}else{0}
                 $classificationBonus=switch($classification.Risk){'Safe to Manage'{20};'Candidate'{12};'Review'{3};default{0}}

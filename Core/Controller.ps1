@@ -24,8 +24,27 @@ $script:YumControllerWorkerScript = {
     foreach($relative in $Modules){ . (Join-Path $Root $relative) }
     $script:Yum = $Shared
     try { Write-YumLog 'Controller worker started.' } catch {}
-    while(-not $StopEvent.Wait(1000)){
+    $handles=[System.Threading.WaitHandle[]]@($StopEvent.WaitHandle,$script:Yum.ControllerWakeEvent)
+    $warmed=$false
+    while($true){
+        # Wake every second, or immediately when the UI queues a request.
+        if([System.Threading.WaitHandle]::WaitAny($handles,1000) -eq 0){break}
+        # 5.3.1: warm the executable-identity cache once (Authenticode checks cost ~4-7 s cold) so the
+        # first Free RAM / automatic pass does not pay for it. Skipped if a request is already waiting.
+        if(-not $warmed -and $null -eq $script:Yum.ReclaimRequest){
+            $warmed=$true
+            try{ [void](Get-YumFastReclaimCandidates -TopN 16) }catch{}
+        }
         try {
+            # Manual Free RAM / Deep Reclaim requests run here, off the UI thread (5.3.1).
+            $reclaimMode=$null
+            [System.Threading.Monitor]::Enter($script:Yum.RequestLock)
+            try{$reclaimMode=$script:Yum.ReclaimRequest;$script:Yum.ReclaimRequest=$null}finally{[System.Threading.Monitor]::Exit($script:Yum.RequestLock)}
+            if($null -ne $reclaimMode){
+                try{ [void](Invoke-YumMemoryReclaim -Mode $reclaimMode -Force) }
+                catch{ try{Write-YumLogException -Context 'Queued RAM reclaim failed' -Exception $_.Exception}catch{} }
+                finally{ $script:Yum.ReclaimResultVersion++ }
+            }
             if([bool]$script:Yum.MonitoringActive){
                 $snap = Get-YumSnapshotCopy
                 if($null -ne $snap){ Update-YumGameState -Snapshot $snap }
@@ -37,6 +56,24 @@ $script:YumControllerWorkerScript = {
         }
     }
     try { Write-YumLog 'Controller worker stopped.' } catch {}
+}
+
+function Request-YumMemoryReclaim {
+    # Queue a manual reclaim for the controller worker so the UI never blocks on it.
+    param([ValidateSet('Quick','Deep')][string]$Mode='Quick')
+    [System.Threading.Monitor]::Enter($script:Yum.RequestLock)
+    try{
+        if([bool]$script:Yum.ReclaimRunning -or $null -ne $script:Yum.ReclaimRequest){return $false}
+        $script:Yum.ReclaimRequest=$Mode
+        $script:Yum.ReclaimRequestedAt=Get-Date
+    }finally{[System.Threading.Monitor]::Exit($script:Yum.RequestLock)}
+    try{Start-YumControllerWorker}catch{}
+    try{[void]$script:Yum.ControllerWakeEvent.Set()}catch{}
+    return $true
+}
+
+function Test-YumReclaimBusy {
+    return ([bool]$script:Yum.ReclaimRunning -or $null -ne $script:Yum.ReclaimRequest)
 }
 
 function Get-YumControllerWorkerModules {

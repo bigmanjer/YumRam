@@ -15,15 +15,21 @@ function Get-YumPressureDecision {
 
 
 function Get-YumModeProfile {
+    # 5.3.1 retune, based on measurements on a 16 GB Windows 11 machine:
+    # - Candidate score = (WS GB * 45) + idle (0-15) + priority + class bonus (Candidate 12, Safe 20).
+    #   A typical idle 300-500 MB app scores 40-50, so the old Safe minimum (65) meant Safe mode
+    #   never trimmed anything, and Balanced (38) skipped most mid-size idle apps.
+    # - Only ~40% of a trimmed working set shows up as Available RAM, and only after 1-2 s, so the
+    #   per-pass budgets were far too small to close a real gap.
     switch([string]$script:Yum.Config.Mode){
         'Safe' {
-            return [pscustomobject]@{Name='Safe';PassLimit=[math]::Min([int]$script:Yum.Config.SafeProcessesPerPass,2);CandidateScoreMinimum=65.0;OptionalApps=0;OptionalServices=0;FollowUpPasses=8;StepDelayMs=350;MaxPassMilliseconds=550;MaxTrimMBPerPass=192}
+            return [pscustomobject]@{Name='Safe';PassLimit=[math]::Min([int]$script:Yum.Config.SafeProcessesPerPass,4);CandidateScoreMinimum=34.0;OptionalApps=0;OptionalServices=0;FollowUpPasses=8;StepDelayMs=350;MaxPassMilliseconds=1800;MaxTrimMBPerPass=512}
         }
         'Aggressive' {
-            return [pscustomobject]@{Name='Aggressive';PassLimit=[math]::Min([int]$script:Yum.Config.AggressiveProcessesPerPass,5);CandidateScoreMinimum=18.0;OptionalApps=2;OptionalServices=0;FollowUpPasses=24;StepDelayMs=125;MaxPassMilliseconds=1000;MaxTrimMBPerPass=768}
+            return [pscustomobject]@{Name='Aggressive';PassLimit=[math]::Min([int]$script:Yum.Config.AggressiveProcessesPerPass,10);CandidateScoreMinimum=12.0;OptionalApps=2;OptionalServices=0;FollowUpPasses=24;StepDelayMs=125;MaxPassMilliseconds=2600;MaxTrimMBPerPass=2048}
         }
         default {
-            return [pscustomobject]@{Name='Balanced';PassLimit=[math]::Min([int]$script:Yum.Config.BalancedProcessesPerPass,3);CandidateScoreMinimum=38.0;OptionalApps=1;OptionalServices=0;FollowUpPasses=16;StepDelayMs=200;MaxPassMilliseconds=750;MaxTrimMBPerPass=384}
+            return [pscustomobject]@{Name='Balanced';PassLimit=[math]::Min([int]$script:Yum.Config.BalancedProcessesPerPass,6);CandidateScoreMinimum=24.0;OptionalApps=1;OptionalServices=0;FollowUpPasses=16;StepDelayMs=200;MaxPassMilliseconds=2200;MaxTrimMBPerPass=1024}
         }
     }
 }
@@ -53,6 +59,12 @@ function Get-YumTrimPlan {
     )
     $gapMB=[math]::Max(0,($TargetGB-$AvailableGB)*1024.0)
     if($gapMB -le 0){ return @() }
+    # 5.3.1: plan in working-set MB, not Available MB. Measured: trimming 726 MB of working set
+    # raised Available RAM by ~280-315 MB (~40%) after it settled, so planning working-set MB equal
+    # to the Available gap always under-trimmed and the controller stalled into fallback churn.
+    $retention=0.4; try{ if($null -ne $script:Yum.Config['CleanupExpectedRetention']){ $retention=[double]$script:Yum.Config['CleanupExpectedRetention'] } }catch{}
+    $retention=[math]::Min(1.0,[math]::Max(0.15,$retention))
+    $gapMB=$gapMB/$retention
     $selected=New-Object System.Collections.Generic.List[object]
     $plannedMB=0.0
 
@@ -192,6 +204,17 @@ function Invoke-YumCleanupCore {
             $scoreFloor=[double]$profile.CandidateScoreMinimum
         }
         $eligible=@($candidates | Where-Object {$_.Score -ge $scoreFloor})
+        # 5.3.1: per-process cooldown. 5.2.x checked ProcessCleanupTimes but never wrote it, and
+        # skipped the check on follow-up passes, so a hot process (e.g. a busy browser tab) was
+        # trimmed on every pass, faulted straight back in, and the user felt it as lag.
+        # Keyed by PID (not name) so one cooling chrome.exe does not block every other chrome.exe.
+        # A user-forced first pass may ignore the cooldown; automatic and follow-up passes never do.
+        $cooldownSeconds=60.0;try{$cooldownSeconds=[math]::Max(5.0,[double]$script:Yum.Config.ProcessCooldownSeconds)}catch{}
+        $nowCool=Get-Date
+        foreach($k in @($script:Yum.ProcessCleanupTimes.Keys)){ if((($nowCool-[datetime]$script:Yum.ProcessCleanupTimes[$k]).TotalSeconds) -ge $cooldownSeconds){ $script:Yum.ProcessCleanupTimes.Remove($k) } }
+        if(-not ($Force -and -not $FollowUp)){
+            $eligible=@($eligible | Where-Object { -not $script:Yum.ProcessCleanupTimes.ContainsKey([string][int]$_.Process.Id) })
+        }
         $selected=@(Get-YumTrimPlan -Candidates $eligible -AvailableGB $before -TargetGB ([double]$decision.StopTargetGB) -PassLimit $limit -MaxTrimMBPerPass $maxTrimForPass -FallbackMode:$FallbackMode)
         if($SafeOnly -and $selected.Count -eq 0){return [pscustomobject]@{Success=$true;Skipped=$false;Reason='Safe optimization found no eligible low-risk working sets within the gradual reclaim budget.';Candidates=@();BeforeAvailableGB=$before;AfterAvailableGB=$before;AvailableImprovementGB=0.0;WorkingSetReduced=0;Processes=0}}
         $gameActive=[bool]$snapshot.Game.Detected
@@ -233,14 +256,12 @@ function Invoke-YumCleanupCore {
         }
         foreach($item in $selected){
             if((((Get-Date)-$passStarted).TotalMilliseconds) -ge [double]$profile.MaxPassMilliseconds){break}
-            $name=$item.Process.ProcessName -replace '\.exe$',''
-            if(-not $Force -and -not $FollowUp -and $script:Yum.ProcessCleanupTimes.Contains($name)){
-                $coolAge=((Get-Date)-$script:Yum.ProcessCleanupTimes[$name]).TotalSeconds
-                if($coolAge -lt [double]$script:Yum.Config.ProcessCooldownSeconds){continue}
-            }
             $current=Get-YumSnapshotCopy
             if($current -and $current.Memory.AvailableGB -ge [double]$decision.StopTargetGB){break}
             $r=Invoke-YumEmptyWorkingSet -Process $item.Process
+            # Record the attempt (success or failure) so neither a hot process nor one we cannot
+            # open is retried on every pass.
+            try{$script:Yum.ProcessCleanupTimes[[string][int]$item.Process.Id]=Get-Date}catch{}
             if($r.Success){$reduced+=[int64]$r.Reduced;$used++;[void]$rows.Add([pscustomobject]@{Time=(Get-Date).ToString('HH:mm:ss.fff');Type='Process';PID=$item.Process.Id;Process=$item.Process.ProcessName;BeforeMB=[math]::Round($r.Before/1MB);AfterMB=[math]::Round($r.After/1MB);ReducedMB=[math]::Round($r.Reduced/1MB);Action='Trimmed';Result=if($r.Success){'Completed'}else{'Failed'}});Write-YumLog ("Trimmed {0} PID {1}: {2:N0} MB -> {3:N0} MB; reduced {4:N0} MB" -f $item.Process.ProcessName,$item.Process.Id,($r.Before/1MB),($r.After/1MB),($r.Reduced/1MB))}else{Write-YumLog ("Trim failed for {0} PID {1}; Win32Error={2}" -f $item.Process.ProcessName,$item.Process.Id,$r.Win32Error)}
             Start-Sleep -Milliseconds ([int]$profile.StepDelayMs)
             $fresh=Get-YumMemoryTelemetry
@@ -331,6 +352,13 @@ function Invoke-YumCleanupToTarget {
         if($last){$totalReduced += [int64]$last.WorkingSetReduced;$totalProcesses += [int]$last.Processes}
         if($null -eq $last -or -not $last.Success){break}
         if($last -and [int]$last.Processes -eq 0 -and @($last.Candidates).Count -eq 0){break}
+        # 5.3.1: let trimmed pages settle before judging the pass. Measured on Windows 11: a trim
+        # shows +41 MB Available immediately but +290 MB after ~2 s. Measuring immediately made
+        # every pass look like a stall and pushed the controller into fallback churn.
+        if([int]$last.Processes -gt 0){
+            $settleMs=1500;try{if($null -ne $script:Yum.Config['CleanupSettleMilliseconds']){$settleMs=[int]$script:Yum.Config['CleanupSettleMilliseconds']}}catch{}
+            Start-Sleep -Milliseconds ([math]::Min(5000,[math]::Max(0,$settleMs)))
+        }
         $fresh=Get-YumMemoryTelemetry
         if($fresh){Update-YumSnapshotMemory -Memory $fresh}
         $current=if($fresh){[double]$fresh.AvailableGB}else{$previous}
@@ -362,6 +390,9 @@ function Invoke-YumCleanupToTarget {
             if($last -and $last.Candidates){foreach($r in @($last.Candidates)){[void]$allRows.Add($r)}}
             if($last){$totalReduced += [int64]$last.WorkingSetReduced;$totalProcesses += [int]$last.Processes;$fallbackReducedSession += [int64]$last.WorkingSetReduced}
             if($null -eq $last -or -not $last.Success){break}
+            if([int]$last.Processes -eq 0){$stopReason='No eligible processes left outside their cooldown; stopping fallback.';break}
+            $settleMs=1500;try{if($null -ne $script:Yum.Config['CleanupSettleMilliseconds']){$settleMs=[int]$script:Yum.Config['CleanupSettleMilliseconds']}}catch{}
+            Start-Sleep -Milliseconds ([math]::Min(5000,[math]::Max(0,$settleMs)))
             $fresh=Get-YumMemoryTelemetry
             if($fresh){Update-YumSnapshotMemory -Memory $fresh}
             $current=if($fresh){[double]$fresh.AvailableGB}else{$fallbackPrevious}
@@ -408,10 +439,21 @@ function Invoke-YumBackgroundController {
         $interval=[double]$script:Yum.Config.ControllerMinIntervalSeconds
         if($snapshot.Memory.TotalGB -gt 0){$distance=[math]::Max(0,$script:Yum.Config.MinimumAvailableGB-$snapshot.Memory.AvailableGB);$ratio=[math]::Min(1,$distance/[math]::Max(1,$snapshot.Memory.TotalGB*0.15));$interval=[double]$script:Yum.Config.ControllerMaxIntervalSeconds-(([double]$script:Yum.Config.ControllerMaxIntervalSeconds-$interval)*$ratio)}
         if($script:Yum.LastControllerClean -eq [datetime]::MinValue){$elapsed=99999}else{$elapsed=((Get-Date)-$script:Yum.LastControllerClean).TotalSeconds}
+        # 5.3.1: no-progress backoff. With an unreachable target the controller used to restart a
+        # full cleanup (process enumeration + classification) every 1-4 s indefinitely.
+        $backoff=0.0;try{if($script:Yum.Contains('ControllerBackoffSeconds')){$backoff=[double]$script:Yum.ControllerBackoffSeconds}}catch{}
+        $interval=[math]::Max($interval,$backoff)
         if($decision.ShouldClean -and $elapsed -ge $interval){
             $script:Yum.LastControllerClean=Get-Date
             $lastResult=Invoke-YumCleanupToTarget -Force:$false
             Publish-YumCleanupResult -Result $lastResult
+            $madeProgress=([bool]$lastResult.TargetReached -or [double]$lastResult.AvailableImprovementGB -ge 0.05)
+            if($madeProgress){$script:Yum.ControllerBackoffSeconds=0.0}
+            else{
+                $nextBackoff=if($backoff -le 0){30.0}else{[math]::Min(120.0,$backoff*2)}
+                if($nextBackoff -ne $backoff){try{Write-YumLog ('Target not reachable right now (Available {0:N2} GB, target {1:N2} GB); next automatic attempt in {2:N0}s.' -f [double]$lastResult.AfterAvailableGB,[double]$lastResult.TargetGB,$nextBackoff)}catch{}}
+                $script:Yum.ControllerBackoffSeconds=$nextBackoff
+            }
         }
     } catch {Write-YumLogException -Context 'Background controller failed' -Exception $_.Exception}
 }

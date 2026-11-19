@@ -25,6 +25,11 @@
         ControllerStopEvent = $null
         ControllerHeartbeatUtc = [datetime]::MinValue
         MonitoringActive = $false
+        ControllerBackoffSeconds = 0.0
+        ControllerWakeEvent = (New-Object System.Threading.AutoResetEvent($false))
+        ReclaimRequest = $null
+        ReclaimRequestedAt = [datetime]::MinValue
+        LastUiReclaimResultVersion = 0
         ReclaimVerificationTimer = $null
         UiTimer = $null
         StopRequested = $false
@@ -134,9 +139,12 @@ function New-YumConfigFromDefaults {
 }
 
 function Merge-YumHashtable {
-    param([hashtable]$Base,[hashtable]$Override)
-    foreach ($key in $Override.Keys) {
-        if ($Base.Contains($key) -and $Base[$key] -is [hashtable] -and $Override[$key] -is [hashtable]) {
+    # 5.3.1: was [hashtable]. The config is an [ordered] dictionary, and binding it to a [hashtable]
+    # parameter makes PowerShell pass a *converted copy*, so every saved user setting was merged into
+    # a throwaway object and the app started on defaults at every launch (e.g. target back to 4 GB).
+    param([System.Collections.IDictionary]$Base,[System.Collections.IDictionary]$Override)
+    foreach ($key in @($Override.Keys)) {
+        if ($Base.Contains($key) -and $Base[$key] -is [System.Collections.IDictionary] -and $Override[$key] -is [System.Collections.IDictionary]) {
             Merge-YumHashtable -Base $Base[$key] -Override $Override[$key]
         } else { $Base[$key] = $Override[$key] }
     }
@@ -192,6 +200,12 @@ function Initialize-YumConfig {
     if(-not $script:Yum.Config.Contains('IntelligentServiceStopThresholdGB')){$script:Yum.Config.IntelligentServiceStopThresholdGB=0.75}
     if(-not $script:Yum.Config.Contains('IntelligentServiceMaxStopsPerSession')){$script:Yum.Config.IntelligentServiceMaxStopsPerSession=2}
     if(-not $script:Yum.Config.Contains('AutoRestoreSessionStoppedServices')){$script:Yum.Config.AutoRestoreSessionStoppedServices=$true}
+    # 5.3.1 migration: raise values that are still at the old (too timid) defaults. Anything the
+    # user changed away from the old default is left alone.
+    $oldDefaults=@{SafeProcessesPerPass=@(2,3);BalancedProcessesPerPass=@(3,5);AggressiveProcessesPerPass=@(5,8);ReclaimMaxProcessActions=@(3,8);GPUIntervalSeconds=@(3.0,5.0)}
+    foreach($k in $oldDefaults.Keys){
+        try{ if($script:Yum.Config.Contains($k) -and [double]$script:Yum.Config[$k] -eq [double]$oldDefaults[$k][0]){ $script:Yum.Config[$k]=$oldDefaults[$k][1] } }catch{}
+    }
     $versionPath=Join-Path $script:Yum.Root 'VERSION'
     $runtimeVersion=''
     if(Test-Path -LiteralPath $versionPath){try{$candidateVersion=(Get-Content -LiteralPath $versionPath -Raw -ErrorAction Stop).Trim();if($candidateVersion -match '^\d+\.\d+\.\d+$'){$runtimeVersion=$candidateVersion}}catch{}}
