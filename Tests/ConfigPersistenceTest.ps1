@@ -3,13 +3,13 @@
 # [ordered] dictionary, so PowerShell passed a converted copy and every saved user setting was lost:
 # the app started on defaults at every launch (e.g. a 10 GB target came back as 4 GB).
 $ErrorActionPreference='Stop'
-$root=Split-Path -Parent $PSScriptRoot
+$repoRoot=Split-Path -Parent $PSScriptRoot  # not $root: Bootstrap sets $script:Root, the same variable
 $tmp=Join-Path $env:TEMP ('yumram-config-test-' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path (Join-Path $tmp 'Config') -Force | Out-Null
 try {
-    Copy-Item (Join-Path $root 'Config\default-config.json') (Join-Path $tmp 'Config\default-config.json')
-    Copy-Item (Join-Path $root 'VERSION') (Join-Path $tmp 'VERSION')
-    $user=Get-Content (Join-Path $root 'Config\default-config.json') -Raw | ConvertFrom-Json
+    Copy-Item (Join-Path $repoRoot 'Config\default-config.json') (Join-Path $tmp 'Config\default-config.json')
+    Copy-Item (Join-Path $repoRoot 'VERSION') (Join-Path $tmp 'VERSION')
+    $user=Get-Content (Join-Path $repoRoot 'Config\default-config.json') -Raw | ConvertFrom-Json
     $user.MinimumAvailableGB=7.5
     $user.Mode='Safe'
     $user.Logging=$false
@@ -19,7 +19,7 @@ try {
     $user.EnableOnlineResearch=$false          # privacy switch in Settings must stick
     $user | ConvertTo-Json -Depth 8 | Set-Content (Join-Path $tmp 'config.json') -Encoding UTF8
 
-    . (Join-Path $root 'App\Bootstrap.ps1')
+    . (Join-Path $repoRoot 'App\Bootstrap.ps1')
     $script:Root=$tmp
     Initialize-YumConfig
     $c=$script:Yum.Config
@@ -41,13 +41,13 @@ try {
 $fresh=Join-Path $env:TEMP ('yumram-fresh-' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path (Join-Path $fresh 'Config') -Force | Out-Null
 try {
-    Copy-Item (Join-Path $root 'Config\default-config.json') (Join-Path $fresh 'Config\default-config.json')
-    Copy-Item (Join-Path $root 'VERSION') (Join-Path $fresh 'VERSION')
+    Copy-Item (Join-Path $repoRoot 'Config\default-config.json') (Join-Path $fresh 'Config\default-config.json')
+    Copy-Item (Join-Path $repoRoot 'VERSION') (Join-Path $fresh 'VERSION')
     $script:Root=$fresh
     Initialize-YumConfig
     if(-not (Test-Path -LiteralPath (Join-Path $fresh 'config.json'))){throw 'First launch did not create config.json.'}
-    $defaults=Get-Content (Join-Path $root 'Config\default-config.json') -Raw | ConvertFrom-Json
+    $defaults=Get-Content (Join-Path $repoRoot 'Config\default-config.json') -Raw | ConvertFrom-Json
     if([double]$script:Yum.Config.MinimumAvailableGB -ne [double]$defaults.MinimumAvailableGB){throw 'Fresh config does not use the default target.'}
-    if([string]$script:Yum.Config.Version -ne (Get-Content (Join-Path $root 'VERSION') -Raw).Trim()){throw 'Fresh config version does not match VERSION.'}
+    if([string]$script:Yum.Config.Version -ne (Get-Content (Join-Path $repoRoot 'VERSION') -Raw).Trim()){throw 'Fresh config version does not match VERSION.'}
 } finally { Remove-Item -LiteralPath $fresh -Recurse -Force -ErrorAction SilentlyContinue }
 Write-Output 'PASS: saved settings load at startup, persist across restart, only old defaults migrate, and a fresh download creates its config.'
