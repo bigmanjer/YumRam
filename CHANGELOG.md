@@ -1,5 +1,29 @@
 # Changelog
 
+# YUMRAM 5.4.0 — Visual overhaul and faster, more complete research (branch `visual-overhaul`)
+
+Design (researched against Microsoft PC Manager, Wise Memory Optimizer, IObit and Windows 11
+guidance; see `Docs/COMPETITIVE-REVIEW.md`, screenshots in `Docs/Screenshots/before|after`):
+- One shared theme (`UI/Xaml/Theme.xaml`) for every window: Windows 11 type scale, 4 px grid,
+  AA contrast; tables, scrollbars, tabs, group boxes and buttons no longer fall back to white/grey
+  Windows defaults.
+- Main window reorganized: Available RAM with a RAM-in-use ring, automatic care, and one primary
+  "Free RAM now" at the top; graph plus side panel below; no overlapping labels.
+- Reclaim Center, Settings (now in tabs), Top Processes, About and Intelligence reorganized.
+
+Research:
+- All 6 previous Unknowns on the test PC resolve: Store/System packages now use Windows' own
+  publisher and signature data (the scanner stored the publisher ID hash before).
+- Online verification works for the first time: the trust check assigned to the read-only `$host`
+  variable and scored every site 0. The publisher's own domain now counts as authoritative.
+- About 3x faster on real items: one `winget list` per run instead of one winget.exe per item
+  (whose exact-match flag never worked), cached executable paths, parallel web requests, and
+  linear-time text matching (one vendor page took 85 s, now ~1 s).
+- Unknown results are re-checked once when the research engine improves.
+- Game detection no longer matches "EA" inside words like "Search".
+
+Tests: 44/44 (new ResearchSpeedAndIdentityTest; pitfall scan flags assignments to automatic variables).
+
 # YUMRAM 5.3.3 — Alpha: GitHub-ready
 
 - **Settings → Privacy** switch for online research (on by default; it sends unidentified
