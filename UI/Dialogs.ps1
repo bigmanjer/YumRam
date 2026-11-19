@@ -387,10 +387,10 @@ function Update-YumSystemScanList {
     if(@($State.Scan.Errors).Count -gt 0){$State.Details.Text='Some inventory categories failed. See YUMRAM.log. Scanning remains usable for categories that succeeded.'}else{$State.Details.Text='Live inventory updated. Select a process to inspect details.'}
 }
 
-if (-not ('YumProcRow' -as [type])) {
+if (-not ('YumProcRow2' -as [type])) {
     Add-Type @'
 using System.ComponentModel;
-public class YumProcRow : INotifyPropertyChanged {
+public class YumProcRow2 : INotifyPropertyChanged {
     public event PropertyChangedEventHandler PropertyChanged;
     private void Set<T>(ref T field, T value, string name) {
         if (object.Equals(field, value)) return;
@@ -398,7 +398,11 @@ public class YumProcRow : INotifyPropertyChanged {
         var h = PropertyChanged; if (h != null) h(this, new PropertyChangedEventArgs(name));
     }
     private string _key, _name, _title, _sub, _memText, _kind, _yum, _path, _company, _desc;
-    private double _mem, _bar; private int _count, _mainPid; private bool _prot;
+    private double _mem, _bar, _cpu, _cpuBar; private int _count, _mainPid; private bool _prot; private string _cpuText, _cpuState;
+    public double CpuPercent { get { return _cpu; } set { Set(ref _cpu, value, "CpuPercent"); } }
+    public double CpuBar { get { return _cpuBar; } set { Set(ref _cpuBar, value, "CpuBar"); } }
+    public string CpuText { get { return _cpuText; } set { Set(ref _cpuText, value, "CpuText"); } }
+    public string CpuState { get { return _cpuState; } set { Set(ref _cpuState, value, "CpuState"); } }
     public string Key { get { return _key; } set { Set(ref _key, value, "Key"); } }
     public string Name { get { return _name; } set { Set(ref _name, value, "Name"); } }
     public string Title { get { return _title; } set { Set(ref _title, value, "Title"); } }
@@ -441,12 +445,22 @@ function Update-YumProcessRows {
     $snap=Get-YumSnapshotCopy
     $gamePid=if($snap -and $snap.Game -and $snap.Game.Detected){[int]$snap.Game.ProcessId}else{0}
     $groups=@{}
+    # 5.9: live CPU per program from processor-time deltas between refreshes (same method Task Manager uses).
+    if(-not $State.ContainsKey('CpuLast')){$State.CpuLast=@{};$State.CpuLastAt=$null}
+    $cpuNow=[datetime]::UtcNow;$cpuElapsed=if($null -eq $State.CpuLastAt){0.0}else{($cpuNow-[datetime]$State.CpuLastAt).TotalMilliseconds};$State.CpuLastAt=$cpuNow
+    $cores=[math]::Max(1,[Environment]::ProcessorCount);$cpuNext=@{};$groupCpu=@{};$cpuTotal=0.0
     foreach($p in @(Get-Process -ErrorAction SilentlyContinue)){
         if($p.Id -eq 0){continue}
         $k=$p.ProcessName.ToLowerInvariant()
         if(-not $groups.ContainsKey($k)){$groups[$k]=New-Object System.Collections.Generic.List[System.Diagnostics.Process]}
         $groups[$k].Add($p)
+        try{
+            $ms=$p.TotalProcessorTime.TotalMilliseconds;$cpuNext[$p.Id]=$ms
+            if($cpuElapsed -gt 0 -and $State.CpuLast.ContainsKey($p.Id)){$pct=[math]::Max(0.0,($ms-[double]$State.CpuLast[$p.Id])/($cpuElapsed*$cores)*100.0);$groupCpu[$k]=[double]$groupCpu[$k]+$pct;$cpuTotal+=$pct}
+        }catch{}
     }
+    $State.CpuLast=$cpuNext
+    $held=@{};try{foreach($r in @((Get-YumCpuBalanceState).Restrained.Values)){$held[([string]$r.Name).ToLowerInvariant()]=$true}}catch{}
     $now=Get-Date
     $built=New-Object System.Collections.Generic.List[object]
     foreach($k in $groups.Keys){
@@ -459,7 +473,8 @@ function Update-YumProcessRows {
             if($gamePid -gt 0 -and $p.Id -eq $gamePid){$isGame=$true}
         }
         $mb=$total/1MB
-        if($mb -lt 15){continue}
+        $cpuPct=[double]$groupCpu[$k]
+        if($mb -lt 15 -and $cpuPct -lt 1.0){continue}   # small but busy programs still show up
         $rep=if($null -ne $withWindow){$withWindow}else{$main}
         $meta=Get-YumProcessMeta -State $State -Process $rep
         # Protection is re-checked at most every 30 s per program (it can call into the classifier).
@@ -475,20 +490,26 @@ function Update-YumProcessRows {
         $sub=$rep.ProcessName+'.exe'
         if($list.Count -gt 1){$sub+=('  •  {0} processes' -f $list.Count)}
         if(-not [string]::IsNullOrWhiteSpace($meta.Company)){$sub+=('  •  '+$meta.Company)}
-        $built.Add([pscustomobject]@{Key=$k;Name=$rep.ProcessName;Title=$title;SubTitle=$sub;MB=$mb;Kind=$kind;Protected=$prot;Path=$meta.Path;Company=$meta.Company;Description=$meta.Description;Count=$list.Count;MainPid=$rep.Id})
+        $built.Add([pscustomobject]@{Key=$k;Name=$rep.ProcessName;Title=$title;SubTitle=$sub;MB=$mb;Cpu=$cpuPct;Held=$held.ContainsKey($k);Kind=$kind;Protected=$prot;Path=$meta.Path;Company=$meta.Company;Description=$meta.Description;Count=$list.Count;MainPid=$rep.Id})
     }
-    $ordered=@($built | Sort-Object MB -Descending | Select-Object -First 80)
-    $top=if($ordered.Count -gt 0){[double]$ordered[0].MB}else{1.0}
+    $sortCpu=([string]$State['SortBy'] -eq 'CPU')
+    $ordered=if($sortCpu){@($built | Sort-Object @{Expression='Cpu';Descending=$true},@{Expression='MB';Descending=$true} | Select-Object -First 80)}else{@($built | Sort-Object MB -Descending | Select-Object -First 80)}
+    $top=1.0;foreach($b in $built){if([double]$b.MB -gt $top){$top=[double]$b.MB}}
+    $topCpu=5.0;foreach($b in $built){if([double]$b.Cpu -gt $topCpu){$topCpu=[double]$b.Cpu}}
     $existing=@{};foreach($row in @($State.Rows)){$existing[$row.Key]=$row}
     $keep=New-Object 'System.Collections.Generic.HashSet[string]'
     for($i=0;$i -lt $ordered.Count;$i++){
         $b=$ordered[$i];[void]$keep.Add($b.Key)
         $row=$existing[$b.Key]
-        if($null -eq $row){$row=New-Object YumProcRow;$row.Key=$b.Key;$State.Rows.Insert([math]::Min($i,$State.Rows.Count),$row)}
+        if($null -eq $row){$row=New-Object YumProcRow2;$row.Key=$b.Key;$State.Rows.Insert([math]::Min($i,$State.Rows.Count),$row)}
         $row.Name=$b.Name;$row.Title=$b.Title;$row.SubTitle=$b.SubTitle;$row.MemoryMB=[math]::Round($b.MB,1)
         $row.MemoryText=if($b.MB -ge 1024){'{0:N2} GB' -f ($b.MB/1024)}else{'{0:N0} MB' -f $b.MB}
         $row.BarPercent=[math]::Round(100.0*$b.MB/[math]::Max(1.0,$top),1)
-        $row.Kind=$b.Kind;$row.Protected=$b.Protected;$row.YumText=if($b.Protected){'Protected'}else{'May trim'}
+        $row.CpuPercent=[math]::Round([double]$b.Cpu,1)
+        $row.CpuText=if($cpuElapsed -le 0){'…'}elseif([double]$b.Cpu -lt 0.1){'0%'}elseif([double]$b.Cpu -lt 10){'{0:N1}%' -f [double]$b.Cpu}else{'{0:N0}%' -f [double]$b.Cpu}
+        $row.CpuBar=[math]::Round(100.0*[double]$b.Cpu/$topCpu,1)
+        $row.CpuState=if($b.Held){'Held back'}else{''}
+        $row.Kind=$b.Kind;$row.Protected=$b.Protected;$row.YumText=if($b.Held){'CPU held back'}elseif($b.Protected){'Protected'}else{'May trim'}
         $row.Path=$b.Path;$row.Company=$b.Company;$row.Description=$b.Description;$row.Count=$b.Count;$row.MainPid=$b.MainPid
         $at=$State.Rows.IndexOf($row)
         if($at -ne $i -and $at -ge 0){$State.Rows.Move($at,$i)}
@@ -504,8 +525,17 @@ function Update-YumProcessRows {
         }
     }catch{}
     $State.Ui.SumPrograms.Text=('{0}' -f $built.Count)
-    if($ordered.Count -gt 0){$State.Ui.SumBiggest.Text=[string]$ordered[0].Title}
-    $State.Ui.Details.Text=('Updated {0:T}. Showing programs using 15 MB or more.' -f (Get-Date))
+    $bigRam=$null;$bigCpu=$null;foreach($b in $built){if($null -eq $bigRam -or $b.MB -gt $bigRam.MB){$bigRam=$b};if($null -eq $bigCpu -or $b.Cpu -gt $bigCpu.Cpu){$bigCpu=$b}}
+    if($null -ne $bigRam){$State.Ui.SumBiggest.Text=('biggest: '+[string]$bigRam.Title)}
+    try{
+        if($cpuElapsed -gt 0){
+            $State.Ui.SumCpu.Text=('{0:N0}%' -f [math]::Min(100,$cpuTotal))
+            $State.Ui.SumCpuTop.Text=if($null -ne $bigCpu -and $bigCpu.Cpu -ge 0.5){'busiest: {0} ({1:N0}%)' -f $bigCpu.Title,$bigCpu.Cpu}else{'nothing busy'}
+            $State.Ui.SumCpuBar.Value=[math]::Min(100,$cpuTotal)
+            $State.Ui.SumCpuBar.Foreground=if($cpuTotal -ge 85){Get-YumBrush '#F87171'}elseif($cpuTotal -ge 60){Get-YumBrush '#FBBF24'}else{Get-YumBrush '#FF9ECD'}
+        }
+    }catch{}
+    $State.Ui.Details.Text=('Updated {0:T}. Sorted by {1}. Programs using 15 MB or more, plus anything busy on the CPU.' -f (Get-Date),$(if($sortCpu){'CPU'}else{'RAM'}))
     Update-YumProcessExplanation -State $State
 }
 
@@ -525,6 +555,14 @@ function Update-YumProcessExplanation {
     $u.ExplainSub.Text=('{0}  •  {1}' -f $row.Kind,$row.SubTitle)
     $u.ExplainWhat.Text=$x.What
     $u.ExplainMemory.Text=$x.Memory
+    if($null -ne $u['ExplainCpu']){
+        $c=[double]$row.CpuPercent
+        $u.ExplainCpu.Text=if($row.CpuState -eq 'Held back'){'Busy: {0} of your whole CPU. CPU balance is letting the app you are using go first until it calms down; it still gets plenty of CPU.' -f $row.CpuText}
+            elseif($c -ge 25){'Very busy: {0} of your whole CPU right now. If your PC feels slow, this is a likely reason.' -f $row.CpuText}
+            elseif($c -ge 5){'Working: {0} of your whole CPU right now.' -f $row.CpuText}
+            elseif($c -ge 0.5){'A little: {0} of your whole CPU.' -f $row.CpuText}
+            else{'Resting - it is not using the CPU right now.'}
+    }
     $u.ExplainSafe.Text=$x.Safe
     $u.ExplainYum.Text=$x.Yumram
     $u.ExplainPath.Text=if([string]::IsNullOrWhiteSpace($row.Path)){'Windows keeps this location private (protected process).'}else{$row.Path}
@@ -540,7 +578,7 @@ function Show-YumTopProcesses {
         $reader=New-Object System.Xml.XmlNodeReader $xaml
         $window=[Windows.Markup.XamlReader]::Load($reader)
         $ui=@{}
-        foreach($n in 'Items','Details','Refresh','Pause','LiveText','EndTask','Close','SumUsed','SumAvailable','SumPrograms','SumBiggest','ExplainTitle','ExplainSub','ExplainWhat','ExplainBody','ExplainMemory','ExplainSafe','ExplainYum','ExplainPath','OpenLocation'){$ui[$n]=$window.FindName($n);if($null -eq $ui[$n]){throw "Top processes control missing: $n"}}
+        foreach($n in 'Items','Details','Refresh','Pause','LiveText','EndTask','Close','SumUsed','SumAvailable','SumPrograms','SumBiggest','ExplainTitle','ExplainSub','ExplainWhat','ExplainBody','ExplainMemory','ExplainSafe','ExplainYum','ExplainPath','OpenLocation','SumCpu','SumCpuTop','SumCpuBar','SortRam','SortCpu','ExplainCpu'){$ui[$n]=$window.FindName($n);if($null -eq $ui[$n]){throw "Top processes control missing: $n"}}
         $rows=New-Object 'System.Collections.ObjectModel.ObservableCollection[object]'
         $ui.Items.ItemsSource=$rows
         # Intelligence knowledge by program name (used for kinds and explanations).
@@ -556,7 +594,10 @@ function Show-YumTopProcesses {
         $timer.Tag=$state
         $timer.Add_Tick({param($s,$e)try{if(-not $s.Tag.Paused){Update-YumProcessRows -State $s.Tag}}catch{Write-YumLogException -Context 'Top processes live update failed' -Exception $_.Exception}})
         $state.Timer=$timer
-        foreach($c in 'Pause','EndTask','Close','OpenLocation','Items'){$ui[$c].Tag=$state}
+        foreach($c in 'Pause','EndTask','Close','OpenLocation','Items','SortRam','SortCpu'){$ui[$c].Tag=$state}
+        $state.SortBy='RAM'
+        $sortClick={param($s,$e)$st=$s.Tag;$st.SortBy=if($s.Name -eq 'SortCpu'){'CPU'}else{'RAM'};$st.Ui.SortRam.Tag=$st;$st.Ui.SortCpu.Tag=$st;$st.Ui.SortRam.FontWeight=if($st.SortBy -eq 'RAM'){'SemiBold'}else{'Normal'};$st.Ui.SortCpu.FontWeight=if($st.SortBy -eq 'CPU'){'SemiBold'}else{'Normal'};$st.Ui.SortRam.Opacity=if($st.SortBy -eq 'RAM'){1.0}else{0.6};$st.Ui.SortCpu.Opacity=if($st.SortBy -eq 'CPU'){1.0}else{0.6};try{Update-YumProcessRows -State $st}catch{}}
+        $ui.SortRam.Add_Click($sortClick);$ui.SortCpu.Add_Click($sortClick);$ui.SortCpu.Opacity=0.6
         $ui.Items.Add_SelectionChanged({param($s,$e)try{Update-YumProcessExplanation -State $s.Tag}catch{}})
         $ui.Pause.Add_Click({param($s,$e)
             $st=$s.Tag;$st.Paused=-not $st.Paused

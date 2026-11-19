@@ -2,7 +2,7 @@
 
 **Yumes Ultimate Memory Reclaim & Monitor**
 
-Version: 5.8.0
+Version: 5.9.0
 Stage: alpha
 
 **YUMRAM keeps Windows responsive by keeping Available RAM above a target you choose.** It trims the
@@ -16,7 +16,7 @@ It is a single-folder Windows PowerShell 5.1 + WPF app: no installer, no runtime
 ## Features
 
 - **One window**: a sidebar (like Windows 11 Task Manager) opens Overview, What's using RAM, Reclaim
-  Center, Startup apps, Intelligence, Settings and About as pages in the same window. `Ctrl+1`…`Ctrl+7`
+  Center, Startup apps, Intelligence, Settings and About (What's running shows live RAM and CPU per program) as pages in the same window. `Ctrl+1`…`Ctrl+7`
   jump between them, and the sidebar shrinks to icons when the window is narrow.
 - **CPU balance** (like Process Lasso's ProBalance): when the PC is busy and a background program hogs
   the CPU, YUMRAM temporarily lowers it to Below Normal priority so the app you are using stays smooth,

@@ -100,11 +100,10 @@ function Update-YumGraph {
             @{Values=$script:Yum.GraphMemory;Line=$script:Yum.GraphMemoryLine},
             @{Values=$script:Yum.GraphMemoryAvailable;Line=$script:Yum.GraphMemoryAvailableLine}
         )
-        $allMemoryVals=@()
-        foreach($s in $memorySeries){$allMemoryVals += @($s.Values | ForEach-Object {[double]$_})}
-        if($allMemoryVals.Count -ge 2){
-            $min=[double](($allMemoryVals | Measure-Object -Minimum).Minimum)
-            $max=[double](($allMemoryVals | Measure-Object -Maximum).Maximum)
+        # 5.8.1: plain loops instead of pipelines + Measure-Object (ran 2x per second).
+        $valCount=0;$min=[double]::MaxValue;$max=[double]::MinValue
+        foreach($s in $memorySeries){foreach($v in $s.Values){$valCount++;$d=[double]$v;if($d -lt $min){$min=$d};if($d -gt $max){$max=$d}}}
+        if($valCount -ge 2){
             $span=$max-$min
             $minimumSpan=6.0
             if($span -lt $minimumSpan){
@@ -184,6 +183,23 @@ function Update-YumUiFromSnapshot {
         $m=$s.Memory
         $target=[double]$script:Yum.Config.MinimumAvailableGB
         if($target -le 0){$target=0.1}
+        # 5.8.1 (measured: ~24% of one core at idle): draw only what is on screen. Hidden in the tray =
+        # tray icon only; another page = sidebar only. History keeps recording, so the graph is whole
+        # when you come back. Telemetry reads this flag to skip GPU sampling (display-only, ~0.25 s CPU).
+        $windowShown=$false;try{$windowShown=[bool]$script:Yum.Window.IsVisible -and $script:Yum.Window.WindowState -ne [System.Windows.WindowState]::Minimized}catch{}
+        $overviewShown=($windowShown -and [string]$script:Yum.CurrentPage -eq 'Overview')
+        try{ if($null -ne $script:Yum.TelemetryCache){ $script:Yum.TelemetryCache['UiWantsGpu']=$overviewShown } }catch{}
+        if($newSnapshot -and -not $overviewShown){
+            $script:Yum.LastUiSnapshotVersion=$script:Yum.SnapshotVersion
+            $availablePctH=if([double]$m.TotalGB -gt 0){([double]$m.AvailableGB/[double]$m.TotalGB)*100}else{0}
+            foreach($pair in @(@($script:Yum.GraphMemory,[double]$m.UsedPercent),@($script:Yum.GraphMemoryAvailable,[double]$availablePctH),@($script:Yum.GraphCPU,[double]$s.CPU),@($script:Yum.GraphGPU,[double]$s.GPU3D))){[void]$pair[0].Add($pair[1]);while($pair[0].Count -gt $script:Yum.GraphPointsLimit){$pair[0].RemoveAt(0)}}
+            Update-YumTray -Percent ([double]$m.UsedPercent) -AvailableGB ([double]$m.AvailableGB)
+            if($windowShown){Update-YumSidebarStatus -UsedPercent ([double]$m.UsedPercent) -AvailableGB ([double]$m.AvailableGB) -TotalGB ([double]$m.TotalGB)}
+            $script:Yum.UiNeedsFullRefresh=$true
+            $newSnapshot=$false
+        }
+        $forcedRefresh=$false
+        if($overviewShown -and [bool]$script:Yum['UiNeedsFullRefresh']){$script:Yum.UiNeedsFullRefresh=$false;$forcedRefresh=(-not $newSnapshot);$newSnapshot=$true}
         if($newSnapshot){
             $script:Yum.LastUiSnapshotVersion=$script:Yum.SnapshotVersion
             $script:Yum.Ui.Available.Text='{0:N2} GB' -f $m.AvailableGB
@@ -197,10 +213,10 @@ function Update-YumUiFromSnapshot {
             Update-YumMemoryRing -Percent ([double]$m.UsedPercent)
             Update-YumTray -Percent ([double]$m.UsedPercent) -AvailableGB ([double]$m.AvailableGB)
             Update-YumSidebarStatus -UsedPercent ([double]$m.UsedPercent) -AvailableGB ([double]$m.AvailableGB) -TotalGB ([double]$m.TotalGB)
-            [void]$script:Yum.GraphMemory.Add([double]$m.UsedPercent);while($script:Yum.GraphMemory.Count -gt $script:Yum.GraphPointsLimit){$script:Yum.GraphMemory.RemoveAt(0)}
-            [void]$script:Yum.GraphMemoryAvailable.Add([double]$availablePct);while($script:Yum.GraphMemoryAvailable.Count -gt $script:Yum.GraphPointsLimit){$script:Yum.GraphMemoryAvailable.RemoveAt(0)}
-            [void]$script:Yum.GraphCPU.Add([double]$s.CPU);while($script:Yum.GraphCPU.Count -gt $script:Yum.GraphPointsLimit){$script:Yum.GraphCPU.RemoveAt(0)}
-            [void]$script:Yum.GraphGPU.Add([double]$s.GPU3D);while($script:Yum.GraphGPU.Count -gt $script:Yum.GraphPointsLimit){$script:Yum.GraphGPU.RemoveAt(0)}
+            if(-not $forcedRefresh){[void]$script:Yum.GraphMemory.Add([double]$m.UsedPercent)};while($script:Yum.GraphMemory.Count -gt $script:Yum.GraphPointsLimit){$script:Yum.GraphMemory.RemoveAt(0)}
+            if(-not $forcedRefresh){[void]$script:Yum.GraphMemoryAvailable.Add([double]$availablePct)};while($script:Yum.GraphMemoryAvailable.Count -gt $script:Yum.GraphPointsLimit){$script:Yum.GraphMemoryAvailable.RemoveAt(0)}
+            if(-not $forcedRefresh){[void]$script:Yum.GraphCPU.Add([double]$s.CPU)};while($script:Yum.GraphCPU.Count -gt $script:Yum.GraphPointsLimit){$script:Yum.GraphCPU.RemoveAt(0)}
+            if(-not $forcedRefresh){[void]$script:Yum.GraphGPU.Add([double]$s.GPU3D)};while($script:Yum.GraphGPU.Count -gt $script:Yum.GraphPointsLimit){$script:Yum.GraphGPU.RemoveAt(0)}
             Update-YumTargetUi
             $script:Yum.Ui.Mode.Text=$script:Yum.Config.Mode.ToUpperInvariant()
             Update-YumGraph
@@ -327,7 +343,7 @@ function Start-YumApplicationUi {
         try{ if($script:Yum.Window.WindowState -eq [System.Windows.WindowState]::Minimized -and $null -ne $script:Yum.TrayIcon -and [bool]$script:Yum.Config['MinimizeToTray']){ Hide-YumToTray } }catch{}
     })
     if([bool]$script:Yum.Config['ShowTrayIcon']){ try{ Initialize-YumTray }catch{ Write-YumLogException -Context 'Tray icon failed; continuing without it' -Exception $_.Exception } }
-    $timer=New-Object System.Windows.Threading.DispatcherTimer;$timer.Interval=[TimeSpan]::FromSeconds([double]$script:Yum.Config.UIRefreshIntervalSeconds);$timer.Add_Tick({Update-YumUiFromSnapshot;Update-YumCpuBalanceUi;Update-YumCleanupResultUI;try{[void](Update-YumReclaimVerification)}catch{};Update-YumReclaimResultUI});$script:Yum.UiTimer=$timer;$timer.Start()
+    $timer=New-Object System.Windows.Threading.DispatcherTimer;$timer.Interval=[TimeSpan]::FromSeconds([double]$script:Yum.Config.UIRefreshIntervalSeconds);$timer.Add_Tick({param($tm,$te)try{$want=if($script:Yum.Window.IsVisible){[TimeSpan]::FromSeconds([double]$script:Yum.Config.UIRefreshIntervalSeconds)}else{[TimeSpan]::FromSeconds(1)};if($tm.Interval -ne $want){$tm.Interval=$want}}catch{};Update-YumUiFromSnapshot;Update-YumCpuBalanceUi;Update-YumCleanupResultUI;try{[void](Update-YumReclaimVerification)}catch{};Update-YumReclaimResultUI});$script:Yum.UiTimer=$timer;$timer.Start()
     try{$initialMemory=Get-YumMemoryTelemetry;if($null -ne $initialMemory){Update-YumSnapshot -Changes @{Memory=$initialMemory;CPU=0.0;GPU3D=0.0;ForegroundProcessId=0;Game=[pscustomobject]@{ProcessId=0;ProcessName=$null;Detected=$false}} -CoreTelemetry}}catch{Write-YumLogException -Context 'Initial memory telemetry failed' -Exception $_.Exception}
     Update-YumUiFromSnapshot
     # The controller worker lives for the whole session so queued requests (safe optimization,

@@ -145,7 +145,9 @@ if($Mode -eq 'Core'){
     while(-not $StopEvent.IsSet){
         try {
             $now=Get-Date; $gpuSampled=$false; $gameSampled=$false
-            if($null -ne $gpuCategory -and ($now-$lastGpu).TotalSeconds -ge $gpuInterval){
+            # 5.8.1: GPU % is display-only and the costliest sample; skip it unless the Overview is on screen.
+            $uiWantsGpu=$true;try{if($Cache.ContainsKey('UiWantsGpu')){$uiWantsGpu=[bool]$Cache['UiWantsGpu']}}catch{}
+            if($null -ne $gpuCategory -and $uiWantsGpu -and ($now-$lastGpu).TotalSeconds -ge $gpuInterval){
                 try {
                     $data=$gpuCategory.ReadCategory()['Utilization Percentage']
                     $engineTotals=@{}

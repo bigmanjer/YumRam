@@ -1,5 +1,33 @@
 # Changelog
 
+# YUMRAM 5.9.0 — Lighter YUMRAM, CPU you can see (branch `visual-overhaul`)
+
+A RAM tool should not be heavy itself. Measured YUMRAM's own cost at idle (goal met, monitoring on,
+CPU balance on), then fixed what the measurements pointed at:
+
+| YUMRAM itself, idle | before | after |
+|---|---|---|
+| Overview on screen | ~24 % of one core | ~14 % |
+| Hidden in the tray | ~9 % of one core | ~8 % |
+| Own memory when hidden in the tray | ~270 MB | ~120 MB |
+
+- GPU % (display-only, the costliest sample at ~0.25 s CPU each) is sampled only while the Overview is
+  on screen. The "reachable RAM" estimate refreshes every 2 min instead of 30 s while nobody sees it.
+- Nothing is redrawn while hidden or on another page (history keeps recording, so the graph is whole
+  when you come back); the screen timer slows to 1 s while hidden; the graph uses plain loops instead
+  of pipelines.
+- Hidden in the tray for 10 s, YUMRAM releases its own idle memory (GC + trim of its own working set).
+
+CPU visuals (there was little more than one % number):
+- **What's running** (was "What's using RAM"): live CPU column with bars per program (all its
+  processes together, same delta method as Task Manager), **Sort by RAM / CPU**, a **CPU now** card with
+  a load bar and the busiest program, a **How busy is it?** answer in plain words, and programs CPU
+  balance is holding back are marked in amber ("CPU held back"). Small programs that are busy on the
+  CPU now appear even under 15 MB.
+- Overview's CPU balance card shows the busiest programs right now.
+- Full UI probe: 53 steps (adds CPU card, How busy, sort by CPU). A hotkey already owned by another
+  running YUMRAM is reported, not treated as an error.
+
 # YUMRAM 5.8.0 — CPU balance (ProBalance-style) (branch `visual-overhaul`)
 
 Last big competitor gap: Process Lasso's ProBalance. Researched from Bitsum's own documentation: it

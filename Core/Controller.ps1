@@ -53,7 +53,9 @@ $script:YumControllerWorkerScript = {
             # 5.3.2: refresh the "reachable Available RAM" estimate: once at start, every 30 s while
             # monitoring, and right after a manual reclaim. ~0.5 s CPU (identities are cached).
             $estimateAge=([datetime]::UtcNow-[datetime]$script:Yum.ReachableEstimateUtc).TotalSeconds
-            if(-not [bool]$script:Yum.CleanupRunning -and ($null -eq $script:Yum.ReachableEstimate -or $null -ne $reclaimMode -or ([bool]$script:Yum.MonitoringActive -and $estimateAge -ge 30))){
+            # 5.8.1: ~0.5 s CPU per estimate; every 30 s only while the Overview is on screen, else every 120 s.
+            $estimateEvery=30;try{if($null -ne $script:Yum.TelemetryCache -and $script:Yum.TelemetryCache.ContainsKey('UiWantsGpu') -and -not [bool]$script:Yum.TelemetryCache['UiWantsGpu']){$estimateEvery=120}}catch{}
+            if(-not [bool]$script:Yum.CleanupRunning -and ($null -eq $script:Yum.ReachableEstimate -or $null -ne $reclaimMode -or ([bool]$script:Yum.MonitoringActive -and $estimateAge -ge $estimateEvery))){
                 $script:Yum.ReachableEstimateUtc=[datetime]::UtcNow
                 try{ $script:Yum.ReachableEstimate=Get-YumReachableEstimate }catch{ try{Write-YumLogException -Context 'Reachable estimate failed' -Exception $_.Exception}catch{} }
             }

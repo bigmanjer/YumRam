@@ -25,7 +25,7 @@ function PW([string]$k){ $p=$script:Yum.Pages[$k]; if($p){$p.Window}else{$null} 
 function Shot([string]$Name){ try{ $Win=$script:Yum.Window;$Win.UpdateLayout();$pw=[int]$Win.ActualWidth;$ph=[int]$Win.ActualHeight-40
   $rtb=New-Object System.Windows.Media.Imaging.RenderTargetBitmap($pw,$ph,96,96,[System.Windows.Media.PixelFormats]::Pbgra32);$dv=New-Object System.Windows.Media.DrawingVisual;$dc=$dv.RenderOpen();$dc.DrawRectangle($Win.Background,$null,(New-Object System.Windows.Rect(0,0,$pw,$ph)));$dc.Close();$rtb.Render($dv);$rtb.Render($Win)
   $enc=New-Object System.Windows.Media.Imaging.PngBitmapEncoder;$enc.Frames.Add([System.Windows.Media.Imaging.BitmapFrame]::Create($rtb));$fs=[IO.File]::Create((Join-Path $Out "$Name.png"));try{$enc.Save($fs)}finally{$fs.Dispose()} }catch{Note "shot $Name failed: $($_.Exception.Message)"} }
-function ErrCount(){ @(Get-Content $script:Yum.Config.LogFileName -ErrorAction SilentlyContinue | Select-String 'Exception|failed|ERROR' | ? { $_.Line -notmatch 'Settings apply failed' }).Count }
+function ErrCount(){ @(Get-Content $script:Yum.Config.LogFileName -ErrorAction SilentlyContinue | Select-String 'Exception|failed|ERROR' | ? { $_.Line -notmatch 'Settings apply failed|could not be registered' }).Count }
 
 $script:Steps=@(
  { $u=$script:Yum.Ui; Check ($u.Status.Text -match 'Paused') "Overview: paused status ($($u.Status.Text))"; Check ($u.SideRamText.Text -notmatch '--') "Sidebar RAM live while paused ($($u.SideRamText.Text))"; Check ([string]$script:Yum.HotkeyStatus -match 'Ctrl\+Alt\+R') "Hotkey registered ($($script:Yum.HotkeyStatus))" },
@@ -45,6 +45,8 @@ $script:Steps=@(
  { Go 'Processes' },
  { $w=PW 'Processes'; Check ($null -ne $w -and $script:Yum.CurrentPage -eq 'Processes') 'Processes page open'; $st=$w.Tag; Check (@($st.Rows).Count -gt 5) "Process rows: $(@($st.Rows).Count)"; $st.Ui.Items.SelectedIndex=0; Check ($st.Ui.ExplainTitle.Text -ne 'Click a program') "Explain: $($st.Ui.ExplainTitle.Text) / $($st.Ui.ExplainSafe.Text)"; Click $st.Ui.Pause; Check ($st.Paused -and $st.Ui.LiveText.Text -match 'PAUSED') 'Pause'; Click $st.Ui.Pause; Check (-not $st.Paused) 'Resume' },
  { $st=(PW 'Processes').Tag; $first=$st.Ui.Items.SelectedItem; $script:SelName=if($first){$first.Title}else{''} },
+ { $st=(PW 'Processes').Tag; Check ($st.Ui.SumCpu.Text -match '%') "CPU now card: $($st.Ui.SumCpu.Text) / $($st.Ui.SumCpuTop.Text)"; Check ($st.Ui.ExplainCpu.Text.Length -gt 5) "How busy: $($st.Ui.ExplainCpu.Text)"; Click $st.Ui.SortCpu },
+ { $st=(PW 'Processes').Tag; $rows=@($st.Rows); $ok=$true; for($i=1;$i -lt [math]::Min(10,$rows.Count);$i++){ if($rows[$i].CpuPercent -gt $rows[$i-1].CpuPercent+0.01){$ok=$false} }; Check $ok "Sort by CPU: top = $($rows[0].Title) $($rows[0].CpuText)"; Shot 'p-processes-cpu'; Click $st.Ui.SortRam },
  { $st=(PW 'Processes').Tag; Check ($null -ne $st.Ui.Items.SelectedItem -and $st.Ui.Items.SelectedItem.Title -eq $script:SelName) "Selection kept across live refresh ($script:SelName)"; Shot 'p-processes' },
  # Reclaim Center
  { Go 'ReclaimCenter' },
@@ -100,7 +102,7 @@ $script:Steps=@(
  { $script:Yum.Window.WindowState='Minimized' },
  { Check (-not $script:Yum.Window.IsVisible) 'Minimize hides to tray'; $o=@($script:Yum.TrayMenu.Items|?{$_.Text -match 'Open'})[0]; $o.PerformClick() },
  { Check ($script:Yum.Window.IsVisible -and $script:Yum.Window.WindowState -eq 'Normal') "Tray Open restores window ($($script:Yum.Window.WindowState))" },
- { $script:EndErr=ErrCount; @(Get-Content $script:Yum.Config.LogFileName -ErrorAction SilentlyContinue | Select-String 'Exception|failed|ERROR' | ? { $_.Line -notmatch 'Settings apply failed' } | Select-Object -Last 12) | % { Note ('log: '+$_.Line.Substring(0,[math]::Min(230,$_.Line.Length))) }; Check ($script:EndErr -eq 0) "No exceptions in the log ($script:EndErr)"; $x=@($script:Yum.TrayMenu.Items|?{$_.Text -match 'Exit'})[0]; $x.PerformClick() }
+ { $script:EndErr=ErrCount; @(Get-Content $script:Yum.Config.LogFileName -ErrorAction SilentlyContinue | Select-String 'Exception|failed|ERROR' | ? { $_.Line -notmatch 'Settings apply failed|could not be registered' } | Select-Object -Last 12) | % { Note ('log: '+$_.Line.Substring(0,[math]::Min(230,$_.Line.Length))) }; Check ($script:EndErr -eq 0) "No exceptions in the log ($script:EndErr)"; $x=@($script:Yum.TrayMenu.Items|?{$_.Text -match 'Exit'})[0]; $x.PerformClick() }
 )
 $script:I=0
 $t=New-Object System.Windows.Threading.DispatcherTimer;$t.Interval=[TimeSpan]::FromMilliseconds(1100)

@@ -20,7 +20,7 @@ function Test-YumShellAvailable {
 function Get-YumPageTitle {
     param([string]$Key)
     switch($Key){
-        'Overview'{'Overview'};'Processes'{"What's using RAM"};'ReclaimCenter'{'Reclaim Center'};'Startup'{'Startup apps'};'Intelligence'{'Intelligence'};'Settings'{'Settings'};'About'{'About'}
+        'Overview'{'Overview'};'Processes'{"What's running"};'ReclaimCenter'{'Reclaim Center'};'Startup'{'Startup apps'};'Intelligence'{'Intelligence'};'Settings'{'Settings'};'About'{'About'}
         default{$Key}
     }
 }

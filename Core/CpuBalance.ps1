@@ -168,6 +168,8 @@ function Invoke-YumCpuBalanceTick {
             Save-YumCpuBalanceRestrained
         }catch{}
     }
+    # 5.9: busiest programs right now (by name, all processes of a program together) for the Overview card.
+    try{ $byName=@{}; foreach($id in $usage.Keys){ if($byId.ContainsKey($id)){ $nm=[string]$byId[$id].ProcessName; if($nm -ieq 'Idle'){continue}; $byName[$nm]=[double]$byName[$nm]+[double]$usage[$id] } }; $st.Top=@($byName.GetEnumerator() | Sort-Object Value -Descending | Select-Object -First 3 | Where-Object { $_.Value -ge 1.0 } | ForEach-Object { '{0} {1:N0}%' -f $_.Key,$_.Value }) }catch{}
     $st.Active=($st.Restrained.Count -gt 0)
     $st.TickMs=[math]::Round($sw.Elapsed.TotalMilliseconds,1)
 }
@@ -217,5 +219,7 @@ function Get-YumCpuBalanceSummary {
     $today=(Get-Date).ToString('yyyy-MM-dd');$n=if($st.Day -eq $today){[int]$st.TodayCount}else{0}
     $held=@($st.Restrained.Values)
     $text=if($held.Count -gt 0){'Holding back {0} so what you are using stays smooth.' -f ((@($held | ForEach-Object { '{0} ({1:N0}% CPU)' -f $_.Name,[double]$_.LastPercent })) -join ', ')}else{'Watching. Nothing is hogging the CPU (PC at {0:N0}%).' -f [double]$st.SystemPercent}
+    $top=@();try{$top=@($st['Top'])}catch{}
+    if($held.Count -eq 0 -and $top.Count -gt 0){$text='Watching. Busiest now: {0} (PC at {1:N0}%).' -f ($top -join ', '),[double]$st.SystemPercent}
     [pscustomobject]@{Text=$text;Count=$(if($n -eq 1){'1 time today'}else{'{0} times today' -f $n});Active=($held.Count -gt 0)}
 }

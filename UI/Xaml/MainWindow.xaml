@@ -103,8 +103,8 @@
           <Button x:Name="NavOverview" Style="{StaticResource NavButton}" ToolTip="Overview: live memory, goal and one-click reclaim (Ctrl+1)" AutomationProperties.Name="Overview">
             <StackPanel Orientation="Horizontal"><TextBlock Text="🏠" Width="24" TextAlignment="Center"/><TextBlock Text="Overview" Margin="10,0,0,0"/></StackPanel>
           </Button>
-          <Button x:Name="Processes" Style="{StaticResource NavButton}" ToolTip="Every program using memory, explained in plain words. Updates live. (Ctrl+2)" AutomationProperties.Name="What's using RAM">
-            <StackPanel Orientation="Horizontal"><TextBlock Text="📊" Width="24" TextAlignment="Center"/><TextBlock Text="What's using RAM" Margin="10,0,0,0"/></StackPanel>
+          <Button x:Name="Processes" Style="{StaticResource NavButton}" ToolTip="Every program using memory or CPU, explained in plain words. Updates live. (Ctrl+2)" AutomationProperties.Name="What's running">
+            <StackPanel Orientation="Horizontal"><TextBlock Text="📊" Width="24" TextAlignment="Center"/><TextBlock Text="What's running" Margin="10,0,0,0"/></StackPanel>
           </Button>
           <Button x:Name="ReclaimCenter" Style="{StaticResource NavButton}" ToolTip="Run a reclaim and see exactly what was trimmed and what Windows returned. (Ctrl+3)" AutomationProperties.Name="Reclaim Center">
             <StackPanel Orientation="Horizontal"><TextBlock Text="♻" Width="24" TextAlignment="Center"/><TextBlock Text="Reclaim Center" Margin="10,0,0,0"/></StackPanel>

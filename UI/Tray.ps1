@@ -122,10 +122,28 @@ function Show-YumMainWindow {
     }catch{}
 }
 
+function Invoke-YumSelfTrim {
+    try{
+        $before=(Get-Process -Id $PID).WorkingSet64
+        [GC]::Collect();[GC]::WaitForPendingFinalizers();[GC]::Collect()
+        $r=Invoke-YumEmptyWorkingSet -Process (Get-Process -Id $PID)
+        $after=(Get-Process -Id $PID).WorkingSet64
+        Write-YumLog ('Hidden in the tray: YUMRAM released its own idle memory ({0:N0} MB -> {1:N0} MB).' -f ($before/1MB),($after/1MB))
+    }catch{}
+}
+
 function Hide-YumToTray {
     $w=$script:Yum.Window
     if($null -eq $w -or $null -eq $script:Yum.TrayIcon){return}
     $w.Hide()
+    # 5.8.1: a RAM tool should practise what it preaches. Once hidden (and still hidden 10 s later),
+    # release YUMRAM's own idle memory: one GC + trim of its own working set. Pages stay in standby.
+    try{
+        if($null -ne $script:Yum['SelfTrimTimer']){$script:Yum['SelfTrimTimer'].Stop()}
+        $st=New-Object System.Windows.Threading.DispatcherTimer;$st.Interval=[TimeSpan]::FromSeconds(10)
+        $st.Add_Tick({param($s,$e)$s.Stop();try{if(-not $script:Yum.Window.IsVisible){Invoke-YumSelfTrim}}catch{}})
+        $script:Yum['SelfTrimTimer']=$st;$st.Start()
+    }catch{}
     if(-not [bool]$script:Yum.TrayHintShown){
         $script:Yum.TrayHintShown=$true
         try{ $script:Yum.TrayIcon.ShowBalloonTip(4000,'YUMRAM is still running','It keeps working from the notification area. Click the icon to open it.',[System.Windows.Forms.ToolTipIcon]::Info) }catch{}
