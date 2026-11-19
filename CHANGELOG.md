@@ -39,7 +39,7 @@ Windows:
 - **Main window**: all tools in the header (the Tools card was below the fold).
 - **About**: feature tiles and quick links (YUMRAM folder, log, project page).
 
-Tests: 47/47 (new Release55BehaviorTest; two text-contract tests updated for the new code).
+Tests: 46/46 (new Release55BehaviorTest; two text-contract tests updated for the new code).
 
 # YUMRAM 5.4.0 — Visual overhaul and faster, more complete research (branch `visual-overhaul`)
 
