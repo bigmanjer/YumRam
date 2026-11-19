@@ -485,6 +485,22 @@ function Invoke-YumMemoryReclaim {
         if($Mode -eq 'Deep' -and [bool]$script:Yum.Config.ReclaimSystemWorkingSet -and $Force -and -not $gameActive){
             $r2=Invoke-YumNativeMemoryCommand -Command EmptyWorkingSets
             [void]$rows.Add([pscustomobject]@{Type='Memory Area';PID='—';Process='System/user working sets';BeforeMB='—';AfterMB='—';ReducedMB='—';Action='Empty working sets';Result=if($r2.Success){'Completed'}else{'Failed'};Reason=$r2.Reason;CPU='—';Score=0})
+            # 5.6 (measured as administrator): emptying every working set parks ~4 GB of changed pages on the
+            # modified list; Windows only writes them out (-> Available) 3-5 s later, so Deep reported +1.4 GB
+            # while the real gain 5 s later was +3.5 GB. A forced flush fixed the number but took ~13 s of
+            # synchronous writes; Windows' own writer drains the list in under 5 s. So wait (max 6 s) for the
+            # modified list to drain, then measure. Pages stay in standby (cached), they are not discarded.
+            if($r2.Success){
+                $drainStart=Get-Date;$drainedMB=0.0;$startMB=$null
+                while(((Get-Date)-$drainStart).TotalMilliseconds -lt 6000){
+                    $modMB=$null;try{$modMB=[double](Get-CimInstance Win32_PerfRawData_PerfOS_Memory -Property ModifiedPageListBytes -ErrorAction Stop).ModifiedPageListBytes/1MB}catch{break}
+                    if($null -eq $startMB){$startMB=$modMB}
+                    if($modMB -le 512){break}
+                    Start-Sleep -Milliseconds 250
+                }
+                if($null -ne $startMB -and $null -ne $modMB){$drainedMB=[math]::Max(0.0,$startMB-$modMB)}
+                [void]$notes.Add(('Waited {0:N1} s for Windows to write out {1:N0} MB of changed memory before measuring.' -f ((Get-Date)-$drainStart).TotalSeconds,$drainedMB))
+            }
         }
 
         $after=Get-YumMemoryReclaimSnapshot
