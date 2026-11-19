@@ -1,5 +1,5 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<!-- About YUMRAM (5.5). Names used by Show-YumAbout: Version, OpenFolder, OpenLog, OpenProject, Close. -->
+<!-- About YUMRAM (5.7). Names used by Show-YumAbout: Version, HotkeyKeys, HotkeyText, OpenFolder, OpenLog, OpenProject, Close. -->
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="About YUMRAM" Width="700" Height="600" MinWidth="600" MinHeight="520" WindowStartupLocation="CenterOwner"
         Background="{StaticResource Bg}" Foreground="{StaticResource Text}" FontFamily="{StaticResource UiFont}" FontSize="14" UseLayoutRounding="True">
@@ -25,14 +25,33 @@
           <Border Style="{StaticResource Tile}"><StackPanel><TextBlock Text="🎯  Keeps RAM free" FontWeight="SemiBold"/><TextBlock Style="{StaticResource Caption}" TextWrapping="Wrap" Margin="0,4,0,0" Text="Set a goal and YUMRAM keeps that much RAM available, trimming idle programs only when needed."/></StackPanel></Border>
           <Border Style="{StaticResource Tile}"><StackPanel><TextBlock Text="🛡  Safe by design" FontWeight="SemiBold"/><TextBlock Style="{StaticResource Caption}" TextWrapping="Wrap" Margin="0,4,0,0" Text="Windows, security, drivers, your game and the app you are using are never trimmed."/></StackPanel></Border>
           <Border Style="{StaticResource Tile}"><StackPanel><TextBlock Text="🧠  Knows your programs" FontWeight="SemiBold"/><TextBlock Style="{StaticResource Caption}" TextWrapping="Wrap" Margin="0,4,0,0" Text="Identifies every process, service and app from Windows' own records, signatures and optional web research."/></StackPanel></Border>
-          <Border Style="{StaticResource Tile}"><StackPanel><TextBlock Text="📏  Honest numbers" FontWeight="SemiBold"/><TextBlock Style="{StaticResource Caption}" TextWrapping="Wrap" Margin="0,4,0,0" Text="Every reclaim is measured after Windows settles and re-checked at 5, 15 and 30 seconds. YUMRAM learns what really sticks on your PC."/></StackPanel></Border>
+          <Border Style="{StaticResource Tile}"><StackPanel><TextBlock Text="📏  Honest numbers" FontWeight="SemiBold"/><TextBlock Style="{StaticResource Caption}" TextWrapping="Wrap" Margin="0,4,0,0" Text="Every reclaim is measured after Windows settles and re-checked at 5, 15 and 30 seconds. The RAM freed counter only counts memory Windows really gave back."/></StackPanel></Border>
+          <Border Style="{StaticResource Tile}"><StackPanel><TextBlock Text="🚀  Startup apps" FontWeight="SemiBold"/><TextBlock Style="{StaticResource Caption}" TextWrapping="Wrap" Margin="0,4,0,0" Text="See what starts with Windows and what it costs in RAM. Turning one off uses the same switch as Task Manager, so nothing is deleted."/></StackPanel></Border>
+          <Border Style="{StaticResource Tile}"><StackPanel><TextBlock Text="▣  One window" FontWeight="SemiBold"/><TextBlock Style="{StaticResource Caption}" TextWrapping="Wrap" Margin="0,4,0,0" Text="Every tool is a page in the sidebar. Close the window to the tray and keep YUMRAM working in the background."/></StackPanel></Border>
         </UniformGrid>
-        <Expander Header="Good to know" IsExpanded="False" Margin="0,4,0,0">
+
+        <Border Style="{StaticResource Card}" Margin="0,4,0,10" Padding="14,12">
+          <StackPanel>
+            <TextBlock Text="KEYBOARD SHORTCUTS" Style="{StaticResource StatLabel}" Margin="0,0,0,8"/>
+            <Grid>
+              <Grid.ColumnDefinitions><ColumnDefinition Width="150"/><ColumnDefinition/></Grid.ColumnDefinitions>
+              <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+              <TextBlock x:Name="HotkeyKeys" Text="Ctrl+Alt+R" FontWeight="SemiBold" Foreground="{StaticResource Brand}" Margin="0,0,0,6"/>
+              <TextBlock x:Name="HotkeyText" Grid.Column="1" Text="Free RAM now, from anywhere (even from a game or the tray)" Style="{StaticResource Caption}" TextWrapping="Wrap" Margin="0,0,0,6"/>
+              <TextBlock Grid.Row="1" Text="Ctrl+1 … Ctrl+7" FontWeight="SemiBold" Foreground="{StaticResource Brand}" Margin="0,0,0,6"/>
+              <TextBlock Grid.Row="1" Grid.Column="1" Text="Overview · What's using RAM · Reclaim Center · Startup apps · Intelligence · Settings · About" Style="{StaticResource Caption}" TextWrapping="Wrap" Margin="0,0,0,6"/>
+              <TextBlock Grid.Row="2" Text="☰" FontWeight="SemiBold" Foreground="{StaticResource Brand}"/>
+              <TextBlock Grid.Row="2" Grid.Column="1" Text="Show or hide the page names in the sidebar" Style="{StaticResource Caption}" TextWrapping="Wrap"/>
+            </Grid>
+          </StackPanel>
+        </Border>
+
+        <Expander Header="Good to know" IsExpanded="False" Margin="0,0,0,0">
           <StackPanel>
             <TextBlock Style="{StaticResource Caption}" TextWrapping="Wrap" Margin="0,0,0,6" Text="• Trimming moves memory a program is not using out of RAM; the program keeps running and pages it back in if it needs it."/>
             <TextBlock Style="{StaticResource Caption}" TextWrapping="Wrap" Margin="0,0,0,6" Text="• Game priority changes CPU scheduling only. It does not add RAM or GPU power."/>
-            <TextBlock Style="{StaticResource Caption}" TextWrapping="Wrap" Margin="0,0,0,6" Text="• Run YUMRAM as administrator for the full reclaim (file cache, memory lists)."/>
-            <TextBlock Style="{StaticResource Caption}" TextWrapping="Wrap" Text="• Settings, logs and learned data are stored next to YUMRAM, never uploaded. Online research sends only unidentified program names to Bing and can be turned off in Settings."/>
+            <TextBlock Style="{StaticResource Caption}" TextWrapping="Wrap" Margin="0,0,0,6" Text="• Run YUMRAM as administrator for the full reclaim (file cache, memory lists) and to change startup apps that start for all users."/>
+            <TextBlock Style="{StaticResource Caption}" TextWrapping="Wrap" Text="• Settings, logs, statistics and learned data stay in the YUMRAM folder and are never uploaded. Online research (optional, in Settings) sends the name, publisher and product of programs YUMRAM cannot identify to Bing search - nothing else."/>
           </StackPanel>
         </Expander>
       </StackPanel>

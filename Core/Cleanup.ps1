@@ -10,7 +10,10 @@ function Get-YumPressureDecision {
     $secondaryPressureFloor=[math]::Max($target, [double]$Memory.TotalGB * 0.15)
     $high=($Memory.UsedPercent -ge $threshold -and $Memory.AvailableGB -lt $secondaryPressureFloor)
     $emergencyHit=$Memory.AvailableGB -lt $emergency
-    [pscustomobject]@{ShouldClean=($below -or $high -or $emergencyHit);Emergency=$emergencyHit;Reason=if($emergencyHit){'Emergency available-memory pressure'}elseif($below){'Available RAM below target'}elseif($high){'Memory usage above mode threshold'}else{'Pressure normal'};ThresholdPercent=$threshold;StopTargetGB=$safeTarget}
+    # 5.7: the Settings "Target hysteresis" value was saved but never used. Once cleaning starts it now aims
+    # this far above the goal (0-2 GB), so memory that creeps back does not re-trigger cleanup seconds later.
+    $hyst=0.0;try{$hyst=[math]::Max(0.0,[math]::Min(2.0,[double]$script:Yum.Config['TargetHysteresisGB']))}catch{}
+    [pscustomobject]@{ShouldClean=($below -or $high -or $emergencyHit);Emergency=$emergencyHit;Reason=if($emergencyHit){'Emergency available-memory pressure'}elseif($below){'Available RAM below target'}elseif($high){'Memory usage above mode threshold'}else{'Pressure normal'};ThresholdPercent=$threshold;StopTargetGB=([math]::Min([double]$Memory.TotalGB,$safeTarget+$hyst));HysteresisGB=$hyst}
 }
 
 
@@ -351,6 +354,9 @@ function Invoke-YumCleanupToTarget {
 
     # Phase 1: low-stutter adaptive cleanup.
     for($pass=0;$pass -lt $adaptivePasses;$pass++){
+        # 5.7 (found by the full UI test): a Free RAM / Deep / hotkey request waited behind every remaining
+        # automatic pass (up to minutes with an out-of-reach goal). Yield to it immediately.
+        if($null -ne $script:Yum.ReclaimRequest){$stopReason='Stopped early so Free RAM now / Deep reclaim can run.';break}
         $last=Invoke-YumCleanupCore -Force:$Force -FollowUp:($pass -gt 0) -SafeOnly:$safeOnlyRequested -FallbackMode:$false
         if($last -and $last.Candidates){foreach($r in @($last.Candidates)){[void]$allRows.Add($r)}}
         if($last){$totalReduced += [int64]$last.WorkingSetReduced;$totalProcesses += [int]$last.Processes}
@@ -367,7 +373,11 @@ function Invoke-YumCleanupToTarget {
         if($fresh){Update-YumSnapshotMemory -Memory $fresh}
         $current=if($fresh){[double]$fresh.AvailableGB}else{$previous}
         if([int]$last.Processes -gt 0 -and (Get-Command Update-YumGlobalRetention -ErrorAction SilentlyContinue)){Update-YumGlobalRetention -AvailableGainGB ($current-$previous) -TrimmedMB ([double]$last.WorkingSetReduced/1MB)}
-        if($current -ge $target){$stopReason='Target reached during adaptive cleanup.';break}
+        # Aim for goal + hysteresis while passes are still gaining; the fallback/assist below only engage
+        # when Available is under the goal itself.
+        $aim=$target;try{$aim=$target+[math]::Max(0.0,[math]::Min(2.0,[double]$script:Yum.Config['TargetHysteresisGB']))}catch{}
+        if($current -ge $aim){$stopReason='Target reached during adaptive cleanup.';break}
+        if($current -ge $target -and ($current-$previous) -le 0.01){$stopReason='Target reached; no further gain toward the hysteresis margin.';break}
         $gain=$current-$previous
         if($gain -le 0.01){$stalled++}else{$stalled=0}
         if($stalled -ge [int]$script:Yum.Config.FallbackStallPasses){$stopReason='Adaptive cleanup stalled; entering configured fallback.';break}
@@ -384,7 +394,7 @@ function Invoke-YumCleanupToTarget {
     # cache and flushing the modified list moves cached/dirty pages into Available without dropping the
     # cache. Administrator only, never while a game runs, at most once per AutoMemoryAreaAssistSeconds.
     $assistGainGB=0.0
-    if($afterAdaptive -lt $target -and -not $safeOnlyRequested){
+    if($afterAdaptive -lt $target -and -not $safeOnlyRequested -and $null -eq $script:Yum.ReclaimRequest){
         $assistEnabled=$true;try{if($script:Yum.Config.Contains('AutoMemoryAreaAssist')){$assistEnabled=[bool]$script:Yum.Config['AutoMemoryAreaAssist']}}catch{}
         $assistEvery=45.0;try{if($script:Yum.Config.Contains('AutoMemoryAreaAssistSeconds')){$assistEvery=[math]::Max(15.0,[double]$script:Yum.Config['AutoMemoryAreaAssistSeconds'])}}catch{}
         $lastAssist=[datetime]::MinValue;try{if($script:Yum.Contains('LastMemoryAreaAssist')){$lastAssist=[datetime]$script:Yum.LastMemoryAreaAssist}}catch{}
@@ -407,7 +417,7 @@ function Invoke-YumCleanupToTarget {
     # Phase 2: legacy/strong fallback. This is target-driven, not a new
     # automatic-cleaning policy: it is entered only after the adaptive path
     # stalls and only while the requested target is still unmet.
-    if($afterAdaptive -lt $target -and -not $safeOnlyRequested -and [bool]$script:Yum.Config.EnableTargetFallbackCleanup){
+    if($afterAdaptive -lt $target -and -not $safeOnlyRequested -and [bool]$script:Yum.Config.EnableTargetFallbackCleanup -and $null -eq $script:Yum.ReclaimRequest){
         $fallbackUsed=$true
         $fallbackPasses=[int]$script:Yum.Config.FallbackFollowUpPasses
         $fallbackPrevious=$afterAdaptive
@@ -415,6 +425,7 @@ function Invoke-YumCleanupToTarget {
         $stopReason='Legacy fallback active.'
         $fallbackSessionCapMB=3072.0; try{$fallbackSessionCapMB=[math]::Max(512,[double]$script:Yum.Config.FallbackMaxTrimPerSessionMB)}catch{}
         for($pass=0;$pass -lt $fallbackPasses;$pass++){
+            if($null -ne $script:Yum.ReclaimRequest){$stopReason='Stopped early so Free RAM now / Deep reclaim can run.';break}
             if(($fallbackReducedSession/1MB) -ge $fallbackSessionCapMB){$stopReason='Legacy fallback session cap reached; stopping to avoid excessive working-set churn.';break}
             $last=Invoke-YumCleanupCore -Force:$true -FollowUp:$true -SafeOnly:$false -FallbackMode:$true
             if($last -and $last.Candidates){foreach($r in @($last.Candidates)){[void]$allRows.Add($r)}}

@@ -31,7 +31,7 @@
             <CheckBox x:Name="StartMonitoringAutomatically" Content="Start monitoring automatically when YUMRAM opens"/>
             <CheckBox x:Name="ShowTrayIcon" Content="Show RAM % in the notification area (tray icon)" Margin="0,8,0,0"/>
             <CheckBox x:Name="MinimizeToTray" Content="Minimize to the notification area instead of the taskbar" Margin="0,8,0,0"/>
-            <TextBlock Text="Tray changes apply the next time YUMRAM opens." Style="{StaticResource Caption}" Margin="27,2,0,0"/>
+            <TextBlock Text="Changes apply as soon as you press Apply." Style="{StaticResource Caption}" Margin="27,2,0,0"/>
             <CheckBox x:Name="GlobalHotkeyEnabled" Content="Global shortcut for Free RAM now (works even from a game or the tray)" Margin="0,10,0,0"/>
             <Grid Margin="27,6,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="160"/><ColumnDefinition/></Grid.ColumnDefinitions>
               <TextBox x:Name="GlobalHotkey" ToolTip="For example Ctrl+Alt+R or Ctrl+Shift+F9. Needs at least one of Ctrl, Alt, Shift or Win." AutomationProperties.Name="Global shortcut"/>
@@ -56,7 +56,7 @@
                   <StackPanel><TextBlock Text="Per-process cooldown (s)" Style="{StaticResource RowLabel}"/><TextBlock Text="A trimmed program is left alone this long, so busy apps are not trimmed over and over." Style="{StaticResource RowHint}"/></StackPanel>
                   <TextBox x:Name="ProcessCooldown" Grid.Column="1" VerticalAlignment="Top"/></Grid>
                 <Grid Style="{StaticResource Row}" Margin="0"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="140"/></Grid.ColumnDefinitions>
-                  <StackPanel><TextBlock Text="Target hysteresis (GB)" Style="{StaticResource RowLabel}"/><TextBlock Text="How far above the goal RAM must recover before automatic care relaxes." Style="{StaticResource RowHint}"/></StackPanel>
+                  <StackPanel><TextBlock Text="Target hysteresis (GB)" Style="{StaticResource RowLabel}"/><TextBlock Text="Once automatic care starts, it aims this much above the goal (0 to 2 GB), so it is not triggered again a moment later." Style="{StaticResource RowHint}"/></StackPanel>
                   <TextBox x:Name="Hysteresis" Grid.Column="1" VerticalAlignment="Top"/></Grid>
               </StackPanel>
             </GroupBox>
@@ -102,7 +102,7 @@
       <TabItem Header="Monitoring">
         <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
           <Border Style="{StaticResource Card}" Margin="0,4,4,4"><StackPanel>
-            <TextBlock Text="How often YUMRAM samples the system. Lower is more responsive but uses more CPU; changes apply after restarting monitoring." Style="{StaticResource Caption}" Margin="0,0,0,14"/>
+            <TextBlock Text="How often YUMRAM samples the system. Lower is more responsive but uses more CPU. Monitoring restarts by itself when you apply a change." Style="{StaticResource Caption}" Margin="0,0,0,14"/>
             <Grid Style="{StaticResource Row}"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="140"/></Grid.ColumnDefinitions>
               <TextBlock Text="RAM and CPU (seconds)" Style="{StaticResource RowLabel}" VerticalAlignment="Center"/><TextBox x:Name="TelemetryInterval" Grid.Column="1"/></Grid>
             <Grid Style="{StaticResource Row}"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="140"/></Grid.ColumnDefinitions>
@@ -124,7 +124,7 @@
                 <TextBlock Text="Sends the program, publisher and product name to Bing search. Nothing else leaves your PC. When off, Intelligence still identifies programs locally (signatures, installed-software records, services, Store packages)." Style="{StaticResource Caption}" Margin="27,2,0,0"/>
               </StackPanel>
             </GroupBox>
-            <GroupBox Header="System inventory scanner">
+            <GroupBox Header="System inventory scanner" Visibility="Collapsed">
               <StackPanel>
                 <CheckBox x:Name="EnableSystemScanner" Content="Enable system inventory scanning"/>
                 <Grid Style="{StaticResource Row}" Margin="0,10,0,0"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="140"/></Grid.ColumnDefinitions>

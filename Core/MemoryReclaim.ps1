@@ -506,10 +506,14 @@ function Invoke-YumMemoryReclaim {
         $after=Get-YumMemoryReclaimSnapshot
         $availableGain=[math]::Max(0.0,$after.AvailableGB-$before.AvailableGB)
         $wsReduced=[double]$processPass.WorkingSetReducedMB
+        # 5.7: say why nothing was trimmed instead of a bare "0 actions completed".
+        if($wsReduced -le 0 -and @($rows|Where-Object{$_.Type -ne 'Memory Area' -and $_.Result -eq 'Completed'}).Count -eq 0){
+            [void]$notes.Add(('Nothing left to trim: no idle program above {0} MB right now (automatic care may already have trimmed them, or they are protected).' -f [int]$script:Yum.Config.ReclaimMinimumWorkingSetMB))
+        }
         $success=($availableGain -gt 0.0 -or $wsReduced -gt 0.0 -or @($rows|Where-Object{$_.Result -eq 'Completed'}).Count -gt 0)
         $result=[pscustomobject]@{
             Success=$success;Skipped=$false;Mode=$Mode;Before=$before;After=$after;AvailableGainGB=$availableGain;WorkingSetReducedMB=$wsReduced;Actions=$rows.Count;Rows=$rows.ToArray();Notes=$notes.ToArray();Timestamp=Get-Date
-            Summary=('Available RAM {0:N2} → {1:N2} GB (+{2:N2} GB). Process working sets reduced {3:N0} MB. {4} actions completed.' -f $before.AvailableGB,$after.AvailableGB,$availableGain,$wsReduced,(@($rows|Where-Object{$_.Result -eq 'Completed'}).Count))
+            Summary=('Available RAM {0:N2} → {1:N2} GB (+{2:N2} GB). Process working sets reduced {3:N0} MB. {4} actions completed.{5}' -f $before.AvailableGB,$after.AvailableGB,$availableGain,$wsReduced,(@($rows|Where-Object{$_.Result -eq 'Completed'}).Count),$(if($wsReduced -le 0){' Nothing left to trim right now - idle programs were already trimmed.'}else{''}))
         }
         try {
             $script:Yum.LastReclaim=$result

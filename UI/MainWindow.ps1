@@ -239,6 +239,8 @@ function Apply-YumUiConfig {
         $script:Yum.Ui.PriorityBox.SelectedIndex=[array]::IndexOf($priorityDisplay,$priorityLabel)
         if($null -ne $script:Yum.Ui.ModeHelp){$script:Yum.Ui.ModeHelp.Text=switch([string]$script:Yum.Config.Mode){'Safe'{'Minimal intervention — low-risk candidates only, up to 8 follow-up passes, no optional apps/services.'};'Aggressive'{'Maximum reclaim — broader known-safe candidates, approved optional apps/services, repeated passes toward the target.'};default{'Recommended balance — moderate candidates and repeated passes toward the target without touching protected/unknown items.'}}}
         $script:Yum.Ui.TargetBox.Text=$script:Yum.Config.MinimumAvailableGB.ToString('0.##',[Globalization.CultureInfo]::InvariantCulture)
+        # 5.7: the sidebar Mode badge followed only telemetry ticks, so a mode change in Settings looked ignored.
+        if($null -ne $script:Yum.Ui.Mode){$script:Yum.Ui.Mode.Text=([string]$script:Yum.Config.Mode).ToUpperInvariant()}
         $script:Yum.Ui.AutoGame.IsChecked=[bool]$script:Yum.Config.AutoDetectGames
         $script:Yum.Ui.ProtectGame.IsChecked=[bool]$script:Yum.Config.ProtectGame
         $script:Yum.Ui.AutoClean.IsChecked=[bool]$script:Yum.Config.AutoCleanOnGameStart

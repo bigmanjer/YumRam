@@ -594,10 +594,13 @@ function Show-YumSettings {
             @('MinimumAvailable','MinimumAvailableGB'),@('CleanupTarget','CleanupTargetAvailableGB'),@('Hysteresis','TargetHysteresisGB'),@('CleanInterval','MinimumCleanIntervalSeconds'),@('ProcessCooldown','ProcessCooldownSeconds'),@('TelemetryInterval','TelemetryIntervalSeconds'),@('GpuInterval','GPUIntervalSeconds'),@('GameInterval','GameDetectionIntervalSeconds'),@('SafePressure','SafePressurePercent'),@('BalancedPressure','BalancedPressurePercent'),@('AggressivePressure','AggressivePressurePercent'),@('SafePass','SafeProcessesPerPass'),@('BalancedPass','BalancedProcessesPerPass'),@('AggressivePass','AggressiveProcessesPerPass'),@('ScannerMaxItems','ScannerMaxItems')
         )){$ui[$pair[0]].Text=[string]$cfg[$pair[1]]}
         $ui.AutoDetectGames.IsChecked=[bool]$cfg.AutoDetectGames;$ui.ProtectGame.IsChecked=[bool]$cfg.ProtectGame;$ui.AutoCleanOnGameStart.IsChecked=[bool]$cfg.AutoCleanOnGameStart;$ui.EnableOptionalBackground.IsChecked=[bool]$cfg.EnableOptionalBackgroundCleanup;$ui.EnableOptionalServices.IsChecked=[bool]$cfg.EnableOptionalServiceCleanup;$ui.StartMonitoringAutomatically.IsChecked=[bool]$cfg.StartMonitoringAutomatically;$ui.EnableOnlineResearch.IsChecked=[bool]$cfg.EnableOnlineResearch;$ui.ShowTrayIcon.IsChecked=[bool]$cfg['ShowTrayIcon'];$ui.MinimizeToTray.IsChecked=[bool]$cfg['MinimizeToTray'];if($null -ne $ui.GlobalHotkeyEnabled){$ui.GlobalHotkeyEnabled.IsChecked=[bool]$cfg['GlobalHotkeyEnabled'];$ui.GlobalHotkey.Text=[string]$cfg['GlobalHotkey'];$ui.HotkeyState.Text=[string]$script:Yum.HotkeyStatus};$ui.EnableSystemScanner.IsChecked=[bool]$cfg.EnableSystemScanner;$modeItems=@($ui.Mode.Items);for($i=0;$i -lt $modeItems.Count;$i++){if([string]$modeItems[$i].Tag -eq [string]$cfg.Mode){$ui.Mode.SelectedIndex=$i;break}};$display=@('Keep Existing','Normal (Default)','Above Normal (Game Preference)','High (Advanced)');$stored=[string]$cfg.GamePriority;$label=switch($stored){'KeepExisting'{'Keep Existing'};'AboveNormal'{'Above Normal (Game Preference)'};'High'{'High (Advanced)'};default{'Normal (Default)'}};$ui.GamePriority.SelectedIndex=[array]::IndexOf($display,$label)
-        $state=@{Window=$window;Ui=$ui};$ui.Apply.Tag=$state;$ui.Reset.Tag=$state;$ui.Close.Tag=$state
+        $state=@{Window=$window;Ui=$ui;TimingAtOpen=('{0}|{1}|{2}' -f $cfg.TelemetryIntervalSeconds,$cfg.GPUIntervalSeconds,$cfg.GameDetectionIntervalSeconds)};$ui.Apply.Tag=$state;$ui.Reset.Tag=$state;$ui.Close.Tag=$state
+        # 5.7: the "optional services" switch maps to the approved-services list, which is empty unless the
+        # user approves services; show it only when there is something to stop.
+        try{ if(@($cfg.OptionalServices).Count -eq 0 -and $null -ne $ui.EnableOptionalServices){$ui.EnableOptionalServices.Visibility='Collapsed'} }catch{}
         $ui.Close.Add_Click({param($sender,$e)$sender.Tag.Window.Close()})
         $loadDefaults={param($u)
-            $d=@{MinimumAvailable='4.0';CleanupTarget='4.0';Hysteresis='0.3';CleanInterval='15';ProcessCooldown='60';TelemetryInterval='0.5';GpuInterval='3';GameInterval='2';SafePressure='92';BalancedPressure='85';AggressivePressure='78';SafePass='6';BalancedPass='10';AggressivePass='16';ScannerMaxItems='80'}
+            $d=@{MinimumAvailable='4.0';CleanupTarget='4.0';Hysteresis='0.3';CleanInterval='15';ProcessCooldown='60';TelemetryInterval='0.5';GpuInterval='5';GameInterval='2';SafePressure='92';BalancedPressure='85';AggressivePressure='78';SafePass='6';BalancedPass='10';AggressivePass='16';ScannerMaxItems='80'}
             foreach($k in $d.Keys){$u.$k.Text=$d[$k]};$modeItems=@($u.Mode.Items);for($i=0;$i -lt $modeItems.Count;$i++){if([string]$modeItems[$i].Tag -eq 'Balanced'){$u.Mode.SelectedIndex=$i;break}};$u.GamePriority.SelectedIndex=0;$u.AutoDetectGames.IsChecked=$true;$u.ProtectGame.IsChecked=$true;$u.AutoCleanOnGameStart.IsChecked=$false;$u.EnableOptionalBackground.IsChecked=$true;$u.EnableOptionalServices.IsChecked=$false;$u.StartMonitoringAutomatically.IsChecked=$false;$u.EnableSystemScanner.IsChecked=$true;$u.EnableOnlineResearch.IsChecked=$true;$u.ShowTrayIcon.IsChecked=$true;$u.MinimizeToTray.IsChecked=$true;if($null -ne $u.GlobalHotkeyEnabled){$u.GlobalHotkeyEnabled.IsChecked=$true;$u.GlobalHotkey.Text='Ctrl+Alt+R'};$u.Validation.Foreground=Get-YumBrush '#FDE68A';$u.Validation.Text='Defaults loaded. Click Apply to save.'
         }
         $ui.Reset.Add_Click({param($sender,$e)& $loadDefaults $sender.Tag.Ui})
@@ -605,7 +608,7 @@ function Show-YumSettings {
             try{
                 $u=$sender.Tag.Ui
                 $fields=@{
-                    MinimumAvailableGB=@($u.MinimumAvailable.Text,0.1,1000);TargetHysteresisGB=@($u.Hysteresis.Text,0.0,100);MinimumCleanIntervalSeconds=@($u.CleanInterval.Text,0.0,3600);ProcessCooldownSeconds=@($u.ProcessCooldown.Text,0.0,86400);TelemetryIntervalSeconds=@($u.TelemetryInterval.Text,0.25,10);GPUIntervalSeconds=@($u.GpuInterval.Text,0.5,30);GameDetectionIntervalSeconds=@($u.GameInterval.Text,0.5,30);SafePressurePercent=@($u.SafePressure.Text,50,99);BalancedPressurePercent=@($u.BalancedPressure.Text,50,99);AggressivePressurePercent=@($u.AggressivePressure.Text,50,99);SafeProcessesPerPass=@($u.SafePass.Text,1,10);BalancedProcessesPerPass=@($u.BalancedPass.Text,1,16);AggressiveProcessesPerPass=@($u.AggressivePass.Text,1,24);ScannerMaxItems=@($u.ScannerMaxItems.Text,10,500)
+                    MinimumAvailableGB=@($u.MinimumAvailable.Text,0.1,1000);TargetHysteresisGB=@($u.Hysteresis.Text,0.0,2.0);MinimumCleanIntervalSeconds=@($u.CleanInterval.Text,0.0,3600);ProcessCooldownSeconds=@($u.ProcessCooldown.Text,0.0,86400);TelemetryIntervalSeconds=@($u.TelemetryInterval.Text,0.25,10);GPUIntervalSeconds=@($u.GpuInterval.Text,5,60);GameDetectionIntervalSeconds=@($u.GameInterval.Text,0.5,30);SafePressurePercent=@($u.SafePressure.Text,50,99);BalancedPressurePercent=@($u.BalancedPressure.Text,50,99);AggressivePressurePercent=@($u.AggressivePressure.Text,50,99);SafeProcessesPerPass=@($u.SafePass.Text,1,10);BalancedProcessesPerPass=@($u.BalancedPass.Text,1,16);AggressiveProcessesPerPass=@($u.AggressivePass.Text,1,24);ScannerMaxItems=@($u.ScannerMaxItems.Text,10,500)
                 }
                 foreach($kv in $fields.GetEnumerator()){$d=0.0;if(-not [double]::TryParse([string]$kv.Value[0],[Globalization.NumberStyles]::Float,[Globalization.CultureInfo]::InvariantCulture,[ref]$d)){throw "Invalid value: $($kv.Key)."};if($d -lt $kv.Value[1] -or $d -gt $kv.Value[2]){throw "$($kv.Key) must be between $($kv.Value[1]) and $($kv.Value[2])."};$val=if($kv.Key -match 'Pass|Items'){[int][math]::Round($d)}elseif($kv.Key -match 'Seconds|Interval'){[math]::Round($d,2)}else{[math]::Round($d,1)};Update-YumConfigValue -Name $kv.Key -Value $val};Update-YumConfigValue -Name CleanupTargetAvailableGB -Value ([double]$script:Yum.Config.MinimumAvailableGB)
                 if([double]$cfg.SafePressurePercent -lt [double]$cfg.BalancedPressurePercent){throw 'Safe pressure should be at least as high as Balanced pressure.'};if([double]$cfg.BalancedPressurePercent -lt [double]$cfg.AggressivePressurePercent){throw 'Balanced pressure should be at least as high as Aggressive pressure.'}
@@ -619,7 +622,18 @@ function Show-YumSettings {
                     Register-YumGlobalHotkey
                     $u.HotkeyState.Text=[string]$script:Yum.HotkeyStatus
                 }
-                $u.Validation.Foreground=Get-YumBrush '#86EFAC';$u.Validation.Text='Settings saved. Restart Monitoring to apply changed telemetry timing. Memory target and safety switches apply immediately.';Apply-YumUiConfig
+                # 5.7: everything applies now - tray icon on/off and new sampling intervals included (they
+                # used to need a restart of YUMRAM / of monitoring).
+                try{
+                    $wantTray=[bool]$script:Yum.Config['ShowTrayIcon']
+                    if($wantTray -and $null -eq $script:Yum.TrayIcon){Initialize-YumTray}
+                    elseif(-not $wantTray -and $null -ne $script:Yum.TrayIcon){Remove-YumTray}
+                }catch{Write-YumLogException -Context 'Tray apply failed' -Exception $_.Exception}
+                $timingNow=('{0}|{1}|{2}' -f $script:Yum.Config.TelemetryIntervalSeconds,$script:Yum.Config.GPUIntervalSeconds,$script:Yum.Config.GameDetectionIntervalSeconds)
+                $restarted=$false
+                if($timingNow -ne [string]$sender.Tag.TimingAtOpen -and $null -ne $script:Yum.TelemetryTimer){try{Stop-YumMonitoring;Start-YumMonitoring;$restarted=$true}catch{Write-YumLogException -Context 'Monitoring restart after settings failed' -Exception $_.Exception}}
+                $sender.Tag.TimingAtOpen=$timingNow
+                $u.Validation.Foreground=Get-YumBrush '#86EFAC';$u.Validation.Text=if($restarted){'Settings saved and applied. Monitoring restarted with the new sampling intervals.'}else{'Settings saved and applied.'};Apply-YumUiConfig
             }catch{$u.Validation.Foreground=Get-YumBrush '#FCA5A5';$u.Validation.Text=$_.Exception.Message;Write-YumLogException -Context 'Settings apply failed' -Exception $_.Exception}
         })
         if(-not (Enter-YumPage -Key 'Settings' -Window $window)){$window.Owner=$script:Yum.Window;[void]$window.ShowDialog()}
@@ -633,6 +647,10 @@ function Show-YumAbout {
         $window=[Windows.Markup.XamlReader]::Load((New-Object System.Xml.XmlNodeReader $xaml))
         $admin=if(Test-YumIsElevated){'running as administrator'}else{'not running as administrator'}
         $window.FindName('Version').Text=('Version {0}  •  {1}' -f [string]$script:Yum.Config.Version,$admin)
+        try{
+            if([bool]$script:Yum.Config['GlobalHotkeyEnabled'] -and $null -ne $script:Yum.Hotkey){$window.FindName('HotkeyKeys').Text=[string]$script:Yum.HotkeyText}
+            else{$window.FindName('HotkeyKeys').Text='(off)';$window.FindName('HotkeyText').Text=('Global Free RAM shortcut: {0}. Turn it on in Settings › General.' -f [string]$script:Yum.HotkeyStatus)}
+        }catch{}
         # The button's own window is the main window when About is hosted as a page, so close via Tag.
         $closeButton=$window.FindName('Close');$closeButton.Tag=$window
         $closeButton.Add_Click({param($s,$e)try{$s.Tag.Close()}catch{}})

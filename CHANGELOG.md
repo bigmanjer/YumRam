@@ -1,5 +1,28 @@
 # Changelog
 
+# YUMRAM 5.7.1 — Full bug test of every view and setting (branch `visual-overhaul`)
+
+A new UI test (`Tests\UI\FullUiProbe.ps1`) drives the real app through every page, setting, button and
+tray item (49 steps, temporary config). What it and a settings audit found, all fixed:
+
+- **Free RAM now waited behind automatic care.** With a goal out of reach, a Free RAM / Deep / hotkey
+  request could wait minutes for the remaining automatic passes. Automatic care now stops at once to
+  let it run.
+- **"0 actions completed" with no explanation** when automatic care had already trimmed everything; the
+  result now says nothing was left to trim and why.
+- **Settings that did nothing:** *Target hysteresis* was saved but never used — automatic care now aims
+  that far above the goal (0–2 GB) so creeping memory does not re-trigger it seconds later. The
+  *optional services* switch only shows when you have approved services, and the unused *system
+  inventory scanner* options are hidden.
+- **GPU interval** Reset gave 3 s and accepted 0.5 s, but YUMRAM never samples faster than 5 s; the
+  range is now 5–60 s with default 5.
+- **Applies immediately:** tray icon on/off (was "next time YUMRAM opens") and sampling intervals
+  (monitoring restarts itself; used to say "restart monitoring").
+- **Sidebar mode badge** did not follow a mode change made in Settings.
+- **About** now lists Startup apps, the one-window layout, the keyboard shortcuts (with your actual
+  hotkey), and the privacy line matches what research really sends (name, publisher, product to Bing).
+- Tests: new `Release57FixesTest`; 49/49 pass. UI probe: 49/49 steps, no errors in the log.
+
 # YUMRAM 5.7.0 — Startup apps, honest Deep reclaim numbers (branch `visual-overhaul`)
 
 Next competitor gap: IObit's Startup Optimizer and Windows Task Manager's "Startup apps".

@@ -2,7 +2,7 @@
 
 **Yumes Ultimate Memory Reclaim & Monitor**
 
-Version: 5.7.0
+Version: 5.7.1
 Stage: alpha
 
 **YUMRAM keeps Windows responsive by keeping Available RAM above a target you choose.** It trims the
