@@ -208,20 +208,45 @@ function Get-YumScannerServiceRows {
     $rows.ToArray()
 }
 
+function Get-YumAppxPublisherName {
+    # Turns a package publisher DN ("CN=Microsoft Corporation, O=Microsoft Corporation, ...") into a name.
+    # Store re-signed packages often have CN=<GUID>; then the package name prefix ("DTSInc.DTSXUltra"
+    # -> "DTSInc") is the best readable publisher Windows gives us.
+    param([string]$PublisherDn,[string]$PackageName)
+    $o=[regex]::Match($PublisherDn,'(?:^|,\s*)O=("?)([^,"]+)\1')
+    if($o.Success -and $o.Groups[2].Value.Trim()){return $o.Groups[2].Value.Trim()}
+    $cn=[regex]::Match($PublisherDn,'(?:^|,\s*)CN=("?)([^,"]+)\1')
+    if($cn.Success -and $cn.Groups[2].Value.Trim() -notmatch '^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-'){return $cn.Groups[2].Value.Trim()}
+    if($PackageName -match '^([A-Za-z][A-Za-z0-9]+)\.'){return $Matches[1]}
+    return ''
+}
+
 function Get-YumScannerAppRows {
     param([int]$MaxItems=80,[System.Collections.Generic.List[string]]$ErrorSink=$null)
     $rows=New-Object System.Collections.Generic.List[object]
     $appErrors=New-Object System.Collections.Generic.List[string]
     try {
-        $packages=@(Get-AppxPackage -ErrorAction SilentlyContinue | Select-Object -First $MaxItems Name,PackageFullName,PublisherId,IsFramework)
+        # 5.4: read Windows' own package metadata. 5.3.x stored the publisher *ID hash* (e.g. 8wekyb3d8bbwe)
+        # as the publisher name and ignored SignatureKind, so built-in Windows components and Store apps
+        # could not be identified and ended up Unknown.
+        $packages=@(Get-AppxPackage -ErrorAction SilentlyContinue | Select-Object -First $MaxItems Name,PackageFullName,PublisherId,Publisher,SignatureKind,IsFramework,NonRemovable,InstallLocation)
         foreach($app in $packages){
             try {
                 $name=[string]$app.Name;$full=[string]$app.PackageFullName;$publisherId=[string]$app.PublisherId;$framework=[bool]$app.IsFramework
-                $game=($name -match 'Xbox|Gaming|GameBar|Game|Steam|Epic|Riot|Ubisoft|EA|Battle|Blizzard' -or $publisherId -match 'Xbox|Gaming|Valve|Epic|Riot|Ubisoft|ElectronicArts|Activision|Blizzard')
-                $category=if($framework){'Protected'}elseif($game){'Games'}else{'Apps'}
-                $risk=if($framework -or $game){'Protected'}else{'Review'}
-                $reason=if($framework){'Windows framework package'}elseif($game){'Gaming package indicators detected'}else{'Installed application package'}
-                [void]$rows.Add([pscustomobject]@{Source='App';Name=$name;PackageFullName=$full;PublisherId=$publisherId;Path=$full;Publisher=$publisherId;Category=$category;Risk=$risk;Score=if($framework -or $game){0}else{20};Confidence=if($framework -or $game){96}else{70};Reason=$reason})
+                $signatureKind=[string]$app.SignatureKind
+                $systemPackage=($signatureKind -eq 'System' -or [bool]$app.NonRemovable)
+                $publisherName=Get-YumAppxPublisherName -PublisherDn ([string]$app.Publisher) -PackageName $name
+                $friendly=$name
+                if($name -match '^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-' -and -not [string]::IsNullOrWhiteSpace([string]$app.InstallLocation)){
+                    # GUID-named packages: the install folder carries the readable name (e.g. Microsoft.Windows.FilePicker).
+                    $friendly=((Split-Path -Leaf ([string]$app.InstallLocation)) -replace '_[a-z0-9]{13}$','')
+                }
+                $game=(-not $systemPackage) -and ($name -match '(?i)xbox|gaming|gamebar|\bgame|steam|epicgames|riotgames|ubisoft|electronicarts|\bEA\b|battle\.?net|blizzard' -or $publisherName -match '(?i)xbox|valve|epic games|riot games|ubisoft|electronic arts|activision|blizzard')
+                $category=if($framework -or $systemPackage){'Protected'}elseif($game){'Games'}else{'Apps'}
+                $risk=if($framework -or $systemPackage -or $game){'Protected'}else{'Review'}
+                $reason=if($systemPackage){'Built-in Windows component ({0}; signature kind {1})' -f $friendly,$signatureKind}elseif($framework){'Windows framework package'}elseif($game){'Gaming package indicators detected'}elseif($signatureKind -eq 'Store'){'Microsoft Store-signed package from {0}' -f $publisherName}else{'Installed application package ({0}-signed)' -f $signatureKind}
+                $confidence=if($framework -or $game -or $systemPackage){96}elseif($signatureKind -eq 'Store' -and $publisherName){88}else{70}
+                [void]$rows.Add([pscustomobject]@{Source='App';Name=$name;DisplayName=$friendly;PackageFullName=$full;PublisherId=$publisherId;Path=$full;Publisher=$publisherName;SignatureKind=$signatureKind;Category=$category;Risk=$risk;Score=if($framework -or $game -or $systemPackage){0}else{20};Confidence=$confidence;Reason=$reason})
             } catch { if($appErrors.Count -lt 25){[void]$appErrors.Add(('App {0}: {1}' -f $app.Name,$_.Exception.Message))} }
         }
     } catch { [void]$appErrors.Add(('App inventory: {0}' -f $_.Exception.Message)) }
@@ -272,7 +297,7 @@ function Invoke-YumNewSystemScan {
     }
     foreach($a in @($apps)){
         try {
-            [void]$records.Add([pscustomobject]@{StableIdentityKey=(Get-YumStableIntelligenceKeyFromValues -Source 'App' -Name ([string]$a.Name) -Path ([string]$a.Path) -Publisher ([string]$a.Publisher) -PackageFullName ([string]$a.PackageFullName));Key=(Get-YumStableIntelligenceKeyFromValues -Source 'App' -Name ([string]$a.Name) -Path ([string]$a.Path) -Publisher ([string]$a.Publisher) -PackageFullName ([string]$a.PackageFullName));Name=$a.Name;Category=$a.Category;Memory='—';CPU='—';Risk=$a.Risk;Confidence=$a.Confidence;ConfidenceText=('{0}%' -f $a.Confidence);Recommendation=if($a.Risk -eq 'Protected'){'Leave available; framework or game package'}else{'Leave installed; app runtime management is conditional'};Reason=$a.Reason;Publisher=$a.Publisher;Path=$a.Path;PID='—';Source='App';Live=$true;LastSeen=(Get-Date).ToString('o');StateText='LIVE';Placement='';ActionLane='';ResearchReason=$a.Reason;ResearchConfidence=$a.Confidence;ResearchSources=@()})
+            [void]$records.Add([pscustomobject]@{StableIdentityKey=(Get-YumStableIntelligenceKeyFromValues -Source 'App' -Name ([string]$a.Name) -Path ([string]$a.Path) -Publisher ([string]$(if($a.PSObject.Properties['PublisherId'] -and $a.PublisherId){$a.PublisherId}else{$a.Publisher})) -PackageFullName ([string]$a.PackageFullName));Key=(Get-YumStableIntelligenceKeyFromValues -Source 'App' -Name ([string]$a.Name) -Path ([string]$a.Path) -Publisher ([string]$(if($a.PSObject.Properties['PublisherId'] -and $a.PublisherId){$a.PublisherId}else{$a.Publisher})) -PackageFullName ([string]$a.PackageFullName));Name=$a.Name;Category=$a.Category;Memory='—';CPU='—';Risk=$a.Risk;Confidence=$a.Confidence;ConfidenceText=('{0}%' -f $a.Confidence);Recommendation=if($a.Risk -eq 'Protected'){'Leave available; framework or game package'}else{'Leave installed; app runtime management is conditional'};Reason=$a.Reason;Publisher=$a.Publisher;DisplayName=$(if($a.PSObject.Properties['DisplayName']){$a.DisplayName}else{$a.Name});SignatureKind=$(if($a.PSObject.Properties['SignatureKind']){$a.SignatureKind}else{''});Path=$a.Path;PID='—';Source='App';Live=$true;LastSeen=(Get-Date).ToString('o');StateText='LIVE';Placement='';ActionLane='';ResearchReason=$a.Reason;ResearchConfidence=$a.Confidence;ResearchSources=@()})
         } catch {}
     }
     foreach($st in @($startup)) {

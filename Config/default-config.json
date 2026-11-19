@@ -1,4 +1,4 @@
-﻿{
+{
   "Version": "5.3.3",
   "TelemetryIntervalSeconds": 0.5,
   "UIRefreshIntervalSeconds": 0.25,
@@ -362,7 +362,7 @@
   "GamingCleanupMaxPassMilliseconds": 700,
   "GamingCleanupMaxTrimMBPerPass": 256,
   "ResearchConcurrency": 1,
-  "ResearchInterItemDelayMs": 250,
+  "ResearchInterItemDelayMs": 50,
   "FallbackStallPasses": 4,
   "EnableTargetFallbackCleanup": true,
   "FallbackProcessesPerPass": 5,

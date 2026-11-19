@@ -205,7 +205,7 @@ function Initialize-YumConfig {
     if(-not $script:Yum.Config.Contains('AutoRestoreSessionStoppedServices')){$script:Yum.Config.AutoRestoreSessionStoppedServices=$true}
     # 5.3.1 migration: raise values that are still at the old (too timid) defaults. Anything the
     # user changed away from the old default is left alone.
-    $oldDefaults=@{SafeProcessesPerPass=@(2,3);BalancedProcessesPerPass=@(3,5);AggressiveProcessesPerPass=@(5,8);ReclaimMaxProcessActions=@(3,8);GPUIntervalSeconds=@(3.0,5.0)}
+    $oldDefaults=@{SafeProcessesPerPass=@(2,3);BalancedProcessesPerPass=@(3,5);AggressiveProcessesPerPass=@(5,8);ReclaimMaxProcessActions=@(3,8);GPUIntervalSeconds=@(3.0,5.0);ResearchInterItemDelayMs=@(250,50)}
     foreach($k in $oldDefaults.Keys){
         try{ if($script:Yum.Config.Contains($k) -and [double]$script:Yum.Config[$k] -eq [double]$oldDefaults[$k][0]){ $script:Yum.Config[$k]=$oldDefaults[$k][1] } }catch{}
     }

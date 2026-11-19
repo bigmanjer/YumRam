@@ -1,6 +1,12 @@
 ﻿#requires -Version 5.1
 Set-StrictMode -Version Latest
 
+# Per-run evidence inventories (reset by Invoke-YumResearch). Declared here so the helpers also work when
+# called on their own under StrictMode, where reading an unset script variable throws.
+$script:YumResearchRegistryInventory=$null
+$script:YumResearchAppxInventory=$null
+$script:YumResearchServiceInventory=$null
+$script:YumResearchWinGetInventory=$null
 
 function Get-YumResearchSafeProperty {
     param([object]$Object,[string]$Name,[object]$Default='')
@@ -248,19 +254,29 @@ function Get-YumStartupRows {
 }
 
 function Convert-YumResearchText {
+    # 5.4: HashSet de-duplication. 'Select-Object -Unique' is quadratic in Windows PowerShell 5.1 and took
+    # over a minute on a single vendor web page once online verification started working.
     param([AllowNull()][string]$Text)
     if([string]::IsNullOrWhiteSpace($Text)){ return @() }
     $clean=($Text.ToLowerInvariant() -replace '[^a-z0-9\._+-]+',' ').Trim()
     if([string]::IsNullOrWhiteSpace($clean)){ return @() }
-    @($clean -split '\s+' | Where-Object { $_.Length -ge 2 } | Select-Object -Unique)
+    $set=New-Object 'System.Collections.Generic.HashSet[string]'
+    $ordered=New-Object System.Collections.Generic.List[string]
+    foreach($tok in $clean.Split(' ',[StringSplitOptions]::RemoveEmptyEntries)){ if($tok.Length -ge 2 -and $set.Add($tok)){ $ordered.Add($tok) } }
+    $ordered.ToArray()   # callers wrap in @(); a leading comma here would nest the array
 }
 
 function Get-YumResearchTokenOverlap {
     param([string]$Left,[string]$Right)
-    $a=@(Convert-YumResearchText $Left);$b=@(Convert-YumResearchText $Right)
-    if($a.Count -eq 0 -or $b.Count -eq 0){return 0}
+    # Only the left (identity) side needs to be a list; the right side is looked up in a HashSet.
+    if($null -ne $Right -and $Right.Length -gt 300000){ $Right=$Right.Substring(0,300000) }  # page head carries the identity
+    $a=@(Convert-YumResearchText $Left)
+    if($a.Count -eq 0 -or [string]::IsNullOrWhiteSpace($Right)){return 0}
+    # ::new, not New-Object: New-Object spreads an array argument into separate constructor arguments.
+    $b=[System.Collections.Generic.HashSet[string]]::new([string[]]@(Convert-YumResearchText $Right))
+    if($b.Count -eq 0){return 0}
     $hits=0
-    foreach($t in $a){ if($b -contains $t){$hits++} }
+    foreach($t in $a){ if($b.Contains($t)){$hits++} }
     [int][math]::Round(($hits / [double]$a.Count) * 100,0)
 }
 
@@ -336,7 +352,7 @@ function Get-YumInstalledSoftwareResearch {
         )
         foreach($p in $paths){try{foreach($item in @(Get-ItemProperty -Path $p -ErrorAction SilentlyContinue)){
             $dn=[string]$item.DisplayName;if([string]::IsNullOrWhiteSpace($dn)){continue}
-            [void]$script:YumResearchRegistryInventory.Add([pscustomobject]@{Name=$dn;Version=[string]$item.DisplayVersion;Publisher=[string]$item.Publisher;InstallLocation=[string]$item.InstallLocation;DisplayIcon=[string]$item.DisplayIcon;UninstallString=[string]$item.UninstallString})
+            [void]$script:YumResearchRegistryInventory.Add([pscustomobject]@{Name=$dn;Version=[string]$item.DisplayVersion;Publisher=[string]$item.Publisher;InstallLocation=[string]$item.InstallLocation;DisplayIcon=[string]$item.DisplayIcon;UninstallString=[string]$item.UninstallString;CandidateExes=@(@([string]$item.InstallLocation,[string]$item.DisplayIcon,[string]$item.UninstallString)|Where-Object{$_}|ForEach-Object{$x=Get-YumResearchExecutablePath -Path $_;if($x){$x.ToLowerInvariant()}else{''}})})  # 5.4: resolved once per run
         }}catch{}}
     }
     $rows=New-Object System.Collections.Generic.List[object]
@@ -346,8 +362,7 @@ function Get-YumInstalledSoftwareResearch {
     $nameNorm=([string]$Name).Trim();$publisherNorm=([string]$Publisher).Trim()
     foreach($item in $script:YumResearchRegistryInventory.ToArray()){
         $pathScore=0
-        foreach($candidate in @([string]$item.InstallLocation,[string]$item.DisplayIcon,[string]$item.UninstallString)|Where-Object{$_}){
-            $cExe=Get-YumResearchExecutablePath -Path $candidate;$cNorm=if($cExe){$cExe.ToLowerInvariant()}else{''}
+        foreach($cNorm in @($item.CandidateExes)){
             if($targetFull -and $cNorm -and $cNorm -eq $targetFull){$pathScore=[math]::Max($pathScore,100)}
             elseif($targetDir -and $item.InstallLocation -and $targetDir.StartsWith(([string]$item.InstallLocation).TrimEnd('\').ToLowerInvariant())){$pathScore=[math]::Max($pathScore,85)}
             elseif($targetDir -and $cNorm -and (Split-Path -Parent $cNorm) -eq $targetDir){$pathScore=[math]::Max($pathScore,80)}
@@ -359,31 +374,57 @@ function Get-YumInstalledSoftwareResearch {
     }
     @($rows|Sort-Object Score,PathMatchScore,NameOverlap -Descending|Select-Object -First 8)
 }
+function Get-YumWinGetInventory {
+    # 5.4: one 'winget list' per research run (~2.5 s for ~200 programs) instead of one winget.exe
+    # process per researched item (~3.5 s each). Parsed from the fixed-width table by header columns.
+    # Get-Variable instead of a direct read: under StrictMode an unset script variable throws, which the
+    # caller's try/catch turned into "no WinGet evidence" without any error.
+    $existing=Get-Variable -Scope Script -Name YumResearchWinGetInventory -ValueOnly -ErrorAction SilentlyContinue
+    if($null -ne $existing){return ,$existing}
+    $inv=New-Object System.Collections.Generic.List[object]
+    $script:YumResearchWinGetInventory=$inv
+    try {
+        $cmd=Get-Command winget.exe -ErrorAction SilentlyContinue
+        if($null -eq $cmd){return ,$inv}
+        # Capture raw lines; Out-String would re-wrap the wide table to the console width and break the columns.
+        $lines=@(& $cmd.Source list --accept-source-agreements --disable-interactivity 2>$null | ForEach-Object { ([string]$_ -split "`r")[-1] })
+        $h=-1;for($i=0;$i -lt $lines.Count;$i++){if($lines[$i] -match '^\s*Name\s+Id\s+Version'){$h=$i;break}}
+        if($h -lt 0){return ,$inv}
+        $header=$lines[$h] -replace '^.*?(Name\s)','$1'
+        $offset=$lines[$h].Length-$header.Length
+        $colId=$header.IndexOf('Id ');$colVer=$header.IndexOf('Version');$colSrc=$header.IndexOf('Source')
+        foreach($line in $lines[($h+2)..($lines.Count-1)]){
+            if($line.Length -lt $offset+$colVer -or $line -notmatch '\S'){continue}
+            $l=$line.Substring($offset)
+            # End position [int]::MaxValue = "to end of line" (a bare -1 argument is ambiguous in command mode).
+            $cut={param([int]$a,[int]$b) if($l.Length -le $a){''}elseif($l.Length -le $b){$l.Substring($a).Trim()}else{$l.Substring($a,[math]::Max(0,$b-$a)).Trim()}}
+            $n=(& $cut 0 $colId) -replace '…$',''
+            if([string]::IsNullOrWhiteSpace($n)){continue}
+            [void]$inv.Add([pscustomobject]@{Name=$n;Truncated=((& $cut 0 $colId) -match '…$');Id=(& $cut $colId $colVer);Version=(& $cut $colVer $(if($colSrc -gt 0){$colSrc}else{[int]::MaxValue}));SourceName=$(if($colSrc -gt 0){& $cut $colSrc ([int]::MaxValue)}else{''})})
+        }
+    } catch {}
+    return ,$inv
+}
+
 function Get-YumWinGetResearch {
     param([string]$Name,[string]$Publisher='')
     try {
-        $cmd=Get-Command winget.exe -ErrorAction SilentlyContinue
-        if($null -eq $cmd){return $null}
         $safeName=($Name -replace '[\r\n\t]',' ').Trim()
         if([string]::IsNullOrWhiteSpace($safeName)){return $null}
-        $args=@('list','--name',$safeName,'--exact','--details','--count','1','--accept-source-agreements','--disable-interactivity')
-        $output=& $cmd.Source @args 2>$null | Out-String
-        if([string]::IsNullOrWhiteSpace($output)){return $null}
-        $fields=@{}
-        foreach($line in @($output -split "`r?`n")){
-            if($line -match '^\s*([^:]{2,40}):\s*(.+?)\s*$'){
-                $k=$matches[1].Trim();$v=$matches[2].Trim()
-                if(-not $fields.ContainsKey($k)){$fields[$k]=$v}
-            }
+        $inv=Get-YumWinGetInventory
+        if($inv.Count -eq 0){return $null}
+        $best=$null;$bestScore=-1;$exact=$false
+        foreach($e in $inv.ToArray()){
+            $isExact=($e.Name -ieq $safeName) -or ($e.Truncated -and $safeName.StartsWith($e.Name,[StringComparison]::OrdinalIgnoreCase))
+            $s=if($isExact){100}else{Get-YumResearchTokenOverlap -Left $safeName -Right ($e.Name+' '+$e.Id)}
+            if($isExact){$best=$e;$bestScore=100;$exact=$true;break}  # an exact name always wins over a token overlap of 100
+            if($s -gt $bestScore){$best=$e;$bestScore=$s}
         }
-        $returnedName='';$id='';$version='';$publisherValue='';$source=''
-        foreach($k in @('Name','Id','Version','Publisher','Source')){if($fields.ContainsKey($k)){Set-Variable -Name ($k.ToLowerInvariant()) -Value ([string]$fields[$k]) -Scope Local}}
-        $matchText=($output+' '+$returnedName+' '+$id+' '+$publisherValue+' '+$source).Trim()
-        $nameScore=Get-YumResearchTokenOverlap -Left $safeName -Right $matchText
-        $publisherScore=if([string]::IsNullOrWhiteSpace($Publisher)){0}else{Get-YumResearchTokenOverlap -Left $Publisher -Right ($publisherValue+' '+$matchText)}
-        $match=[int][math]::Round(($nameScore*0.7)+($publisherScore*0.3),0)
-        if($returnedName -and $returnedName -ieq $safeName){$match=[math]::Min(100,$match+15)}
-        [pscustomobject]@{Source='WinGet Local Catalog';Text=$output.Trim();Name=$returnedName;Id=$id;Version=$version;Publisher=$publisherValue;SourceName=$source;MatchScore=$match;ExactName=($returnedName -ieq $safeName)}
+        if($null -eq $best -or $bestScore -lt 30){return $null}
+        $publisherScore=if([string]::IsNullOrWhiteSpace($Publisher)){0}else{Get-YumResearchTokenOverlap -Left $Publisher -Right ($best.Name+' '+$best.Id)}
+        $match=[int][math]::Round(($bestScore*0.7)+($publisherScore*0.3),0)
+        if($exact){$match=[math]::Min(100,$match+15)}
+        [pscustomobject]@{Source='WinGet Local Catalog';Text=('{0} | {1} | {2}' -f $best.Name,$best.Id,$best.Version);Name=$best.Name;Id=$best.Id;Version=$best.Version;Publisher='';SourceName=$best.SourceName;MatchScore=$match;ExactName=[bool]$exact}
     } catch { return $null }
 }
 
@@ -391,7 +432,8 @@ function Get-YumAppxResearch {
     param([string]$Name,[string]$Publisher='',[string]$Path='')
     if($null -eq $script:YumResearchAppxInventory){
         $script:YumResearchAppxInventory=New-Object System.Collections.Generic.List[object]
-        try{foreach($pkg in @(Get-AppxPackage -AllUsers -ErrorAction Stop)){[void]$script:YumResearchAppxInventory.Add([pscustomobject]@{Name=[string]$pkg.Name;PackageFullName=[string]$pkg.PackageFullName;Publisher=[string]$pkg.Publisher;Version=[string]$pkg.Version;InstallLocation=[string]$pkg.InstallLocation})}}catch{}
+        $pkgs=@();try{$pkgs=@(Get-AppxPackage -AllUsers -ErrorAction Stop)}catch{try{$pkgs=@(Get-AppxPackage -ErrorAction Stop)}catch{}}  # -AllUsers needs admin
+        foreach($pkg in $pkgs){[void]$script:YumResearchAppxInventory.Add([pscustomobject]@{Name=[string]$pkg.Name;PackageFullName=[string]$pkg.PackageFullName;Publisher=[string]$pkg.Publisher;Version=[string]$pkg.Version;InstallLocation=[string]$pkg.InstallLocation;SignatureKind=[string]$pkg.SignatureKind})}
     }
     $rows=New-Object System.Collections.Generic.List[object]
     $targetExe=Get-YumResearchExecutablePath -Path $Path;$targetDir='';if($targetExe){try{$targetDir=(Split-Path -Parent $targetExe).ToLowerInvariant()}catch{}}
@@ -399,8 +441,11 @@ function Get-YumAppxResearch {
     foreach($pkg in $script:YumResearchAppxInventory.ToArray()){
         $n=if($nameNorm){Get-YumResearchTokenOverlap -Left $nameNorm -Right ($pkg.Name+' '+$pkg.PackageFullName)}else{0};$p=if($Publisher){Get-YumResearchTokenOverlap -Left $Publisher -Right $pkg.Publisher}else{0}
         $pathScore=0;if($targetDir -and $pkg.InstallLocation -and $targetDir.StartsWith($pkg.InstallLocation.TrimEnd('\').ToLowerInvariant())){$pathScore=100}
-        $score=[int][math]::Min(100,$pathScore+($n*0.45)+($p*0.15))
-        if($score -ge 35){[void]$rows.Add([pscustomobject]@{Name=$pkg.Name;PackageFullName=$pkg.PackageFullName;Publisher=$pkg.Publisher;Version=$pkg.Version;InstallLocation=$pkg.InstallLocation;Score=$score;NameOverlap=$n;PublisherOverlap=$p;PathMatchScore=$pathScore;Source='AppX';ExactPathMatch=($pathScore -ge 100)})}
+        # 5.4: an exact package identity in Windows' own package store is definitive (Store packages have
+        # no .exe path, so the name/publisher blend alone capped them at ~60 and they stayed Unknown).
+        $exactPackage=($nameNorm -and ($pkg.Name -ieq $nameNorm -or $pkg.PackageFullName -ieq $nameNorm -or $pkg.PackageFullName -ieq ([string]$Path).Trim()))
+        $score=if($exactPackage){100}else{[int][math]::Min(100,$pathScore+($n*0.45)+($p*0.15))}
+        if($score -ge 35){[void]$rows.Add([pscustomobject]@{Name=$pkg.Name;PackageFullName=$pkg.PackageFullName;Publisher=$pkg.Publisher;Version=$pkg.Version;InstallLocation=$pkg.InstallLocation;SignatureKind=$pkg.SignatureKind;ExactPackage=[bool]$exactPackage;Score=$score;NameOverlap=$n;PublisherOverlap=$p;PathMatchScore=$pathScore;Source='AppX';ExactPathMatch=($pathScore -ge 100)})}
     }
     @($rows|Sort-Object Score,PathMatchScore,NameOverlap -Descending|Select-Object -First 8)
 }
@@ -464,15 +509,17 @@ function Test-YumResearchIdentityAnchor {
 }
 
 function Get-YumResearchSourceTrust {
-    param([string]$Url)
+    # 5.4: was "$host = ...": $host is read-only in PowerShell, so this function always hit its catch and
+    # returned 0. No online source was ever trusted, so online verification never succeeded.
+    param([string]$Url,[string]$Publisher='')
     try {
         $u=[Uri]$Url
         if($u.Scheme -notin @('http','https')){return 0}
-        $host=$u.Host.ToLowerInvariant().TrimEnd('.')
-        if([string]::IsNullOrWhiteSpace($host)){return 0}
+        $urlHost=$u.Host.ToLowerInvariant().TrimEnd('.')
+        if([string]::IsNullOrWhiteSpace($urlHost)){return 0}
         # Search engines are discovery only; never count their result pages as authoritative evidence.
-        if($host -eq 'bing.com' -or $host.EndsWith('.bing.com') -or $host -eq 'search.yahoo.com' -or $host.EndsWith('.search.yahoo.com') -or $host -eq 'duckduckgo.com' -or $host.EndsWith('.duckduckgo.com') -or $host -eq 'yandex.com' -or $host.EndsWith('.yandex.com') -or $host -eq 'baidu.com' -or $host.EndsWith('.baidu.com')){return 0}
-        if($host -in @('google.com','www.google.com') -and $u.AbsolutePath -match '^/(?:$|/$|search|webhp|url)'){return 0}
+        if($urlHost -eq 'bing.com' -or $urlHost.EndsWith('.bing.com') -or $urlHost -eq 'search.yahoo.com' -or $urlHost.EndsWith('.search.yahoo.com') -or $urlHost -eq 'duckduckgo.com' -or $urlHost.EndsWith('.duckduckgo.com') -or $urlHost -eq 'yandex.com' -or $urlHost.EndsWith('.yandex.com') -or $urlHost -eq 'baidu.com' -or $urlHost.EndsWith('.baidu.com')){return 0}
+        if($urlHost -in @('google.com','www.google.com') -and $u.AbsolutePath -match '^/(?:$|/$|search|webhp|url)'){return 0}
         $authoritative=@(
             'microsoft.com','learn.microsoft.com','support.microsoft.com',
             'github.com','githubusercontent.com','nvidia.com','amd.com','intel.com',
@@ -483,12 +530,19 @@ function Get-YumResearchSourceTrust {
             'cloudflare.com','vmware.com','paloaltonetworks.com','crowdstrike.com',
             'sentinelone.com','eset.com','bitdefender.com','malwarebytes.com','sophos.com'
         )
-        foreach($d in $authoritative){ if($host -eq $d -or $host.EndsWith('.'+$d)){return 96} }
-        if($host -match '(^|\.)gov(\.[a-z]{2})?$'){return 92}
-        if($host -match '(^|\.)edu(\.[a-z]{2})?$|(^|\.)ac\.[a-z]{2}$'){return 82}
-        if($host -match '(^|\.)org$'){return 55}
-        if($host -match '(^|\.)com$'){return 42}
-        if($host -match '(^|\.)net$'){return 30}
+        foreach($d in $authoritative){ if($urlHost -eq $d -or $urlHost.EndsWith('.'+$d)){return 96} }
+        # 5.4: the publisher's own site (e.g. logitechg.com for 'Logitech') is authoritative for its products.
+        if(-not [string]::IsNullOrWhiteSpace($Publisher)){
+            $site=($urlHost -replace '^(www|m|en)\.','') -split '\.' | Select-Object -First 1
+            foreach($tok in @(([string]$Publisher).ToLowerInvariant() -split '[^a-z0-9]+' | Where-Object { $_.Length -ge 4 -and $_ -notin @('corporation','company','incorporated','limited','software','technologies','technology','systems','group','games','studio','studios') })){
+                if($site.StartsWith($tok) -or ($tok.Length -ge 5 -and $site.Contains($tok))){return 88}
+            }
+        }
+        if($urlHost -match '(^|\.)gov(\.[a-z]{2})?$'){return 92}
+        if($urlHost -match '(^|\.)edu(\.[a-z]{2})?$|(^|\.)ac\.[a-z]{2}$'){return 82}
+        if($urlHost -match '(^|\.)org$'){return 55}
+        if($urlHost -match '(^|\.)com$'){return 42}
+        if($urlHost -match '(^|\.)net$'){return 30}
         return 15
     } catch { return 0 }
 }
@@ -528,39 +582,59 @@ function Get-YumOnlineResearch {
             @{Kind='Reddit';Query=(('site:reddit.com '+($identity -join ' ')+' Windows'))}
         )
         $results=New-Object System.Collections.Generic.List[object]
+        # 5.4: start all three searches at once and wait for them together (was strictly sequential,
+        # up to 3 x timeout per item).
+        $pending=New-Object System.Collections.Generic.List[object]
         foreach($qdef in $queries){
             try{
                 $q=[Uri]::EscapeDataString([string]$qdef.Query)
-                $uri="https://www.bing.com/search?q=$q&format=rss"
                 $wc=New-Object Net.WebClient
                 $wc.Headers['User-Agent']="YUMRAM/$version"
                 $wc.Encoding=[Text.Encoding]::UTF8
-                $task=$wc.DownloadStringTaskAsync($uri)
-                if(-not $task.Wait([math]::Max(1000,$timeout*1000))){$wc.Dispose();continue}
-                $xml=[xml]$task.Result;$wc.Dispose()
+                [void]$pending.Add([pscustomobject]@{Def=$qdef;Client=$wc;Task=$wc.DownloadStringTaskAsync("https://www.bing.com/search?q=$q&format=rss")})
+            }catch{}
+        }
+        $deadline=[DateTime]::UtcNow.AddMilliseconds([math]::Max(1000,$timeout*1000))
+        foreach($pq in $pending.ToArray()){
+            $qdef=$pq.Def
+            try{
+                $left=[int][math]::Max(0,($deadline-[DateTime]::UtcNow).TotalMilliseconds)
+                if(-not $pq.Task.Wait($left)){continue}
+                $xml=[xml]$pq.Task.Result
                 foreach($item in @($xml.rss.channel.item|Select-Object -First 5)){
                     $title=[string]$item.title;$description=[string]$item.description;$link=[string]$item.link;$text=($title+' '+$description).Trim()
                     $n=if($Name){Get-YumResearchTokenOverlap -Left $Name -Right $text}else{0}
                     $p=if($Publisher){Get-YumResearchTokenOverlap -Left $Publisher -Right $text}else{0}
                     $pr=if($Product){Get-YumResearchTokenOverlap -Left $Product -Right $text}else{0}
                     $match=[int][math]::Round(($n*0.45)+($p*0.30)+($pr*0.25),0)
-                    $trust=Get-YumResearchSourceTrust -Url $link
-                    $host='';try{$host=([Uri]$link).Host.ToLowerInvariant()}catch{}
-                    $lane=[string]$qdef.Kind
-                    if($host -match '(^|\.)github\.com$'){$lane='GitHub'}
-                    elseif($host -match '(^|\.)reddit\.com$'){$lane='Reddit'}
+                    $trust=Get-YumResearchSourceTrust -Url $link -Publisher $Publisher
+                    # 5.4: was '$host', which is PowerShell's read-only automatic variable, so the
+                    # assignment silently failed and GitHub/Reddit results were never recognized.
+                    $linkHost='';try{$linkHost=([Uri]$link).Host.ToLowerInvariant()}catch{}
+                    # Label by the real site: Bing RSS ignores 'site:' so every query returns similar pages.
+                    $lane=if($linkHost -match '(^|\.)github\.com$'){'GitHub'}elseif($linkHost -match '(^|\.)reddit\.com$'){'Reddit'}else{'Authority'}
                     [void]$results.Add([pscustomobject]@{Lane=$lane;Title=$title;Description=$description;Link=$link;MatchScore=$match;SourceTrust=$trust;Verified=$false;VerifiedScore=0})
                 }
             }catch{}
         }
+        foreach($pq in $pending.ToArray()){try{$pq.Client.Dispose()}catch{}}
         $dedup=@($results|Where-Object{$_.Link}|Group-Object Link|ForEach-Object{$_.Group|Sort-Object MatchScore -Descending|Select-Object -First 1})
         $verify=@($dedup|Where-Object{$_.Lane -ne 'Reddit' -and $_.SourceTrust -ge 80}|Sort-Object MatchScore -Descending|Select-Object -First 4)
         $verified=New-Object System.Collections.Generic.List[string];$community=New-Object System.Collections.Generic.List[object];$verifiedCount=0
+        # 5.4: fetch the candidate pages in parallel (was one Invoke-WebRequest after another).
+        $fetches=New-Object System.Collections.Generic.List[object]
         foreach($result in $verify){
+            try{$wc=New-Object Net.WebClient;$wc.Headers['User-Agent']="YUMRAM/$version";$wc.Encoding=[Text.Encoding]::UTF8;[void]$fetches.Add([pscustomobject]@{Result=$result;Client=$wc;Task=$wc.DownloadStringTaskAsync([string]$result.Link)})}catch{}
+        }
+        $deadline=[DateTime]::UtcNow.AddMilliseconds([math]::Max(2000,$timeout*1000))
+        foreach($f in $fetches.ToArray()){
+            $result=$f.Result
             try{
-                $web=Invoke-WebRequest -Uri ([string]$result.Link) -UseBasicParsing -TimeoutSec ([math]::Max(2,$timeout)) -MaximumRedirection 5 -ErrorAction Stop
-                $m=[regex]::Match([string]$web.Content,'(?is)<title[^>]*>(.*?)</title>');$pageTitle='';if($m.Success){$pageTitle=[System.Net.WebUtility]::HtmlDecode(($m.Groups[1].Value -replace '<[^>]+>',' '))}
-                $body=(($pageTitle+' '+[string]$web.Content)-replace '\s+',' ')
+                $left=[int][math]::Max(0,($deadline-[DateTime]::UtcNow).TotalMilliseconds)
+                if(-not $f.Task.Wait($left)){continue}
+                $content=[string]$f.Task.Result
+                $m=[regex]::Match($content,'(?is)<title[^>]*>(.*?)</title>');$pageTitle='';if($m.Success){$pageTitle=[System.Net.WebUtility]::HtmlDecode(($m.Groups[1].Value -replace '<[^>]+>',' '))}
+                $body=(($pageTitle+' '+$content)-replace '\s+',' ')
                 $n=if($Name){Get-YumResearchTokenOverlap -Left $Name -Right $body}else{0}
                 $p=if($Publisher){Get-YumResearchTokenOverlap -Left $Publisher -Right $body}else{0}
                 $pr=if($Product){Get-YumResearchTokenOverlap -Left $Product -Right $body}else{0}
@@ -570,6 +644,7 @@ function Get-YumOnlineResearch {
                 if($result.SourceTrust -ge 80 -and $identityMatch -and $vScore -ge 55){$result.Verified=$true;$result.VerifiedScore=$vScore;$result.MatchScore=[math]::Max([int]$result.MatchScore,$vScore);$verifiedCount++;[void]$verified.Add([string]$result.Link)}
             }catch{}
         }
+        foreach($f in $fetches.ToArray()){try{$f.Client.Dispose()}catch{}}
         foreach($r in @($dedup|Where-Object{$_.Lane -eq 'Reddit'}|Sort-Object MatchScore -Descending|Select-Object -First 3)){[void]$community.Add([pscustomobject]@{Title=$r.Title;Link=$r.Link;MatchScore=[int]$r.MatchScore;UseAsIdentityEvidence=$false})}
         $best=@($dedup|Sort-Object @{Expression={if($_.Verified){1}else{0}};Descending=$true},MatchScore -Descending)
         $officialBest=@($best|Where-Object{$_.Lane -ne 'Reddit'}|Select-Object -First 1)
@@ -592,12 +667,12 @@ function Get-YumServiceResearch {
     param([string]$Name,[string]$Path='')
     if($null -eq $script:YumResearchServiceInventory){
         $script:YumResearchServiceInventory=New-Object System.Collections.Generic.List[object]
-        try{foreach($svc in @(Get-CimInstance Win32_Service -ErrorAction Stop)){[void]$script:YumResearchServiceInventory.Add([pscustomobject]@{Name=[string]$svc.Name;DisplayName=[string]$svc.DisplayName;PathName=[string]$svc.PathName;StartMode=[string]$svc.StartMode;State=[string]$svc.State})}}catch{}
+        try{foreach($svc in @(Get-CimInstance Win32_Service -ErrorAction Stop)){[void]$script:YumResearchServiceInventory.Add([pscustomobject]@{Name=[string]$svc.Name;DisplayName=[string]$svc.DisplayName;PathName=[string]$svc.PathName;StartMode=[string]$svc.StartMode;State=[string]$svc.State;ExePath=(Get-YumResearchExecutablePath -Path ([string]$svc.PathName))})}}catch{}  # 5.4: resolve each service's executable once per run
     }
     $rows=New-Object System.Collections.Generic.List[object]
     $targetExe=Get-YumResearchExecutablePath -Path $Path;$targetFull=if($targetExe){$targetExe.ToLowerInvariant()}else{''}
     foreach($svc in $script:YumResearchServiceInventory.ToArray()){
-        $exe=Get-YumResearchExecutablePath -Path $svc.PathName;$exeNorm=if($exe){$exe.ToLowerInvariant()}else{''}
+        $exe=[string]$svc.ExePath;$exeNorm=if($exe){$exe.ToLowerInvariant()}else{''}
         $nameScore=if($Name){Get-YumResearchTokenOverlap -Left $Name -Right ($svc.Name+' '+$svc.DisplayName)}else{0};$pathScore=0
         if($targetFull -and $exeNorm -and $targetFull -eq $exeNorm){$pathScore=100}elseif($targetFull -and $exeNorm -and (Split-Path -Parent $targetFull) -eq (Split-Path -Parent $exeNorm)){$pathScore=85}elseif($Path -and $svc.PathName -and $svc.PathName -like ('*'+$Name+'*')){$pathScore=45}
         $score=[int][math]::Max($nameScore,$pathScore)
@@ -696,7 +771,11 @@ function Get-YumResearchPlacement {
     # Windows system services/components are identifiable enough to protect even when
     # the service is hosted by svchost and therefore has no unique executable signature.
     $isWindowsSystemService=($Category -match '(?i)service') -and ($Publisher -match '(?i)^Microsoft Corporation$|^Microsoft Windows$') -and (($Path -match '(?i)\\Windows\\System32\\|\\svchost\.exe') -or (@($ServiceEvidence).Count -gt 0))
-    $isWindowsAppxComponent=($Category -match '(?i)app|installed') -and ($Publisher -match '(?i)^(8wekyb3d8bbwe|cw5n1h2txyewy)$') -and ($Name -match '(?i)^Microsoft[.]')
+    # 5.4: the scanner now records the real publisher name; keep accepting the old publisher-ID form for saved records.
+    $isWindowsAppxComponent=($Category -match '(?i)app|installed|protected') -and ($Publisher -match '(?i)^(8wekyb3d8bbwe|cw5n1h2txyewy|Microsoft Corporation|Microsoft Windows)$') -and ($Name -match '(?i)^Microsoft|^[0-9a-f]{8}-[0-9a-f]{4}-')
+    foreach($appxV in @($AppxEvidence|Where-Object{$null -ne $_.PSObject.Properties['ExactPackage'] -and [bool]$_.ExactPackage -and [string]$_.SignatureKind -in @('Store','System')})){
+        $scores.Application+=25;[void]$evidence.Add(('Package signature verified by Windows ({0})' -f $appxV.SignatureKind));break
+    }
     if($isWindowsSystemService){$scores.System+=45;[void]$evidence.Add('Windows system service identity')}
     if($isWindowsAppxComponent){$scores.System+=45;[void]$evidence.Add('Windows system component identity')}
 
@@ -715,6 +794,10 @@ function Get-YumResearchPlacement {
     $signerMatches=($signatureStrong -and -not [string]::IsNullOrWhiteSpace($Publisher) -and (Get-YumResearchTokenOverlap -Left ([string]$SignatureEvidence.Signer) -Right $Publisher) -ge 50)
     $wingetStrong=($null -ne $WingetEvidence -and [bool]$WingetEvidence.ExactName -and [int]$WingetEvidence.MatchScore -ge 75)
     $appxStrong=(@($AppxEvidence|Where-Object{[int]$_.Score -ge 75}).Count -gt 0)
+    # 5.4: Windows verifies Store/System package signatures itself; an exact package match with that
+    # signature is equivalent to a valid Authenticode signer match for an .exe.
+    $appxVerified=(@($AppxEvidence|Where-Object{$null -ne $_.PSObject.Properties['ExactPackage'] -and [bool]$_.ExactPackage -and [string]$_.SignatureKind -in @('Store','System')}).Count -gt 0)
+    if($appxVerified){$signerMatches=$true}
     $onlineStrong=($null -ne $OnlineEvidence -and [bool]$OnlineEvidence.Success -and [int]$OnlineEvidence.BestScore -ge 70 -and [int]$OnlineEvidence.VerifiedCount -gt 0)
     $fileStrong=($null -ne $FileEvidence -and ((-not [string]::IsNullOrWhiteSpace($Publisher) -and -not [string]::IsNullOrWhiteSpace([string]$FileEvidence.Company) -and (Get-YumResearchTokenOverlap -Left $Publisher -Right ([string]$FileEvidence.Company)) -ge 60) -or (-not [string]::IsNullOrWhiteSpace($Name) -and -not [string]::IsNullOrWhiteSpace([string]$FileEvidence.Product) -and (Get-YumResearchTokenOverlap -Left $Name -Right ([string]$FileEvidence.Product)) -ge 60)))
     $identitySignals=@( @($registryStrong,$signerMatches,$wingetStrong,$appxStrong,$onlineStrong,$fileStrong,(@($ServiceEvidence|Where-Object{[int]$_.Score -ge 70}).Count -gt 0)) | Where-Object { $_ } )
@@ -862,6 +945,7 @@ function Invoke-YumResearch {
     $script:YumResearchRegistryInventory=$null
     $script:YumResearchAppxInventory=$null
     $script:YumResearchServiceInventory=$null
+    $script:YumResearchWinGetInventory=$null
     # Research is intentionally single-item sequential. This prevents concurrent evidence lookups, UI contention, and network bursts.
     $researchConcurrency=1 # hard safety contract: one research item at a time
     # Normalize null/empty input defensively. Empty research queues are valid no-ops.

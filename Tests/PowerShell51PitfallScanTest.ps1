@@ -59,6 +59,15 @@ foreach($f in $files){
         Add-Finding 'ArrayArithmetic' $name $n.Extent "'a,b/c' divides the array; parenthesize the element"
     }
 
+    # $host/$input/$args/... are automatic variables; assigning them throws (or is silently ignored inside
+    # try/catch). '$host = ...' made every online source score 0 trust for the life of the research engine.
+    foreach($n in $ast.FindAll({param($x) $x -is [System.Management.Automation.Language.AssignmentStatementAst] -and $x.Left -is [System.Management.Automation.Language.VariableExpressionAst]},$true)){
+        $vn=$n.Left.VariablePath.UserPath
+        if($vn -in @('host','input','args','this','PSItem','_','true','false','PID','PSHOME','HOME','ShellId','ExecutionContext','PSVersionTable','Error')){
+            Add-Finding 'AutomaticVariableAssignment' $name $n.Extent "`$$vn is an automatic variable; use another name"
+        }
+    }
+
     foreach($p in $ast.FindAll({param($x) $x -is [System.Management.Automation.Language.ParameterAst]},$true)){
         $mandatory=@($p.Attributes | Where-Object { $_.TypeName.Name -eq 'Parameter' -and $_.Extent.Text -match 'Mandatory' }).Count -gt 0
         $allowNull=@($p.Attributes | Where-Object { $_.TypeName.Name -in @('AllowNull','AllowEmptyString','AllowEmptyCollection') }).Count -gt 0

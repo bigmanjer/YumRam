@@ -13,3 +13,4 @@ research-live-results.json
 research-live-results.tmp
 *.tmp
 Tests/tmp-*
+manual-organizations.json

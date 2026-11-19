@@ -143,7 +143,7 @@ function Show-YumListManager {
         $approve = $window.FindName("ApproveSelected")
         $refresh = $window.FindName("RefreshServices")
         $status = $window.FindName("Status")
-        $input = $window.FindName("Input")
+        $inputBox = $window.FindName("Input")
         $add = $window.FindName("Add")
         $remove = $window.FindName("Remove")
         $count = $window.FindName("Count")
@@ -151,7 +151,7 @@ function Show-YumListManager {
         $state = @{
             Window = $window
             Items = $items
-            Input = $input
+            Input = $inputBox
             Count = $count
             ListName = $List
         }
@@ -160,7 +160,7 @@ function Show-YumListManager {
         $remove.Tag = $state
         if($null -ne $approve){$approve.Tag=$state}
         if($null -ne $refresh){$refresh.Tag=$state}
-        $input.Tag = $state
+        $inputBox.Tag = $state
 
         $add.Add_Click({
             param($sender, $eventArgs)
@@ -172,7 +172,7 @@ function Show-YumListManager {
             Invoke-YumDialogRemoveSelectedItems -State $sender.Tag
         })
 
-        $input.Add_KeyDown({
+        $inputBox.Add_KeyDown({
             param($sender, $eventArgs)
             Invoke-YumDialogEnterAdd -Sender $sender -EventArgs $eventArgs
         })
@@ -513,7 +513,7 @@ function Show-YumBloatManager {
         $items=$window.FindName('Items')
         $discovered=$window.FindName('Discovered')
         $recommendations=$window.FindName('Recommendations')
-        $input=$window.FindName('Input')
+        $inputBox=$window.FindName('Input')
         $add=$window.FindName('Add')
         $addDiscovered=$window.FindName('AddDiscovered')
         $addRecommended=$window.FindName('AddRecommended')
@@ -522,8 +522,8 @@ function Show-YumBloatManager {
         $enable=$window.FindName('Enable')
         $scan=$window.FindName('Scan');$scanStatus=$window.FindName('ScanStatus');$doneTop=$window.FindName('DoneTop')
 
-        $state=@{Window=$window;Items=$items;Discovered=$discovered;Recommendations=$recommendations;Input=$input;Status=$scanStatus;ListName='OptionalBackgroundProcesses';Busy=$false;ListView=$discovered}
-        foreach($control in @($add,$addDiscovered,$addRecommended,$remove,$input,$scan,$close,$doneTop)){if($null -ne $control){$control.Tag=$state}}
+        $state=@{Window=$window;Items=$items;Discovered=$discovered;Recommendations=$recommendations;Input=$inputBox;Status=$scanStatus;ListName='OptionalBackgroundProcesses';Busy=$false;ListView=$discovered}
+        foreach($control in @($add,$addDiscovered,$addRecommended,$remove,$inputBox,$scan,$close,$doneTop)){if($null -ne $control){$control.Tag=$state}}
         $enable.IsChecked=[bool]$script:Yum.Config.EnableOptionalBackgroundCleanup
         $enable.Tag=$state
 
@@ -554,7 +554,7 @@ function Show-YumBloatManager {
         })
 
         $remove.Add_Click({param($sender,$eventArgs) Invoke-YumDialogRemoveSelectedItems -State $sender.Tag})
-        $input.Add_KeyDown({param($sender,$eventArgs) Invoke-YumDialogEnterAdd -Sender $sender -EventArgs $eventArgs})
+        $inputBox.Add_KeyDown({param($sender,$eventArgs) Invoke-YumDialogEnterAdd -Sender $sender -EventArgs $eventArgs})
         if($null -ne $close){$close.Add_Click({param($sender,$eventArgs) $sender.Tag.Window.Close()})}
 
         $scan.Add_Click({ param($sender,$eventArgs) try { Start-YumOptionalBackgroundScanAsync -State $sender.Tag } catch { Write-YumLogException -Context 'Optional background app scan failed' -Exception $_.Exception } })
@@ -660,7 +660,7 @@ function Show-YumServiceManager {
         $approve = $window.FindName("ApproveSelected")
         $refresh = $window.FindName("RefreshServices")
         $status = $window.FindName("Status")
-        $input = $window.FindName("Input")
+        $inputBox = $window.FindName("Input")
         $add = $window.FindName("Add")
         $remove = $window.FindName("Remove")
         $close = $window.FindName("Close")
@@ -670,7 +670,7 @@ function Show-YumServiceManager {
             Window = $window
             Items = $items
             Available = $available
-            Input = $input
+            Input = $inputBox
             ApproveSelected = $approve
             RefreshServices = $refresh
             Status = $status
@@ -681,7 +681,7 @@ function Show-YumServiceManager {
         $remove.Tag = $state
         if($null -ne $approve){$approve.Tag=$state}
         if($null -ne $refresh){$refresh.Tag=$state}
-        $input.Tag = $state
+        $inputBox.Tag = $state
         $close.Tag = @{ Window = $window }
         $enable.IsChecked = [bool]$script:Yum.Config.EnableOptionalServiceCleanup
 
@@ -700,7 +700,7 @@ function Show-YumServiceManager {
             Invoke-YumServiceRemove -State $sender.Tag
         })
 
-        $input.Add_KeyDown({
+        $inputBox.Add_KeyDown({
             param($sender, $eventArgs)
             if ($eventArgs.Key -eq [System.Windows.Input.Key]::Enter) {
                 Invoke-YumServiceAdd -State $sender.Tag
