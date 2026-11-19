@@ -255,7 +255,7 @@ function Update-YumCpuBalanceUi {
         $ui=$script:Yum.Ui;if($null -eq $ui -or $null -eq $ui['CpuBalanceText']){return}
         $s=Get-YumCpuBalanceSummary
         $ui.CpuBalanceText.Text=[string]$s.Text
-        $ui.CpuBalanceCount.Text=if($s.Count){'Stepped in '+[string]$s.Count}else{''}
+        $ui.CpuBalanceCount.Text=if(-not $s.Count){''}elseif([string]$s.Count -match '^0 '){'Has not needed to step in today.'}else{'Stepped in '+[string]$s.Count+'.'}
         $ui.CpuBalancePill.Visibility=if($s.Active){'Visible'}else{'Collapsed'}
     }catch{}
 }
