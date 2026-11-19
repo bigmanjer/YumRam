@@ -1,6 +1,6 @@
 @echo off
 setlocal EnableExtensions DisableDelayedExpansion
-title YUMRAM v5.3.2
+title YUMRAM v5.3.3
 
 set "ROOT=%~dp0"
 set "ROOT=%ROOT:~0,-1%"
@@ -10,14 +10,14 @@ set "LOG=%ROOT%\YUMRAM.log"
 set "STARTLOG=%TEMP%\YUMRAM-startup.log"
 
 >"%STARTLOG%" echo ================================================================
->>"%STARTLOG%" echo YUMRAM v5.3.2 STARTUP
+>>"%STARTLOG%" echo YUMRAM v5.3.3 STARTUP
 >>"%STARTLOG%" echo Time: %DATE% %TIME%
 >>"%STARTLOG%" echo Root: %ROOT%
 >>"%STARTLOG%" echo Launcher: %~f0
 >>"%STARTLOG%" echo ================================================================
 
 echo.
-echo YUMRAM v5.3.2
+echo YUMRAM v5.3.3
 echo Launcher/startup log: %STARTLOG%
 echo.
 

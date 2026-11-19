@@ -1,55 +1,69 @@
-﻿# YUMRAM 4.5.9 Architecture
+# YUMRAM architecture (5.3.x)
+
+## Threads
 
 ```text
-Windows APIs / Counters
-        |
-        v
-Telemetry timer (background data collection)
-        |
-        v
-Immutable-style system snapshot
-        |
-   +----+---------+
-   |              |
-   v              v
-WPF Dispatcher   Background controller
-   |              |
-   |              +--> pressure decision
-   |              +--> candidate scoring
-   |              +--> trim / optional cleanup
-   |              +--> before/after measurement
-   v
-Specialized purple dashboard
+                 shared state: $script:Yum (ordered dictionary, guarded by Monitor locks)
+                                       |
+ +------------------+   +--------------+--------------+   +----------------------------+
+ | UI thread (WPF)  |   | Telemetry Core runspace     |   | Controller worker runspace |
+ | DispatcherTimer  |   | memory + CPU every 0.5 s    |   | wakes every 1 s or on      |
+ | 0.25 s: read     |<--| Telemetry Aux runspace      |   | request (AutoResetEvent):  |
+ | snapshot, draw   |   | GPU (5 s), game/foreground  |   | - manual reclaim requests  |
+ | graph, show      |   | (2 s); publishes only on    |   | - queued cleanup requests  |
+ | results          |   | change                      |   | - automatic maintenance    |
+ +------------------+   +-----------------------------+   | - game state, estimates    |
+        |  button clicks only queue work                  +----------------------------+
+        +------------------------------------------------>  (Request-YumMemoryReclaim,
+                                                              Request-YumCleanup)
+ Research worker runspace (Intelligence): researches unresolved items, writes a live checkpoint.
 ```
 
-### UI rules
+Rules:
 
-- The UI thread owns graph history and WPF controls.
-- Background telemetry never mutates WPF objects.
-- Cleanup requests are queued so button clicks do not perform the full cleanup synchronously.
-- Graph polylines are reusable objects.
+- Only the UI thread touches WPF objects. Workers publish results (`CleanupResult`, `LastReclaim`,
+  `ReachableEstimate`) and bump a version counter; the UI timer renders when a version changes.
+- Never use `System.Timers.Timer` with a scriptblock handler: on Windows PowerShell 5.1 it fires
+  on a thread with no runspace and never runs. Use a runspace worker or a `DispatcherTimer`.
+- Anything that can take more than ~50 ms (process enumeration, signature checks, trims, settle
+  delays) runs on a worker, never on the UI thread.
 
-### Cleanup rules
+## Memory engine
 
-- Never intentionally terminate a process.
-- Foreground process, active game, RealTime process, configured protected process, and YUMRAM itself are excluded.
-- `K32EmptyWorkingSet` is used for working-set trimming.
-- Optional background applications are cooperative only.
-- Optional services require explicit configuration and must pass dependency/start-mode/core-service checks.
+| Piece | File | Purpose |
+|---|---|---|
+| Native calls | `Core/Native.ps1` | `K32EmptyWorkingSet`, `GlobalMemoryStatusEx`, `GetPerformanceInfo`, `NtSetSystemInformation` memory lists, privilege adjust |
+| Safety policy | `Core/Safety.ps1` | Protected-process test and per-mode candidate filter/scoring |
+| Automatic cleanup | `Core/Cleanup.ps1` | Pressure decision, trim plan, adaptive passes, fallback, back-off |
+| Manual reclaim | `Core/MemoryReclaim.ps1` | Free RAM / Deep reclaim, settle + verification, learning |
+| Controller | `Core/Controller.ps1` | Background worker loop and request queue |
 
-## 4.5.9 UI/Controller improvements
-The UI now maintains independent RAM, CPU, and GPU 3D graph series. Target rendering is independent of snapshot-version changes. Preview cleanup bypasses the request queue and calls the non-mutating core directly. Settings/About/Top Processes use dedicated WPF dialogs.
+### Measurement model
 
+Trimming moves pages out of a working set. Clean/shared pages become Standby (counted as Available)
+immediately; private pages are compressed or written out, so only part of a trim becomes Available,
+and only after ~1-2 s. Therefore:
 
-## 4.5.9 regression-control architecture
+1. Every pass waits `CleanupSettleMilliseconds` / `ReclaimSettleMilliseconds` (1.5 s) before measuring.
+2. `Update-YumGlobalRetention` keeps an EWMA of (Available gain / working set trimmed) for passes of
+   at least 200 MB, persisted in `reclaim-learning.json` (bounded 15-90%, default 40%).
+3. `Get-YumTrimPlan` divides the Available gap by that retention to size a pass.
+4. `Get-YumReachableEstimate` = Available + (eligible working sets x retention) drives the
+   `reachable ≈ X GB` display and the **[OUT OF REACH]** state.
+5. Per-process learning records how much of each trim stayed trimmed after settling, so processes
+   that page straight back in are deprioritized; each PID has a 60 s cooldown.
 
-Telemetry is isolated from cleanup controller work. The telemetry timer samples memory/CPU and schedules slower GPU/game samples. The controller timer evaluates pressure and requests cleanup separately. The WPF UI consumes immutable-ish snapshot replacements and owns graph point history/rendering.
+## Intelligence and research
 
-The scanner is on-demand so a full process/service/package inventory cannot stall live dashboard telemetry.
+`Core/Intelligence.ps1` builds an identity for each executable (version info + Authenticode,
+cached per path) and classifies it (Protected / Safe to Manage / Candidate / Review / Unknown).
+`Core/Research.ps1` resolves Review/Unknown items from local evidence (installed software, services,
+Store packages, parent folder) and, if enabled, online search. Results persist in
+`intelligence-db.json` and `research-*.json`.
 
+## Configuration
 
-## 4.6.1 Intelligence / Target Architecture
-
-The system scan is the source of truth for automatic organization. Scanned items are classified into protected, active game/game launcher, background app, service, safe candidate, review, or unknown categories. A local intelligence database (`intelligence-db.json`) persists classification evidence so repeated scans can reuse known identities and only rediscover changed or new items. Unknown items are never managed automatically.
-
-Safe, Balanced, and Aggressive are target-driven memory modes. Each mode changes candidate breadth and the number of safe follow-up passes, while the configured Available RAM Target is the hard stopping goal. The controller continues until the target is reached or safe reclaimable candidates no longer produce measurable available-memory gain.
+`Config/default-config.json` holds shipped defaults. On launch, `Initialize-YumConfig` merges the
+user's `config.json` over it (`Merge-YumHashtable`, which takes `IDictionary` so the ordered config is
+modified in place), migrates values still at old defaults, and saves. `VERSION` is the single
+source of the release number.

@@ -84,6 +84,12 @@
             <CheckBox x:Name="EnableSystemScanner" Grid.Row="1" Grid.ColumnSpan="2" Content="Enable system inventory scanning" VerticalAlignment="Center" Margin="0,8,0,0"/>
           </Grid>
         </GroupBox>
+        <GroupBox Header="Privacy" Foreground="#CFA8FF" Margin="0,0,0,14">
+          <StackPanel Margin="10">
+            <CheckBox x:Name="EnableOnlineResearch" Content="Online research for unidentified programs (sends program, publisher and product names to Bing search)"/>
+            <TextBlock Text="When off, Intelligence still identifies programs locally (signatures, installed-software records, services, Store packages)." TextWrapping="Wrap" FontSize="11" Foreground="#BFAFC9" Margin="22,4,0,0"/>
+          </StackPanel>
+        </GroupBox>
       </StackPanel>
     </ScrollViewer>
     <Grid Grid.Row="2" MinHeight="92" Margin="0,10,0,0">

@@ -213,8 +213,8 @@ function Initialize-YumConfig {
     $runtimeVersion=''
     if(Test-Path -LiteralPath $versionPath){try{$candidateVersion=(Get-Content -LiteralPath $versionPath -Raw -ErrorAction Stop).Trim();if($candidateVersion -match '^\d+\.\d+\.\d+$'){$runtimeVersion=$candidateVersion}}catch{}}
     $script:Yum.Config.Version=$runtimeVersion
-    # Monitoring remains user-started by design; keep background telemetry off at launch.
-    $script:Yum.Config.StartMonitoringAutomatically=$false
+    # 5.3.3: honour the Settings checkbox. It defaults to off (default-config.json), but 5.2.x forced it
+    # off here on every launch, so the "Start monitoring automatically" option never worked.
     $script:Yum.Config.CleanupTargetAvailableGB=[double]$script:Yum.Config.MinimumAvailableGB
     $dbName = if($script:Yum.Config.Contains('IntelligenceDatabaseFileName')){[string]$script:Yum.Config.IntelligenceDatabaseFileName}else{'intelligence-db.json'}
     if ([string]::IsNullOrWhiteSpace($dbName)) { $dbName = 'intelligence-db.json' }

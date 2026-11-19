@@ -15,6 +15,8 @@ try {
     $user.Logging=$false
     $user.SafeProcessesPerPass=4      # custom (not the old default 2) -> must survive migration
     $user.BalancedProcessesPerPass=3  # old default -> must be migrated to 5
+    $user.StartMonitoringAutomatically=$true   # 5.2.x forced this off on every launch
+    $user.EnableOnlineResearch=$false          # privacy switch in Settings must stick
     $user | ConvertTo-Json -Depth 8 | Set-Content (Join-Path $tmp 'config.json') -Encoding UTF8
 
     . (Join-Path $root 'App\Bootstrap.ps1')
@@ -25,6 +27,8 @@ try {
     if([string]$c.Mode -ne 'Safe'){throw "Saved mode was not loaded: got $($c.Mode)"}
     if([int]$c.SafeProcessesPerPass -ne 4){throw "Custom SafeProcessesPerPass was overwritten: $($c.SafeProcessesPerPass)"}
     if([int]$c.BalancedProcessesPerPass -ne 5){throw "Old-default BalancedProcessesPerPass was not migrated: $($c.BalancedProcessesPerPass)"}
+    if(-not [bool]$c.StartMonitoringAutomatically){throw 'StartMonitoringAutomatically was forced off at startup.'}
+    if([bool]$c.EnableOnlineResearch){throw 'EnableOnlineResearch=false was not honoured.'}
     # And the change must persist through a save + reload.
     Update-YumConfigValue -Name MinimumAvailableGB -Value 9
     Initialize-YumConfig
@@ -32,4 +36,18 @@ try {
 } finally {
     Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
 }
-Write-Output 'PASS: saved settings load at startup, persist across restart, and only old defaults migrate.'
+
+# Fresh download: config.json is not in the repository; the first launch must create it from defaults.
+$fresh=Join-Path $env:TEMP ('yumram-fresh-' + [guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory -Path (Join-Path $fresh 'Config') -Force | Out-Null
+try {
+    Copy-Item (Join-Path $root 'Config\default-config.json') (Join-Path $fresh 'Config\default-config.json')
+    Copy-Item (Join-Path $root 'VERSION') (Join-Path $fresh 'VERSION')
+    $script:Root=$fresh
+    Initialize-YumConfig
+    if(-not (Test-Path -LiteralPath (Join-Path $fresh 'config.json'))){throw 'First launch did not create config.json.'}
+    $defaults=Get-Content (Join-Path $root 'Config\default-config.json') -Raw | ConvertFrom-Json
+    if([double]$script:Yum.Config.MinimumAvailableGB -ne [double]$defaults.MinimumAvailableGB){throw 'Fresh config does not use the default target.'}
+    if([string]$script:Yum.Config.Version -ne (Get-Content (Join-Path $root 'VERSION') -Raw).Trim()){throw 'Fresh config version does not match VERSION.'}
+} finally { Remove-Item -LiteralPath $fresh -Recurse -Force -ErrorAction SilentlyContinue }
+Write-Output 'PASS: saved settings load at startup, persist across restart, only old defaults migrate, and a fresh download creates its config.'

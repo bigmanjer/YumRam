@@ -58,12 +58,9 @@ text instead of executing code, so none of these were caught.
 
 ## 5. Known issues (remaining for beta)
 
-1. **Reclaim runs on the UI thread.** FREE RAM NOW / DEEP RAM RECLAIM freeze the window for the
-   length of the reclaim (usually under a second, longer for Deep). Route them through the
-   controller worker's request queue and show progress from the published result.
-2. **Online research is on by default and sends program names to Bing.** `EnableOnlineResearch`
-   sends each unresolved item's publisher/product/name to `bing.com/search`. Consider making it
-   opt-in, with a first-run prompt.
+1. ~~Reclaim runs on the UI thread.~~ **Fixed in 5.3.1**: it runs on the controller worker.
+2. ~~Online research has no off switch.~~ **Decided in 5.3.3**: stays on by default (owner's choice),
+   documented in the README, with a Settings → Privacy switch.
 3. **Shared state is an OrderedDictionary used from 4 threads** (UI, two telemetry workers,
    controller). Value writes are low-risk, but a `Hashtable.Synchronized` runtime or a clear
    per-field ownership rule would remove the residual race risk.
@@ -74,14 +71,16 @@ text instead of executing code, so none of these were caught.
    Settings, Scan) before adding features.
 6. **Interrupted-session service restore** restarts any service YUMRAM recorded as stopped, even
    if you stopped it yourself later. Record and compare the service's start time.
-7. **Packaging:** `config.json` in the folder carries personal settings, the launcher uses
-   `-ExecutionPolicy Bypass`, and scripts are unsigned. For distribution, generate `config.json`
-   on first run and sign the scripts.
+7. **Packaging:** ~~`config.json` shipped with personal settings~~ (fixed in 5.3.3: created on first
+   run, git-ignored). Still open: scripts are unsigned and the launcher uses
+   `-ExecutionPolicy Bypass` for its own process.
+8. **No license chosen yet** (owner's decision); the README states all rights are reserved.
 
 ## 6. Road to beta
 
-1. Move manual reclaim off the UI thread (issue 1).
-2. Decide the online research default (issue 2).
+1. ~~Move manual reclaim off the UI thread~~ (done, 5.3.1).
+2. ~~Decide the online research default~~ (done, 5.3.3).
 3. Run an elevated soak test: monitoring on for a full gaming session with `YUMRAM.log` reviewed.
 4. Convert the Research contract tests to behavioral tests (issue 4).
 5. Split `Dialogs.ps1` (issue 5).
+6. Choose a license before inviting outside contributions.
