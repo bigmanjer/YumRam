@@ -90,10 +90,10 @@
             </StackPanel>
           </Border>
           <TextBlock x:Name="SideRamCompact" Text="--%" HorizontalAlignment="Center" FontWeight="SemiBold" Margin="0,0,0,10" Visibility="Collapsed" ToolTip="RAM in use"/>
-          <Button x:Name="Settings" Style="{StaticResource NavButton}" ToolTip="Settings (Ctrl+5)" AutomationProperties.Name="Settings">
+          <Button x:Name="Settings" Style="{StaticResource NavButton}" ToolTip="Settings (Ctrl+6)" AutomationProperties.Name="Settings">
             <StackPanel Orientation="Horizontal"><TextBlock Text="⚙" Width="24" TextAlignment="Center"/><TextBlock Text="Settings" Margin="10,0,0,0"/></StackPanel>
           </Button>
-          <Button x:Name="About" Style="{StaticResource NavButton}" ToolTip="About YUMRAM (Ctrl+6)" AutomationProperties.Name="About">
+          <Button x:Name="About" Style="{StaticResource NavButton}" ToolTip="About YUMRAM (Ctrl+7)" AutomationProperties.Name="About">
             <StackPanel Orientation="Horizontal"><TextBlock Text="ⓘ" Width="24" TextAlignment="Center"/><TextBlock Text="About" Margin="10,0,0,0"/></StackPanel>
           </Button>
         </StackPanel>
@@ -109,7 +109,10 @@
           <Button x:Name="ReclaimCenter" Style="{StaticResource NavButton}" ToolTip="Run a reclaim and see exactly what was trimmed and what Windows returned. (Ctrl+3)" AutomationProperties.Name="Reclaim Center">
             <StackPanel Orientation="Horizontal"><TextBlock Text="♻" Width="24" TextAlignment="Center"/><TextBlock Text="Reclaim Center" Margin="10,0,0,0"/></StackPanel>
           </Button>
-          <Button x:Name="Intelligence" Style="{StaticResource NavButton}" ToolTip="Identify every program, service and app; unknown items are researched automatically. (Ctrl+4)" AutomationProperties.Name="Intelligence">
+          <Button x:Name="Startup" Style="{StaticResource NavButton}" ToolTip="Programs that start with Windows: see what they cost in RAM and turn them off safely. (Ctrl+4)" AutomationProperties.Name="Startup apps">
+            <StackPanel Orientation="Horizontal"><TextBlock Text="🚀" Width="24" TextAlignment="Center"/><TextBlock Text="Startup apps" Margin="10,0,0,0"/></StackPanel>
+          </Button>
+          <Button x:Name="Intelligence" Style="{StaticResource NavButton}" ToolTip="Identify every program, service and app; unknown items are researched automatically. (Ctrl+5)" AutomationProperties.Name="Intelligence">
             <StackPanel Orientation="Horizontal"><TextBlock Text="🧠" Width="24" TextAlignment="Center"/><TextBlock Text="Intelligence" Margin="10,0,0,0"/></StackPanel>
           </Button>
         </StackPanel>

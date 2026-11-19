@@ -53,6 +53,7 @@
         HotkeyStatus = 'Off'
         FreedStats = $null
         LastStatReclaimKey = ''
+        LastPausedMemoryRead = [datetime]::MinValue
         LastUiReclaimResultVersion = 0
         ReclaimVerificationTimer = $null
         UiTimer = $null

@@ -1,5 +1,25 @@
 # Changelog
 
+# YUMRAM 5.7.0 — Startup apps, honest Deep reclaim numbers (branch `visual-overhaul`)
+
+Next competitor gap: IObit's Startup Optimizer and Windows Task Manager's "Startup apps".
+
+- **Startup apps page** (sidebar, `Ctrl+4`). Lists what Task Manager lists (Run keys incl. 32-bit,
+  Startup folders) with what each one uses in RAM right now, its publisher, and plain-language advice:
+  *Turn off* (launchers, chat, updaters, browsers' background start), *Your call* (sync, backup, VPN),
+  *Careful* (hardware helpers for audio, mouse, lighting), *Keep* (security and anti-cheat, locked).
+  Turning one off writes the same `StartupApproved` flag as Task Manager (`03` + time; on = `02`), so
+  nothing is deleted, the date shows as "off since", and Task Manager / Settings › Apps › Startup agree.
+  "All users" entries need administrator; the page says so instead of failing.
+- **Deep reclaim reports its real gain.** Measured as administrator: emptying every working set leaves
+  GBs on the modified list that Windows writes out 3–5 s later, so Deep showed +1.38 GB while the real
+  gain was +3.46 GB. Deep now waits (max 6 s, typically ~2.5 s) for that before measuring: shown
+  +2.33 GB vs measured +2.30 GB. Measured Free RAM now as administrator: +1.64 GB, +1.26 GB kept at 30 s.
+- **Paused is not an error.** With monitoring off, the status said "Telemetry delayed" and the sidebar
+  and tray froze at "--%". It now says Paused and keeps RAM readings live with one cheap read every 2 s.
+- Shortcuts are now `Ctrl+1`…`Ctrl+7` (Startup apps is 4, Intelligence 5, Settings 6, About 7).
+- Tests: new `Release57StartupTest` (uses a throw-away registry value, cleaned up); all pass.
+
 # YUMRAM 5.6.0 — One window, global shortcut, freed-RAM counter (branch `visual-overhaul`)
 
 Compared against IObit Advanced SystemCare / Smart RAM, Wise Memory Optimizer, Mem Reduct, Process
