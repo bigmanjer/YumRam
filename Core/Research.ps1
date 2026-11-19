@@ -129,7 +129,7 @@ function Set-YumResearchStatus {
         $dir=Split-Path -Parent $path
         if(-not (Test-Path -LiteralPath $dir)){New-Item -ItemType Directory -Path $dir -Force | Out-Null}
         $completed=($Stage -in @('Organized','Unknown','Research Error','Error','Skipped','Complete'))
-        $status=[ordered]@{Version='1';EngineVersion=[string]$script:Yum.Config.ResearchEngineVersion;Updated=(Get-Date).ToString('o');Key=$Key;Name=$Name;Stage=$Stage;Index=$Index;Total=$Total;Message=$Message;Confidence=$Confidence;Placement=$Placement;Error=$Error;Completed=$completed}
+        $status=[ordered]@{Version='1';Pid=$PID;EngineVersion=[string]$script:Yum.Config.ResearchEngineVersion;Updated=(Get-Date).ToString('o');Key=$Key;Name=$Name;Stage=$Stage;Index=$Index;Total=$Total;Message=$Message;Confidence=$Confidence;Placement=$Placement;Error=$Error;Completed=$completed}
         try {
             if($null -ne $script:Yum -and $null -ne $script:Yum.ResearchState){
                 $script:Yum.ResearchState.Phase=if($completed){'Complete'}else{'Researching'}
@@ -663,6 +663,43 @@ function Get-YumOnlineResearch {
     } catch { try{Write-YumLogException -Context 'Online research failed' -Exception $_.Exception}catch{}; $empty.Success=$false;$empty.Error=$_.Exception.Message;return $empty }
 }
 
+function Get-YumPathlessProcessIdentity {
+    # 5.5: Windows hides the executable path of protected processes (audiodg, sppsvc, NVIDIA containers,
+    # gaming services...) from programs that are not elevated, so these used to end up Unknown. Find the
+    # binary another way and let Windows verify its signature:
+    #   1. a Windows service whose executable has this name (any folder);
+    #   2. a file with this name in System32 / the Windows folder.
+    # Store-package binaries under WindowsApps that belong to Microsoft's package ID count as Microsoft.
+    param([string]$Name)
+    if([string]::IsNullOrWhiteSpace($Name)){return $null}
+    try{[void](Get-YumServiceResearch -Name $Name)}catch{}
+    $candidates=New-Object System.Collections.Generic.List[object]
+    $inventory=if($null -ne $script:YumResearchServiceInventory){$script:YumResearchServiceInventory.ToArray()}else{@()}
+    foreach($svc in $inventory){
+        $exe=[string]$svc.ExePath
+        if($exe -and [System.IO.Path]::GetFileNameWithoutExtension($exe) -ieq $Name){$candidates.Add([pscustomobject]@{Path=$exe;How=('service {0}' -f $svc.Name)})}
+    }
+    foreach($dir in @((Join-Path $env:SystemRoot 'System32'),$env:SystemRoot)){
+        $f=Join-Path $dir ($Name+'.exe')
+        if(Test-Path -LiteralPath $f){$candidates.Add([pscustomobject]@{Path=$f;How='Windows folder'})}
+    }
+    $seen=@{}
+    foreach($c in $candidates){
+        if($seen.ContainsKey($c.Path.ToLowerInvariant())){continue};$seen[$c.Path.ToLowerInvariant()]=$true
+        $underWindows=($c.Path -match '(?i)^[a-z]:\\windows\\')
+        if($c.Path -match '(?i)\\WindowsApps\\[^\\]+_(8wekyb3d8bbwe|cw5n1h2txyewy)\\'){return [pscustomobject]@{Path=$c.Path;Signer='Microsoft Corporation';Microsoft=$true;UnderWindows=$false;How=$c.How+', Microsoft Store package'}}
+        try{
+            $sig=Get-AuthenticodeSignature -LiteralPath $c.Path -ErrorAction Stop
+            if([string]$sig.Status -eq 'Valid' -and $null -ne $sig.SignerCertificate){
+                $subject=[string]$sig.SignerCertificate.Subject
+                $org=if($subject -match 'O="([^"]+)"'){$Matches[1]}elseif($subject -match 'O=([^,]+)'){$Matches[1].Trim()}else{''}
+                return [pscustomobject]@{Path=$c.Path;Signer=$org;Microsoft=($org -match '(?i)^Microsoft');UnderWindows=$underWindows;How=$c.How}
+            }
+        }catch{}
+    }
+    return $null
+}
+
 function Get-YumServiceResearch {
     param([string]$Name,[string]$Path='')
     if($null -eq $script:YumResearchServiceInventory){
@@ -773,17 +810,38 @@ function Get-YumResearchPlacement {
     $isWindowsSystemService=($Category -match '(?i)service') -and ($Publisher -match '(?i)^Microsoft Corporation$|^Microsoft Windows$') -and (($Path -match '(?i)\\Windows\\System32\\|\\svchost\.exe') -or (@($ServiceEvidence).Count -gt 0))
     # 5.4: the scanner now records the real publisher name; keep accepting the old publisher-ID form for saved records.
     $isWindowsAppxComponent=($Category -match '(?i)app|installed|protected') -and ($Publisher -match '(?i)^(8wekyb3d8bbwe|cw5n1h2txyewy|Microsoft Corporation|Microsoft Windows)$') -and ($Name -match '(?i)^Microsoft|^[0-9a-f]{8}-[0-9a-f]{4}-')
+    # 5.4: a package full name ending in Microsoft's own publisher IDs is a Microsoft package whatever
+    # category it was filed under (a manual "Review Queue" choice used to hide this rule).
+    $microsoftPackageId=($Path -match '(?i)_(8wekyb3d8bbwe|cw5n1h2txyewy)$')
+    if($microsoftPackageId -and ($Name -match '(?i)^Microsoft|^[0-9a-f]{8}-[0-9a-f]{4}-|^Windows')){$isWindowsAppxComponent=$true}
     foreach($appxV in @($AppxEvidence|Where-Object{$null -ne $_.PSObject.Properties['ExactPackage'] -and [bool]$_.ExactPackage -and [string]$_.SignatureKind -in @('Store','System')})){
         $scores.Application+=25;[void]$evidence.Add(('Package signature verified by Windows ({0})' -f $appxV.SignatureKind));break
     }
     if($isWindowsSystemService){$scores.System+=45;[void]$evidence.Add('Windows system service identity')}
     if($isWindowsAppxComponent){$scores.System+=45;[void]$evidence.Add('Windows system component identity')}
+    if($microsoftPackageId -and $isWindowsAppxComponent){$scores.System+=20;[void]$evidence.Add('Published under Microsoft''s own package ID')}
 
     if($null -ne $ServiceEvidence){
         $strongSvc=@($ServiceEvidence|Where-Object{[int]$_.Score -ge 70}).Count -gt 0
         $svc=@($ServiceEvidence)
         if($strongSvc){$scores.Application+=20;[void]$evidence.Add('Windows service metadata corroborates identity')}
         if(@($svc|Where-Object{([string]$_.StartMode -match '(?i)auto') -and ([string]$_.PathName -match '(?i)\\windows\\system32|\\drivers\\')}).Count -gt 0){$scores.Drivers+=20;[void]$evidence.Add('Service is backed by Windows driver/system path')}
+    }
+    # 5.4: protected Windows processes (e.g. sppsvc, Software Protection) hide their path from other
+    # programs, so the scanner sees no executable. If the matching Windows service runs a binary in
+    # System32 that Windows verifies as Microsoft-signed, that is the identity.
+    $windowsServiceBinary=$null
+    if([string]::IsNullOrWhiteSpace($Path) -and -not [string]::IsNullOrWhiteSpace($baseName)){
+        $hidden=Get-YumPathlessProcessIdentity -Name $baseName
+        if($null -ne $hidden){
+            $windowsServiceBinary=$hidden.Path
+            if($hidden.Path -match '(?i)\\DriverStore\\'){$scores.Drivers+=70;[void]$evidence.Add(('Protected driver process: {0} (Windows driver store, {1})' -f $hidden.Path,$hidden.How))}
+            elseif($hidden.Microsoft -and $hidden.UnderWindows){$scores.System+=70;[void]$evidence.Add(('Protected Windows process: {0}, signed by Microsoft ({1})' -f $hidden.Path,$hidden.How))}
+            elseif($hidden.Microsoft){$scores.System+=60;[void]$evidence.Add(('Protected Microsoft process: {0} ({1})' -f $hidden.Path,$hidden.How))}
+            elseif($hidden.UnderWindows -or $hidden.Signer -match '(?i)nvidia|advanced micro devices|amd|intel|realtek|logitech|corsair|razer|asus|msi|dolby|dts|synaptics|elan|qualcomm|broadcom|killer|rivet'){$scores.Drivers+=60;[void]$evidence.Add(('Protected hardware/driver process: {0}, signed by {1} ({2})' -f $hidden.Path,$hidden.Signer,$hidden.How))}
+            else{$scores.Application+=45;[void]$evidence.Add(('Protected process: {0}, signed by {1} ({2})' -f $hidden.Path,$hidden.Signer,$hidden.How))}
+            if([string]::IsNullOrWhiteSpace($Publisher) -or $Publisher -eq 'Unknown'){$Publisher=$hidden.Signer}
+        }
     }
 
     $ordered=@($scores.GetEnumerator()|Sort-Object Value -Descending)
@@ -798,6 +856,7 @@ function Get-YumResearchPlacement {
     # signature is equivalent to a valid Authenticode signer match for an .exe.
     $appxVerified=(@($AppxEvidence|Where-Object{$null -ne $_.PSObject.Properties['ExactPackage'] -and [bool]$_.ExactPackage -and [string]$_.SignatureKind -in @('Store','System')}).Count -gt 0)
     if($appxVerified){$signerMatches=$true}
+    if($null -ne $windowsServiceBinary -or ($microsoftPackageId -and $isWindowsAppxComponent)){$signerMatches=$true;$appxStrong=$appxStrong -or $microsoftPackageId}
     $onlineStrong=($null -ne $OnlineEvidence -and [bool]$OnlineEvidence.Success -and [int]$OnlineEvidence.BestScore -ge 70 -and [int]$OnlineEvidence.VerifiedCount -gt 0)
     $fileStrong=($null -ne $FileEvidence -and ((-not [string]::IsNullOrWhiteSpace($Publisher) -and -not [string]::IsNullOrWhiteSpace([string]$FileEvidence.Company) -and (Get-YumResearchTokenOverlap -Left $Publisher -Right ([string]$FileEvidence.Company)) -ge 60) -or (-not [string]::IsNullOrWhiteSpace($Name) -and -not [string]::IsNullOrWhiteSpace([string]$FileEvidence.Product) -and (Get-YumResearchTokenOverlap -Left $Name -Right ([string]$FileEvidence.Product)) -ge 60)))
     $identitySignals=@( @($registryStrong,$signerMatches,$wingetStrong,$appxStrong,$onlineStrong,$fileStrong,(@($ServiceEvidence|Where-Object{[int]$_.Score -ge 70}).Count -gt 0)) | Where-Object { $_ } )

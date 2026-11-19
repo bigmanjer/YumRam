@@ -26,7 +26,7 @@ try {
     if([double]$c.MinimumAvailableGB -ne 7.5){throw "Saved target was not loaded: got $($c.MinimumAvailableGB)"}
     if([string]$c.Mode -ne 'Safe'){throw "Saved mode was not loaded: got $($c.Mode)"}
     if([int]$c.SafeProcessesPerPass -ne 4){throw "Custom SafeProcessesPerPass was overwritten: $($c.SafeProcessesPerPass)"}
-    if([int]$c.BalancedProcessesPerPass -ne 5){throw "Old-default BalancedProcessesPerPass was not migrated: $($c.BalancedProcessesPerPass)"}
+    if([int]$c.BalancedProcessesPerPass -ne 10){throw "Old-default BalancedProcessesPerPass was not migrated to the 5.5 default 10: $($c.BalancedProcessesPerPass)"}
     if(-not [bool]$c.StartMonitoringAutomatically){throw 'StartMonitoringAutomatically was forced off at startup.'}
     if([bool]$c.EnableOnlineResearch){throw 'EnableOnlineResearch=false was not honoured.'}
     # And the change must persist through a save + reload.

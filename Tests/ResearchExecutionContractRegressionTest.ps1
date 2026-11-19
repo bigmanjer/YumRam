@@ -10,7 +10,7 @@ $checks=@(
     @(([bool]($dialogs -match 'RESEARCH WORKER STARTED:')), 'Worker must log actual startup.'),
     @(([bool]($dialogs -match 'RESEARCH WORKER FINISHED:')), 'Worker must log actual completion.'),
     @(([bool]($dialogs -match 'RESEARCH WORKER ERROR STREAM:')), 'Worker error stream must be captured.'),
-    @(([bool]($dialogs -match 'statusPath=Join-Path \$script:Yum.Root')), 'UI and worker must share research status path.'),
+    @(([bool]($dialogs -match 'statusPath=Get-YumResearchStatusPath')), 'UI and worker must share research status path (Get-YumResearchStatusPath).'),
     @(([bool]($research -match 'RESEARCH EXECUTION: item')), 'Each research item must log execution.'),
     @(([bool]($research -match 'ONLINE RESEARCH EXECUTION: item')), 'Online research must have explicit execution logging.'),
     @(([bool]($research -match 'function Ensure-YumResearchRecordSchema')), 'Research record schema helper is required before strict-mode access.'),

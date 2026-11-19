@@ -21,15 +21,17 @@ function Get-YumModeProfile {
     #   never trimmed anything, and Balanced (38) skipped most mid-size idle apps.
     # - Only ~40% of a trimmed working set shows up as Available RAM, and only after 1-2 s, so the
     #   per-pass budgets were far too small to close a real gap.
+    # 5.4: per-pass caps raised (were 4/6/10, which silently overrode larger values set in Settings)
+    # and defaults raised to 6/10/16 after the 5.3 field test showed trimming could not keep up.
     switch([string]$script:Yum.Config.Mode){
         'Safe' {
-            return [pscustomobject]@{Name='Safe';PassLimit=[math]::Min([int]$script:Yum.Config.SafeProcessesPerPass,4);CandidateScoreMinimum=34.0;OptionalApps=0;OptionalServices=0;FollowUpPasses=8;StepDelayMs=350;MaxPassMilliseconds=1800;MaxTrimMBPerPass=512}
+            return [pscustomobject]@{Name='Safe';PassLimit=[math]::Min([int]$script:Yum.Config.SafeProcessesPerPass,10);CandidateScoreMinimum=34.0;OptionalApps=0;OptionalServices=0;FollowUpPasses=10;StepDelayMs=350;MaxPassMilliseconds=2200;MaxTrimMBPerPass=1024}
         }
         'Aggressive' {
-            return [pscustomobject]@{Name='Aggressive';PassLimit=[math]::Min([int]$script:Yum.Config.AggressiveProcessesPerPass,10);CandidateScoreMinimum=12.0;OptionalApps=2;OptionalServices=0;FollowUpPasses=24;StepDelayMs=125;MaxPassMilliseconds=2600;MaxTrimMBPerPass=2048}
+            return [pscustomobject]@{Name='Aggressive';PassLimit=[math]::Min([int]$script:Yum.Config.AggressiveProcessesPerPass,24);CandidateScoreMinimum=12.0;OptionalApps=2;OptionalServices=0;FollowUpPasses=24;StepDelayMs=125;MaxPassMilliseconds=3200;MaxTrimMBPerPass=4096}
         }
         default {
-            return [pscustomobject]@{Name='Balanced';PassLimit=[math]::Min([int]$script:Yum.Config.BalancedProcessesPerPass,6);CandidateScoreMinimum=24.0;OptionalApps=1;OptionalServices=0;FollowUpPasses=16;StepDelayMs=200;MaxPassMilliseconds=2200;MaxTrimMBPerPass=1024}
+            return [pscustomobject]@{Name='Balanced';PassLimit=[math]::Min([int]$script:Yum.Config.BalancedProcessesPerPass,16);CandidateScoreMinimum=24.0;OptionalApps=1;OptionalServices=0;FollowUpPasses=16;StepDelayMs=200;MaxPassMilliseconds=2800;MaxTrimMBPerPass=2048}
         }
     }
 }
@@ -376,6 +378,31 @@ function Invoke-YumCleanupToTarget {
     $fresh=Get-YumMemoryTelemetry
     if($fresh){Update-YumSnapshotMemory -Memory $fresh}
     $afterAdaptive=if($fresh){[double]$fresh.AvailableGB}else{$previous}
+
+    # 5.4 memory-area assist: trimming alone could not keep up with memory regrowth after a Deep reclaim
+    # (log: "Target not reachable" every 30-120 s at 8.5-8.9 GB of a 9 GB goal). Trimming the system file
+    # cache and flushing the modified list moves cached/dirty pages into Available without dropping the
+    # cache. Administrator only, never while a game runs, at most once per AutoMemoryAreaAssistSeconds.
+    $assistGainGB=0.0
+    if($afterAdaptive -lt $target -and -not $safeOnlyRequested){
+        $assistEnabled=$true;try{if($script:Yum.Config.Contains('AutoMemoryAreaAssist')){$assistEnabled=[bool]$script:Yum.Config['AutoMemoryAreaAssist']}}catch{}
+        $assistEvery=45.0;try{if($script:Yum.Config.Contains('AutoMemoryAreaAssistSeconds')){$assistEvery=[math]::Max(15.0,[double]$script:Yum.Config['AutoMemoryAreaAssistSeconds'])}}catch{}
+        $lastAssist=[datetime]::MinValue;try{if($script:Yum.Contains('LastMemoryAreaAssist')){$lastAssist=[datetime]$script:Yum.LastMemoryAreaAssist}}catch{}
+        $gameNow=$false;try{$sg=Get-YumSnapshotCopy;$gameNow=[bool]($sg -and $sg.Game -and $sg.Game.Detected)}catch{}
+        if($assistEnabled -and -not $gameNow -and ((Get-Date)-$lastAssist).TotalSeconds -ge $assistEvery -and (Test-YumIsElevated)){
+            $script:Yum.LastMemoryAreaAssist=Get-Date
+            $assistBefore=$afterAdaptive
+            $c1=Invoke-YumNativeMemoryCommand -Command TrimSystemFileCache
+            $c2=$null;if([bool]$script:Yum.Config.ReclaimModifiedPageList){$c2=Invoke-YumNativeMemoryCommand -Command FlushModifiedList}
+            Start-Sleep -Milliseconds 400
+            $fresh=Get-YumMemoryTelemetry
+            if($fresh){Update-YumSnapshotMemory -Memory $fresh;$afterAdaptive=[double]$fresh.AvailableGB}
+            $assistGainGB=[math]::Max(0.0,$afterAdaptive-$assistBefore)
+            try{Write-YumLog ('Memory-area assist: system file cache {0}, modified list {1}; Available {2:N2} -> {3:N2} GB (+{4:N2} GB).' -f $(if($c1.Success){'trimmed'}else{'skipped'}),$(if($null -ne $c2 -and $c2.Success){'flushed'}else{'skipped'}),$assistBefore,$afterAdaptive,$assistGainGB)}catch{}
+            [void]$allRows.Add([pscustomobject]@{Name='System file cache + modified list';PID='—';Process='Memory areas';Score=0;Action='Memory-area assist';Result=$(if($c1.Success){'Completed'}else{'Skipped'});Reason=$c1.Reason;WorkingSetMB=0;ReducedMB=[math]::Round($assistGainGB*1024,0)})
+            if($afterAdaptive -ge $target){$stopReason='Target reached with memory-area assist.'}
+        }
+    }
 
     # Phase 2: legacy/strong fallback. This is target-driven, not a new
     # automatic-cleaning policy: it is entered only after the adaptive path

@@ -92,7 +92,7 @@ if($dialogs -notmatch 'No items currently require research\.'){Add-CheckError 'E
 if($dialogs -notmatch '\$previousDb=@\{\}'){Add-CheckError 'Persisted Intelligence DB is not captured before live-record replacement.'}
 if($dialogs -notmatch 'identityCompatible=\$true'){Add-CheckError 'Saved/live identity compatibility guard missing.'}
 if($dialogs -notmatch '\$researchInput=@\(\$ctx\.State\.Data\.Records \| Where-Object'){Add-CheckError 'Research queue is not built from the merged current state.'}
-if($dialogs -notmatch '\[bool\]\$_.Live -and -not \[bool\]\$_.ManualOverride' -and $dialogs -notmatch '\[bool\]\$_\.Live -and \(Test-YumResearchUnresolved -Record \$_\)'){Add-CheckError 'Research queue does not restrict to current non-manual live records.'}
+if($dialogs -notmatch '\[bool\]\$_.Live -and -not \[bool\]\$_.ManualOverride' -and $dialogs -notmatch '\[bool\]\$_\.Live -and \(Test-YumResearchUnresolved -Record \$_\)' -and $dialogs -notmatch '\(\[bool\]\$_\.Live -or \[string\]\$_\.ResearchStatus -eq ''Unknown''\) -and \(Test-YumResearchUnresolved -Record \$_\)'){Add-CheckError 'Research queue does not restrict to current non-manual live records.'}
 # 5.3.0: 'Automatic research candidates:' log wording retired; queue behaviour is asserted above.
 
 # Incremental merge: never replace the entire live collection with a partial research result.

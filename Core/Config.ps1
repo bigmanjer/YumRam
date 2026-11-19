@@ -80,6 +80,7 @@
         CleanupResult = $null
         CleanupResultVersion = 0
         LastControllerClean = [datetime]::MinValue
+        LastMemoryAreaAssist = [datetime]::MinValue
         LastTelemetryUpdate = [datetime]::MinValue
         LastCoreTelemetryUpdate = [datetime]::MinValue
         LastTelemetryCycle = [datetime]::MinValue
@@ -214,14 +215,22 @@ function Initialize-YumConfig {
     if(-not $script:Yum.Config.Contains('AutoRestoreSessionStoppedServices')){$script:Yum.Config.AutoRestoreSessionStoppedServices=$true}
     # 5.3.1 migration: raise values that are still at the old (too timid) defaults. Anything the
     # user changed away from the old default is left alone.
-    $oldDefaults=@{SafeProcessesPerPass=@(2,3);BalancedProcessesPerPass=@(3,5);AggressiveProcessesPerPass=@(5,8);ReclaimMaxProcessActions=@(3,8);GPUIntervalSeconds=@(3.0,5.0);ResearchInterItemDelayMs=@(250,50)}
+    # Each entry: @(new value, old default, older default...). 5.4 raised the per-pass defaults again.
+    $oldDefaults=@{SafeProcessesPerPass=@(6,2,3);BalancedProcessesPerPass=@(10,3,5);AggressiveProcessesPerPass=@(16,5,8);MinimumCleanIntervalSeconds=@(15,30);ReclaimMaxProcessActions=@(8,3);GPUIntervalSeconds=@(5.0,3.0);ResearchInterItemDelayMs=@(50,250)}
     foreach($k in $oldDefaults.Keys){
-        try{ if($script:Yum.Config.Contains($k) -and [double]$script:Yum.Config[$k] -eq [double]$oldDefaults[$k][0]){ $script:Yum.Config[$k]=$oldDefaults[$k][1] } }catch{}
+        try{
+            if(-not $script:Yum.Config.Contains($k)){continue}
+            $entry=@($oldDefaults[$k]);$current=[double]$script:Yum.Config[$k]
+            foreach($old in @($entry[1..($entry.Count-1)])){ if($current -eq [double]$old){ $script:Yum.Config[$k]=$entry[0]; break } }
+        }catch{}
     }
     $versionPath=Join-Path $script:Yum.Root 'VERSION'
     $runtimeVersion=''
     if(Test-Path -LiteralPath $versionPath){try{$candidateVersion=(Get-Content -LiteralPath $versionPath -Raw -ErrorAction Stop).Trim();if($candidateVersion -match '^\d+\.\d+\.\d+$'){$runtimeVersion=$candidateVersion}}catch{}}
     $script:Yum.Config.Version=$runtimeVersion
+    # 5.5: the research engine version follows VERSION, so an upgrade re-checks Unknown results even when
+    # config.json still carries the older value.
+    if(-not [string]::IsNullOrWhiteSpace($runtimeVersion)){$script:Yum.Config.ResearchEngineVersion=$runtimeVersion}
     # 5.3.3: honour the Settings checkbox. It defaults to off (default-config.json), but 5.2.x forced it
     # off here on every launch, so the "Start monitoring automatically" option never worked.
     $script:Yum.Config.CleanupTargetAvailableGB=[double]$script:Yum.Config.MinimumAvailableGB

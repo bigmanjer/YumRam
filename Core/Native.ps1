@@ -127,6 +127,35 @@ function Invoke-YumSetSystemMemoryListCommand {
     finally {if($ptr -ne [IntPtr]::Zero){[Runtime.InteropServices.Marshal]::FreeHGlobal($ptr)}}
 }
 
+if (-not ('YumRamCacheNative' -as [type])) {
+    Add-Type @'
+using System;
+using System.Runtime.InteropServices;
+public static class YumRamCacheNative {
+    [DllImport("kernel32.dll", SetLastError=true)]
+    public static extern bool SetSystemFileCacheSize(IntPtr MinimumFileCacheSize, IntPtr MaximumFileCacheSize, int Flags);
+}
+'@
+}
+
+function Invoke-YumTrimSystemFileCache {
+    # 5.4: trims the system file cache's working set (SetSystemFileCacheSize(-1,-1)). The pages move to
+    # the standby list, so the files stay cached, but they now count as Available RAM. Needs
+    # administrator rights (SeIncreaseQuotaPrivilege). Same technique as Mem Reduct's "system working set".
+    try {
+        $priv=Enable-YumNativePrivilege -Privilege 'SeIncreaseQuotaPrivilege'
+        if(-not $priv.Success){return [pscustomobject]@{Success=$false;Status=$priv.Error;Reason=('Required privilege was not enabled (Win32 {0}); run YUMRAM as administrator.' -f $priv.Error);ErrorCategory='Privilege'}}
+        $ok=[YumRamCacheNative]::SetSystemFileCacheSize([IntPtr](-1),[IntPtr](-1),0)
+        if($ok){return [pscustomobject]@{Success=$true;Status=0;Reason='System file cache working set trimmed.';ErrorCategory=''}}
+        $code=[Runtime.InteropServices.Marshal]::GetLastWin32Error()
+        return [pscustomobject]@{Success=$false;Status=$code;Reason=('SetSystemFileCacheSize failed (Win32 {0}).' -f $code);ErrorCategory='NativeMemoryCommand'}
+    } catch { return [pscustomobject]@{Success=$false;Status=-1;Reason=$_.Exception.Message;ErrorCategory='NativeMemoryCommand'} }
+}
+
+function Test-YumIsElevated {
+    try{$id=[Security.Principal.WindowsIdentity]::GetCurrent();return (New-Object Security.Principal.WindowsPrincipal($id)).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)}catch{return $false}
+}
+
 function Get-YumForegroundProcessId {
     try {
         $foregroundPid = [uint32]0

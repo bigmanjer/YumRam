@@ -387,21 +387,150 @@ function Update-YumSystemScanList {
     if(@($State.Scan.Errors).Count -gt 0){$State.Details.Text='Some inventory categories failed. See YUMRAM.log. Scanning remains usable for categories that succeeded.'}else{$State.Details.Text='Live inventory updated. Select a process to inspect details.'}
 }
 
-function Update-YumTopProcessList {
-    param([Parameter(Mandatory)][System.Windows.Controls.ListView]$List)
-    $List.Items.Clear()
+if (-not ('YumProcRow' -as [type])) {
+    Add-Type @'
+using System.ComponentModel;
+public class YumProcRow : INotifyPropertyChanged {
+    public event PropertyChangedEventHandler PropertyChanged;
+    private void Set<T>(ref T field, T value, string name) {
+        if (object.Equals(field, value)) return;
+        field = value;
+        var h = PropertyChanged; if (h != null) h(this, new PropertyChangedEventArgs(name));
+    }
+    private string _key, _name, _title, _sub, _memText, _kind, _yum, _path, _company, _desc;
+    private double _mem, _bar; private int _count, _mainPid; private bool _prot;
+    public string Key { get { return _key; } set { Set(ref _key, value, "Key"); } }
+    public string Name { get { return _name; } set { Set(ref _name, value, "Name"); } }
+    public string Title { get { return _title; } set { Set(ref _title, value, "Title"); } }
+    public string SubTitle { get { return _sub; } set { Set(ref _sub, value, "SubTitle"); } }
+    public double MemoryMB { get { return _mem; } set { Set(ref _mem, value, "MemoryMB"); } }
+    public string MemoryText { get { return _memText; } set { Set(ref _memText, value, "MemoryText"); } }
+    public double BarPercent { get { return _bar; } set { Set(ref _bar, value, "BarPercent"); } }
+    public string Kind { get { return _kind; } set { Set(ref _kind, value, "Kind"); } }
+    public string YumText { get { return _yum; } set { Set(ref _yum, value, "YumText"); } }
+    public string Path { get { return _path; } set { Set(ref _path, value, "Path"); } }
+    public string Company { get { return _company; } set { Set(ref _company, value, "Company"); } }
+    public string Description { get { return _desc; } set { Set(ref _desc, value, "Description"); } }
+    public int Count { get { return _count; } set { Set(ref _count, value, "Count"); } }
+    public int MainPid { get { return _mainPid; } set { Set(ref _mainPid, value, "MainPid"); } }
+    public bool Protected { get { return _prot; } set { Set(ref _prot, value, "Protected"); } }
+}
+'@
+}
+
+function Get-YumProcessMeta {
+    # Path / description / company for a process name, cached for the life of the window.
+    param($State,[System.Diagnostics.Process]$Process)
+    $key=$Process.ProcessName.ToLowerInvariant()
+    if($State.Meta.ContainsKey($key)){return $State.Meta[$key]}
+    $path='';$desc='';$company=''
+    try{$path=[string]$Process.Path}catch{}
+    if(-not [string]::IsNullOrWhiteSpace($path)){
+        try{$vi=[System.Diagnostics.FileVersionInfo]::GetVersionInfo($path);$desc=[string]$vi.FileDescription;$company=[string]$vi.CompanyName}catch{}
+    }
+    $meta=[pscustomobject]@{Path=$path;Description=$desc.Trim();Company=$company.Trim()}
+    $State.Meta[$key]=$meta
+    return $meta
+}
+
+function Update-YumProcessRows {
+    # Groups running processes by program, then updates the bound rows in place (add / update / remove /
+    # reorder) so the list never flickers or loses the selection.
+    param($State)
     $fg=Get-YumForegroundProcessId
     $snap=Get-YumSnapshotCopy
-    $gamePid=if($snap -and $snap.Game.Detected){[int]$snap.Game.ProcessId}else{0}
-    foreach($process in @(Get-Process -ErrorAction SilentlyContinue | Sort-Object WorkingSet64 -Descending | Select-Object -First 40)){
-        try{
-            $priority='Unknown';try{$priority=[string]$process.PriorityClass}catch{}
-            $protected=Test-YumProtectedProcess -Process $process -ForegroundPid $fg -GamePid $gamePid
-            $processPath=''
-            try{$processPath=[string]$process.MainModule.FileName}catch{}
-            [void]$List.Items.Add([pscustomobject]@{Process=$process.ProcessName;Name=$process.ProcessName;PID=$process.Id;MemoryMB=[math]::Round($process.WorkingSet64/1MB,0);Priority=$priority;Protected=$protected;ProtectedText=$(if($protected){'Yes'}else{''});ProcessObject=$process;Path=$processPath;Publisher='Unknown';Category='Apps';Risk=if($protected){'Protected'}else{'Review'};Placement='';ActionLane='Review before management'})
-        }catch{}
+    $gamePid=if($snap -and $snap.Game -and $snap.Game.Detected){[int]$snap.Game.ProcessId}else{0}
+    $groups=@{}
+    foreach($p in @(Get-Process -ErrorAction SilentlyContinue)){
+        if($p.Id -eq 0){continue}
+        $k=$p.ProcessName.ToLowerInvariant()
+        if(-not $groups.ContainsKey($k)){$groups[$k]=New-Object System.Collections.Generic.List[System.Diagnostics.Process]}
+        $groups[$k].Add($p)
     }
+    $now=Get-Date
+    $built=New-Object System.Collections.Generic.List[object]
+    foreach($k in $groups.Keys){
+        $list=$groups[$k]
+        $total=[int64]0;$main=$null;$withWindow=$null;$isGame=$false
+        foreach($p in $list){
+            $total+=[int64]$p.WorkingSet64
+            if($null -eq $main -or $p.WorkingSet64 -gt $main.WorkingSet64){$main=$p}
+            try{if($null -eq $withWindow -and $p.MainWindowHandle -ne [IntPtr]::Zero){$withWindow=$p}}catch{}
+            if($gamePid -gt 0 -and $p.Id -eq $gamePid){$isGame=$true}
+        }
+        $mb=$total/1MB
+        if($mb -lt 15){continue}
+        $rep=if($null -ne $withWindow){$withWindow}else{$main}
+        $meta=Get-YumProcessMeta -State $State -Process $rep
+        # Protection is re-checked at most every 30 s per program (it can call into the classifier).
+        $prot=$false
+        $pc=$State.ProtectedCache[$k]
+        if($null -ne $pc -and ($now-$pc.At).TotalSeconds -lt 30){$prot=[bool]$pc.Value}
+        else{try{$prot=[bool](Test-YumProtectedProcess -Process $rep -ForegroundPid $fg -GamePid $gamePid)}catch{};$State.ProtectedCache[$k]=[pscustomobject]@{At=$now;Value=$prot}}
+        $record=$null;if($State.IntelByName.ContainsKey($k)){$record=$State.IntelByName[$k]}
+        $kind=Get-YumProcessKind -Name $rep.ProcessName -Path $meta.Path -Company $meta.Company -HasWindow:($null -ne $withWindow) -IsGame:$isGame -Record $record
+        if($kind -in @('Windows','Security')){$prot=$true}
+        $guideKey=$rep.ProcessName.ToLowerInvariant()
+        $title=if($script:YumProcessGuide.ContainsKey($guideKey)){[string]$script:YumProcessGuide[$guideKey][0]}elseif(-not [string]::IsNullOrWhiteSpace($meta.Description)){$meta.Description}else{$rep.ProcessName}
+        $sub=$rep.ProcessName+'.exe'
+        if($list.Count -gt 1){$sub+=('  •  {0} processes' -f $list.Count)}
+        if(-not [string]::IsNullOrWhiteSpace($meta.Company)){$sub+=('  •  '+$meta.Company)}
+        $built.Add([pscustomobject]@{Key=$k;Name=$rep.ProcessName;Title=$title;SubTitle=$sub;MB=$mb;Kind=$kind;Protected=$prot;Path=$meta.Path;Company=$meta.Company;Description=$meta.Description;Count=$list.Count;MainPid=$rep.Id})
+    }
+    $ordered=@($built | Sort-Object MB -Descending | Select-Object -First 80)
+    $top=if($ordered.Count -gt 0){[double]$ordered[0].MB}else{1.0}
+    $existing=@{};foreach($row in @($State.Rows)){$existing[$row.Key]=$row}
+    $keep=New-Object 'System.Collections.Generic.HashSet[string]'
+    for($i=0;$i -lt $ordered.Count;$i++){
+        $b=$ordered[$i];[void]$keep.Add($b.Key)
+        $row=$existing[$b.Key]
+        if($null -eq $row){$row=New-Object YumProcRow;$row.Key=$b.Key;$State.Rows.Insert([math]::Min($i,$State.Rows.Count),$row)}
+        $row.Name=$b.Name;$row.Title=$b.Title;$row.SubTitle=$b.SubTitle;$row.MemoryMB=[math]::Round($b.MB,1)
+        $row.MemoryText=if($b.MB -ge 1024){'{0:N2} GB' -f ($b.MB/1024)}else{'{0:N0} MB' -f $b.MB}
+        $row.BarPercent=[math]::Round(100.0*$b.MB/[math]::Max(1.0,$top),1)
+        $row.Kind=$b.Kind;$row.Protected=$b.Protected;$row.YumText=if($b.Protected){'Protected'}else{'May trim'}
+        $row.Path=$b.Path;$row.Company=$b.Company;$row.Description=$b.Description;$row.Count=$b.Count;$row.MainPid=$b.MainPid
+        $at=$State.Rows.IndexOf($row)
+        if($at -ne $i -and $at -ge 0){$State.Rows.Move($at,$i)}
+    }
+    for($j=$State.Rows.Count-1;$j -ge 0;$j--){if(-not $keep.Contains($State.Rows[$j].Key)){$State.Rows.RemoveAt($j)}}
+    # Summary cards.
+    try{
+        $m=Get-YumMemoryTelemetry
+        if($m){
+            $State.TotalRamGB=[double]$m.TotalGB
+            $State.Ui.SumUsed.Text=('{0:N1} / {1:N0} GB' -f ([double]$m.TotalGB-[double]$m.AvailableGB),[double]$m.TotalGB)
+            $State.Ui.SumAvailable.Text=('{0:N1} GB' -f [double]$m.AvailableGB)
+        }
+    }catch{}
+    $State.Ui.SumPrograms.Text=('{0}' -f $built.Count)
+    if($ordered.Count -gt 0){$State.Ui.SumBiggest.Text=[string]$ordered[0].Title}
+    $State.Ui.Details.Text=('Updated {0:T}. Showing programs using 15 MB or more.' -f (Get-Date))
+    Update-YumProcessExplanation -State $State
+}
+
+function Update-YumProcessExplanation {
+    param($State)
+    $u=$State.Ui
+    $row=$u.Items.SelectedItem
+    if($null -eq $row){
+        $u.ExplainTitle.Text='Click a program';$u.ExplainSub.Text=''
+        $u.ExplainWhat.Text='Pick any program in the list and YUMRAM explains what it is, whether you can close it, and what YUMRAM does with it.'
+        $u.ExplainBody.Visibility='Collapsed';$u.EndTask.IsEnabled=$false
+        return
+    }
+    $record=$null;if($State.IntelByName.ContainsKey($row.Key)){$record=$State.IntelByName[$row.Key]}
+    $x=Get-YumProcessExplanation -Name $row.Name -Description $row.Description -Company $row.Company -Path $row.Path -Kind $row.Kind -Protected $row.Protected -MemoryMB $row.MemoryMB -Count $row.Count -TotalRamGB ([double]$State.TotalRamGB) -Record $record
+    $u.ExplainTitle.Text=$x.Title
+    $u.ExplainSub.Text=('{0}  •  {1}' -f $row.Kind,$row.SubTitle)
+    $u.ExplainWhat.Text=$x.What
+    $u.ExplainMemory.Text=$x.Memory
+    $u.ExplainSafe.Text=$x.Safe
+    $u.ExplainYum.Text=$x.Yumram
+    $u.ExplainPath.Text=if([string]::IsNullOrWhiteSpace($row.Path)){'Windows keeps this location private (protected process).'}else{$row.Path}
+    $u.OpenLocation.IsEnabled=-not [string]::IsNullOrWhiteSpace($row.Path)
+    $u.ExplainBody.Visibility='Visible'
+    $u.EndTask.IsEnabled=-not $row.Protected
 }
 
 function Show-YumTopProcesses {
@@ -410,23 +539,44 @@ function Show-YumTopProcesses {
         [xml]$xaml=Read-YumXamlText -Path $path
         $reader=New-Object System.Xml.XmlNodeReader $xaml
         $window=[Windows.Markup.XamlReader]::Load($reader)
-        $items=$window.FindName('Items');$refresh=$window.FindName('Refresh');$endTask=$window.FindName('EndTask');$close=$window.FindName('Close');$details=$window.FindName('Details')
-        $state=@{Window=$window;Items=$items;ListView=$items;Details=$details}
-        $refresh.Tag=$state;$endTask.Tag=$state;$close.Tag=@{Window=$window}
-        $refresh.Add_Click({param($sender,$e)Update-YumTopProcessList -List $sender.Tag.Items})
-        $endTask.Add_Click({
-            param($sender,$e)
-            $selected=$sender.Tag.Items.SelectedItem
-            if($null -eq $selected){$sender.Tag.Details.Text='Select a process first.';return}
-            $r=Invoke-YumEndTask -Process $selected.ProcessObject
-            $sender.Tag.Details.Text=$r.Reason
-            Update-YumTopProcessList -List $sender.Tag.Items
+        $ui=@{}
+        foreach($n in 'Items','Details','Refresh','Pause','LiveText','EndTask','Close','SumUsed','SumAvailable','SumPrograms','SumBiggest','ExplainTitle','ExplainSub','ExplainWhat','ExplainBody','ExplainMemory','ExplainSafe','ExplainYum','ExplainPath','OpenLocation'){$ui[$n]=$window.FindName($n);if($null -eq $ui[$n]){throw "Top processes control missing: $n"}}
+        $rows=New-Object 'System.Collections.ObjectModel.ObservableCollection[object]'
+        $ui.Items.ItemsSource=$rows
+        # Intelligence knowledge by program name (used for kinds and explanations).
+        $intel=@{}
+        try{
+            if($null -eq $script:Yum.IntelligenceDb -and (Get-Command Load-YumIntelligenceDb -ErrorAction SilentlyContinue)){$script:Yum.IntelligenceDb=Load-YumIntelligenceDb}
+            if($null -ne $script:Yum.IntelligenceDb){foreach($rec in @($script:Yum.IntelligenceDb.Values)){try{$n=([string]$rec.Name).ToLowerInvariant();if($n -and -not $intel.ContainsKey($n)){$intel[$n]=$rec}}catch{}}}
+        }catch{}
+        $state=@{Window=$window;Ui=$ui;Rows=$rows;Meta=@{};ProtectedCache=@{};IntelByName=$intel;TotalRamGB=0.0;Paused=$false}
+        $window.Tag=$state
+        $timer=New-Object System.Windows.Threading.DispatcherTimer
+        $timer.Interval=[TimeSpan]::FromSeconds(2)
+        $timer.Tag=$state
+        $timer.Add_Tick({param($s,$e)try{if(-not $s.Tag.Paused){Update-YumProcessRows -State $s.Tag}}catch{Write-YumLogException -Context 'Top processes live update failed' -Exception $_.Exception}})
+        $state.Timer=$timer
+        foreach($c in 'Pause','EndTask','Close','OpenLocation','Items'){$ui[$c].Tag=$state}
+        $ui.Items.Add_SelectionChanged({param($s,$e)try{Update-YumProcessExplanation -State $s.Tag}catch{}})
+        $ui.Pause.Add_Click({param($s,$e)
+            $st=$s.Tag;$st.Paused=-not $st.Paused
+            $s.Content=if($st.Paused){'Resume'}else{'Pause'}
+            $st.Ui.LiveText.Text=if($st.Paused){'❚❚ PAUSED'}else{'● LIVE'}
+            if(-not $st.Paused){try{Update-YumProcessRows -State $st}catch{}}
         })
-        $items.Tag=$state
-        try { Add-YumOrganizationContextMenu -ListView $items -State $state -Mode 'NoRefresh' } catch { Write-YumLogException -Context 'Top processes organization menu attach failed' -Exception $_.Exception }
-        $items.Add_SelectionChanged({param($sender,$e)if($sender.SelectedItem){$sender.Tag.Details.Text=('PID {0} | {1:N0} MB | Priority {2} | Protected {3}' -f $sender.SelectedItem.PID,$sender.SelectedItem.MemoryMB,$sender.SelectedItem.Priority,$sender.SelectedItem.Protected)}})
-        $close.Add_Click({param($sender,$e)$sender.Tag.Window.Close()})
-        Update-YumTopProcessList -List $items
+        $ui.OpenLocation.Add_Click({param($s,$e)try{$row=$s.Tag.Ui.Items.SelectedItem;if($null -ne $row -and -not [string]::IsNullOrWhiteSpace($row.Path) -and (Test-Path -LiteralPath $row.Path)){Start-Process -FilePath 'explorer.exe' -ArgumentList ('/select,"{0}"' -f $row.Path)}}catch{Write-YumLogException -Context 'Open file location failed' -Exception $_.Exception}})
+        $ui.EndTask.Add_Click({param($s,$e)
+            $st=$s.Tag;$row=$st.Ui.Items.SelectedItem
+            if($null -eq $row){$st.Ui.Details.Text='Select a program first.';return}
+            $proc=$null;try{$proc=Get-Process -Id $row.MainPid -ErrorAction Stop}catch{$st.Ui.Details.Text='That program has already closed.';return}
+            $r=Invoke-YumEndTask -Process $proc
+            $st.Ui.Details.Text=$r.Reason
+            try{Update-YumProcessRows -State $st}catch{}
+        })
+        $ui.Close.Add_Click({param($s,$e)$s.Tag.Window.Close()})
+        $window.Add_Closed({param($s,$e)try{$s.Tag.Timer.Stop()}catch{}})
+        Update-YumProcessRows -State $state
+        $timer.Start()
         $window.Owner=$script:Yum.Window
         [void]$window.ShowDialog()
     } catch { Write-YumLogException -Context 'Top processes dialog failed' -Exception $_.Exception; Show-YumMessage -Message $_.Exception.Message -Title 'YUMRAM - Error' -Buttons 'OK' -Icon 'Error' }
@@ -445,7 +595,7 @@ function Show-YumSettings {
         $state=@{Window=$window;Ui=$ui};$ui.Apply.Tag=$state;$ui.Reset.Tag=$state;$ui.Close.Tag=$state
         $ui.Close.Add_Click({param($sender,$e)$sender.Tag.Window.Close()})
         $loadDefaults={param($u)
-            $d=@{MinimumAvailable='4.0';CleanupTarget='4.0';Hysteresis='0.3';CleanInterval='30';ProcessCooldown='60';TelemetryInterval='0.5';GpuInterval='3';GameInterval='2';SafePressure='92';BalancedPressure='85';AggressivePressure='78';SafePass='3';BalancedPass='6';AggressivePass='10';ScannerMaxItems='80'}
+            $d=@{MinimumAvailable='4.0';CleanupTarget='4.0';Hysteresis='0.3';CleanInterval='15';ProcessCooldown='60';TelemetryInterval='0.5';GpuInterval='3';GameInterval='2';SafePressure='92';BalancedPressure='85';AggressivePressure='78';SafePass='6';BalancedPass='10';AggressivePass='16';ScannerMaxItems='80'}
             foreach($k in $d.Keys){$u.$k.Text=$d[$k]};$modeItems=@($u.Mode.Items);for($i=0;$i -lt $modeItems.Count;$i++){if([string]$modeItems[$i].Tag -eq 'Balanced'){$u.Mode.SelectedIndex=$i;break}};$u.GamePriority.SelectedIndex=0;$u.AutoDetectGames.IsChecked=$true;$u.ProtectGame.IsChecked=$true;$u.AutoCleanOnGameStart.IsChecked=$false;$u.EnableOptionalBackground.IsChecked=$true;$u.EnableOptionalServices.IsChecked=$false;$u.StartMonitoringAutomatically.IsChecked=$false;$u.EnableSystemScanner.IsChecked=$true;$u.EnableOnlineResearch.IsChecked=$true;$u.ShowTrayIcon.IsChecked=$true;$u.MinimizeToTray.IsChecked=$true;$u.Validation.Foreground=Get-YumBrush '#FDE68A';$u.Validation.Text='Defaults loaded. Click Apply to save.'
         }
         $ui.Reset.Add_Click({param($sender,$e)& $loadDefaults $sender.Tag.Ui})
@@ -453,7 +603,7 @@ function Show-YumSettings {
             try{
                 $u=$sender.Tag.Ui
                 $fields=@{
-                    MinimumAvailableGB=@($u.MinimumAvailable.Text,0.1,1000);TargetHysteresisGB=@($u.Hysteresis.Text,0.0,100);MinimumCleanIntervalSeconds=@($u.CleanInterval.Text,0.0,3600);ProcessCooldownSeconds=@($u.ProcessCooldown.Text,0.0,86400);TelemetryIntervalSeconds=@($u.TelemetryInterval.Text,0.25,10);GPUIntervalSeconds=@($u.GpuInterval.Text,0.5,30);GameDetectionIntervalSeconds=@($u.GameInterval.Text,0.5,30);SafePressurePercent=@($u.SafePressure.Text,50,99);BalancedPressurePercent=@($u.BalancedPressure.Text,50,99);AggressivePressurePercent=@($u.AggressivePressure.Text,50,99);SafeProcessesPerPass=@($u.SafePass.Text,1,32);BalancedProcessesPerPass=@($u.BalancedPass.Text,1,32);AggressiveProcessesPerPass=@($u.AggressivePass.Text,1,64);ScannerMaxItems=@($u.ScannerMaxItems.Text,10,500)
+                    MinimumAvailableGB=@($u.MinimumAvailable.Text,0.1,1000);TargetHysteresisGB=@($u.Hysteresis.Text,0.0,100);MinimumCleanIntervalSeconds=@($u.CleanInterval.Text,0.0,3600);ProcessCooldownSeconds=@($u.ProcessCooldown.Text,0.0,86400);TelemetryIntervalSeconds=@($u.TelemetryInterval.Text,0.25,10);GPUIntervalSeconds=@($u.GpuInterval.Text,0.5,30);GameDetectionIntervalSeconds=@($u.GameInterval.Text,0.5,30);SafePressurePercent=@($u.SafePressure.Text,50,99);BalancedPressurePercent=@($u.BalancedPressure.Text,50,99);AggressivePressurePercent=@($u.AggressivePressure.Text,50,99);SafeProcessesPerPass=@($u.SafePass.Text,1,10);BalancedProcessesPerPass=@($u.BalancedPass.Text,1,16);AggressiveProcessesPerPass=@($u.AggressivePass.Text,1,24);ScannerMaxItems=@($u.ScannerMaxItems.Text,10,500)
                 }
                 foreach($kv in $fields.GetEnumerator()){$d=0.0;if(-not [double]::TryParse([string]$kv.Value[0],[Globalization.NumberStyles]::Float,[Globalization.CultureInfo]::InvariantCulture,[ref]$d)){throw "Invalid value: $($kv.Key)."};if($d -lt $kv.Value[1] -or $d -gt $kv.Value[2]){throw "$($kv.Key) must be between $($kv.Value[1]) and $($kv.Value[2])."};$val=if($kv.Key -match 'Pass|Items'){[int][math]::Round($d)}elseif($kv.Key -match 'Seconds|Interval'){[math]::Round($d,2)}else{[math]::Round($d,1)};Update-YumConfigValue -Name $kv.Key -Value $val};Update-YumConfigValue -Name CleanupTargetAvailableGB -Value ([double]$script:Yum.Config.MinimumAvailableGB)
                 if([double]$cfg.SafePressurePercent -lt [double]$cfg.BalancedPressurePercent){throw 'Safe pressure should be at least as high as Balanced pressure.'};if([double]$cfg.BalancedPressurePercent -lt [double]$cfg.AggressivePressurePercent){throw 'Balanced pressure should be at least as high as Aggressive pressure.'}
@@ -466,22 +616,22 @@ function Show-YumSettings {
 }
 
 function Show-YumAbout {
-    $lines=@(
-        ('YUMRAM {0}' -f $script:Yum.Config.Version),
-        '',
-        'Your Ultimate Memory Reclaim & Monitor',
-        '',
-        'YUMRAM combines Available-RAM telemetry, conservative working-set reclaim, game protection, optional background-app cleanup, and a reversible optional-service layer.',
-        '',
-        'Game priority changes CPU scheduling preference only. It does not create additional RAM or GPU capacity. High priority is intentionally treated as an advanced option.',
-        '',
-        'Working-set reduction is reported separately from measured Available RAM improvement.',
-        '',
-        'Protected processes, the foreground process, and the active game are excluded by the safety layer.',
-        '',
-        '💜 Built to reclaim memory without acting like a process killer.'
-    )
-    Show-YumInfoWindow -Title '💜 About YUMRAM' -Subtitle ('{0} — Live inventory, target controller, telemetry, and safe cleanup.' -f $script:Yum.Config.Version) -Lines $lines
+    # 5.5: own window (feature tiles + quick links) instead of a plain text list.
+    try{
+        [xml]$xaml=Read-YumXamlText -Path (Join-Path $script:Yum.Root 'UI\Xaml\About.xaml')
+        $window=[Windows.Markup.XamlReader]::Load((New-Object System.Xml.XmlNodeReader $xaml))
+        $admin=if(Test-YumIsElevated){'running as administrator'}else{'not running as administrator'}
+        $window.FindName('Version').Text=('Version {0}  •  {1}' -f [string]$script:Yum.Config.Version,$admin)
+        $window.FindName('Close').Add_Click({param($s,$e)[System.Windows.Window]::GetWindow($s).Close()})
+        $window.FindName('OpenFolder').Add_Click({try{Start-Process -FilePath 'explorer.exe' -ArgumentList ('"{0}"' -f [string]$script:Yum.ConfigDirectory)}catch{Write-YumLogException -Context 'Open YUMRAM folder failed' -Exception $_.Exception}})
+        $window.FindName('OpenLog').Add_Click({try{$log=[string](Get-YumLogPath);if(Test-Path -LiteralPath $log){Start-Process -FilePath 'notepad.exe' -ArgumentList ('"{0}"' -f $log)}else{Start-Process -FilePath 'explorer.exe' -ArgumentList ('"{0}"' -f [string]$script:Yum.ConfigDirectory)}}catch{Write-YumLogException -Context 'Open log failed' -Exception $_.Exception}})
+        $window.FindName('OpenProject').Add_Click({try{Start-Process 'https://github.com/bigmanjer/YumRam'}catch{}})
+        $window.Owner=$script:Yum.Window
+        [void]$window.ShowDialog()
+    }catch{
+        Write-YumLogException -Context 'About window failed' -Exception $_.Exception
+        Show-YumInfoWindow -Title 'About YUMRAM' -Subtitle ([string]$script:Yum.Config.Version) -Lines @('YUMRAM — memory reclaim & monitor for Windows.')
+    }
 }
 
 function Start-YumOptionalBackgroundScanAsync {
@@ -911,6 +1061,54 @@ function Refresh-YumIntelligenceView {
     }
 }
 
+function Set-YumIntelligenceFilter {
+    # Selects the Show entry whose text is $Name (summary-card click). The Filter's own
+    # SelectionChanged handler then rebuilds the list and moves the card highlight.
+    param($State,[string]$Name)
+    if($null -eq $State -or [string]::IsNullOrWhiteSpace($Name)){return}
+    foreach($item in @($State.Filter.Items)){
+        if([string]$item.Content -eq $Name){
+            if($State.Filter.SelectedItem -eq $item){Update-YumIntelligenceList -State $State -Force;Update-YumIntelligenceCardHighlight -State $State}
+            else{$State.Filter.SelectedItem=$item}
+            return
+        }
+    }
+}
+
+function Update-YumIntelligenceCardHighlight {
+    param($State)
+    if($null -eq $State -or -not $State.ContainsKey('CounterStrip') -or $null -eq $State.CounterStrip){return}
+    $current='';try{$current=[string]$State.Filter.SelectedItem.Content}catch{}
+    if($current -eq 'Overview'){$current='All Items'}
+    $accent=$null;try{$accent=[System.Windows.Application]::Current.Resources['Accent']}catch{}
+    if($null -eq $accent){$accent=Get-YumBrush '#A855F7'}
+    foreach($card in @($State.CounterStrip.Children)){
+        if([string]$card.Tag -eq $current){$card.BorderBrush=$accent;$card.BorderThickness=[System.Windows.Thickness]::new(2)}
+        else{$card.ClearValue([System.Windows.Controls.Border]::BorderBrushProperty);$card.ClearValue([System.Windows.Controls.Border]::BorderThicknessProperty)}
+    }
+}
+
+function Update-YumIntelligenceSelectionPanel {
+    param($State)
+    if($null -eq $State){return}
+    $r=$State.ListView.SelectedItem
+    $has=($null -ne $r)
+    foreach($n in 'ResearchCard','DecisionCard'){if($State.ContainsKey($n) -and $null -ne $State[$n]){$State[$n].IsEnabled=$has}}
+    $get={param($o,[string]$p) if($null -ne $o -and $null -ne $o.PSObject.Properties[$p] -and $null -ne $o.$p){[string]$o.$p}else{''}}
+    if(-not $has){
+        if($null -ne $State.SelectedName){$State.SelectedName.Text='Nothing selected'}
+        if($null -ne $State.SelectedMeta){$State.SelectedMeta.Text='Select an item in the list to see what it is, the evidence and what YUMRAM will do with it.'}
+        return
+    }
+    if($null -ne $State.SelectedName){$State.SelectedName.Text=(& $get $r 'Name')}
+    $meta=@(@((& $get $r 'Source'),(& $get $r 'Publisher'),(& $get $r 'Category'),(& $get $r 'Risk'))|Where-Object{-not [string]::IsNullOrWhiteSpace($_)})
+    if($null -ne $State.SelectedMeta){$State.SelectedMeta.Text=($meta -join '  •  ')}
+    # Start the decision from the item's current category (instead of always "Games / Gaming").
+    $cat=(& $get $r 'Category');$placement=(& $get $r 'Placement');$idx=-1;$i=0
+    foreach($item in @($State.ManualCategory.Items)){$c=[string]$item.Content;if($c -eq $cat -or $c -eq $placement -or ($c -eq 'Unknown / Quarantine' -and $placement -like 'Unknown*')){$idx=$i;break};$i++}
+    $State.ManualCategory.SelectedIndex=$idx
+}
+
 function Show-YumIntelligence {
     param([ValidateSet('All','Apps','Games','Protected','Background','Services','Review','Unknown')][string]$InitialFilter='All')
     try {
@@ -985,7 +1183,16 @@ function Show-YumIntelligence {
         })
         $state.RefreshView.Add_Click({param($s,$e)try{if($s.Tag.Busy -or $s.Tag.ResearchBusy){return};[void](Refresh-YumIntelligenceView -State $s.Tag)}catch{Write-YumLogException -Context 'Manual Intelligence view refresh failed' -Exception $_.Exception}})
 
-        $state.Filter.Add_SelectionChanged({param($s,$e)try{Update-YumIntelligenceList -State $s.Tag -Force}catch{Write-YumLogException -Context 'Intelligence filter failed' -Exception $_.Exception}})
+        $state.Filter.Add_SelectionChanged({param($s,$e)try{Update-YumIntelligenceList -State $s.Tag -Force}catch{Write-YumLogException -Context 'Intelligence filter failed' -Exception $_.Exception};try{Update-YumIntelligenceCardHighlight -State $s.Tag}catch{}})
+        # 5.4: summary cards switch the Show filter; the selected item gets a header; the decision panel
+        # starts from the item's current category and is disabled until something is selected.
+        foreach($n in @('CounterStrip','ResultCount','SelectedName','SelectedMeta','ResearchCard','DecisionCard')){$state[$n]=$window.FindName($n)}
+        if($null -ne $state.CounterStrip){
+            foreach($card in @($state.CounterStrip.Children)){
+                $card.Add_MouseLeftButtonUp({param($s,$e)try{Set-YumIntelligenceFilter -State $script:Yum.IntelligenceWindow.Tag -Name ([string]$s.Tag)}catch{Write-YumLogException -Context 'Intelligence card filter failed' -Exception $_.Exception}})
+            }
+        }
+        $state['ListView'].Add_SelectionChanged({param($s,$e)try{Update-YumIntelligenceSelectionPanel -State $s.Tag}catch{Write-YumLogException -Context 'Intelligence selection panel failed' -Exception $_.Exception}})
         $state.SearchTimer=New-Object System.Windows.Threading.DispatcherTimer
         $state.SearchTimer.Interval=[TimeSpan]::FromMilliseconds(250)
         $state.SearchTimer.Tag=$state
@@ -999,7 +1206,7 @@ function Show-YumIntelligence {
                     $r=$s.SelectedItem
                     try{[void](Ensure-YumIntelligenceRecordSchema -Record $r)}catch{Write-YumLogException -Context 'Intelligence selection schema normalization failed' -Exception $_.Exception}
 $stateLabel=if($null -ne $r.StateText){[string]$r.StateText}else{if($r.Live){'LIVE'}else{'SAVED'}};$manual=if($null -ne $r.PSObject.Properties['ManualOverride'] -and [bool]$r.ManualOverride){'YES'}else{'NO'};$sources=if($null -ne $r.PSObject.Properties['ResearchSources']){(@($r.ResearchSources) -join ', ')}else{''};$links=if($null -ne $r.PSObject.Properties['ResearchLinks']){(@($r.ResearchLinks) -join '
-')}else{''};$identityState=[string]$r.IdentityState;if([string]::IsNullOrWhiteSpace($identityState)){$identityState='Not recorded'};$identityConfidence=if($null -ne $r.PSObject.Properties['IdentityConfidence']){[int]$r.IdentityConfidence}else{[int]$r.Confidence};$unknownReason=[string]$r.UnknownReason;if([string]::IsNullOrWhiteSpace($unknownReason)){$unknownReason=[string]$r.ResearchReason};$hash='';try{if($null -ne $r.PSObject.Properties['FileHash']){$hash=[string]$r.FileHash}}catch{};if([string]::IsNullOrWhiteSpace($hash)){$hash='Not calculated yet'};$signature='Unknown';try{if($null -ne $r.PSObject.Properties['Signature']){$signature=[string]$r.Signature};if([string]::IsNullOrWhiteSpace($signature) -and $null -ne $r.PSObject.Properties['SignerThumbprint']){$signature=[string]$r.SignerThumbprint}}catch{};if([string]::IsNullOrWhiteSpace($signature)){$signature='Unknown'};$ctx.Details.Text=("State: {0}`nName: {1}`nCategory: {2}`nRisk: {3}`nPlacement: {4}`nPublisher: {5}`nIdentity: {6} ({7}% confidence)`nSignature: {8}`nSHA-256: {9}`nManual override: {10}`nEvidence: {11}`nWhy Unknown: {12}`nSources: {13}" -f $stateLabel,$r.Name,$r.Category,$r.Risk,$r.Placement,$r.Publisher,$identityState,$identityConfidence,$signature,$hash,$manual,$r.Reason,$unknownReason,$sources);if($null -ne $ctx.SelectedResearch){$liveStage=if($null -ne $r.PSObject.Properties['ResearchProgressStage']){[string]$r.ResearchProgressStage}else{''};$liveMessage=if($null -ne $r.PSObject.Properties['ResearchProgressMessage']){[string]$r.ResearchProgressMessage}else{''};$liveLine=if(-not [string]::IsNullOrWhiteSpace($liveStage)){("`nLive progress: {0} — {1}" -f $liveStage,$liveMessage)}else{''};$ctx.SelectedResearch.Text=("Research: {0}`nConfidence: {1}%`nComplete: {2}`nPerformed: {3}`nExhausted: {4}`nError: {5}{6}" -f [string]$r.ResearchStatus,[string]$r.ResearchConfidence,[bool]$r.ResearchComplete,[bool]$r.ResearchPerformed,[bool]$r.ResearchExhausted,[string]$r.ResearchErrorState,$liveLine)};if($null -ne $ctx.SelectedAction){$ctx.SelectedAction.Text=("Action Lane: {0}`nRecommendation: {1}" -f [string]$r.ActionLane,[string]$r.Recommendation)}};try{if($null -ne $ctx.ManualOrganizationStatus){$ctx.ManualOrganizationStatus.Text=if([bool]$r.ManualOverride){('MANUAL OVERRIDE SAVED • ' + [string]$r.Category)}else{'No manual override selected.'}}}catch{}
+')}else{''};$identityState=[string]$r.IdentityState;if([string]::IsNullOrWhiteSpace($identityState)){$identityState='Not recorded'};$identityConfidence=if($null -ne $r.PSObject.Properties['IdentityConfidence']){[int]$r.IdentityConfidence}else{[int]$r.Confidence};$unknownReason=[string]$r.UnknownReason;if([string]::IsNullOrWhiteSpace($unknownReason)){$unknownReason=[string]$r.ResearchReason};$hash='';try{if($null -ne $r.PSObject.Properties['FileHash']){$hash=[string]$r.FileHash}}catch{};if([string]::IsNullOrWhiteSpace($hash)){$hash='Not calculated yet'};$signature='Unknown';try{if($null -ne $r.PSObject.Properties['Signature']){$signature=[string]$r.Signature};if([string]::IsNullOrWhiteSpace($signature) -and $null -ne $r.PSObject.Properties['SignerThumbprint']){$signature=[string]$r.SignerThumbprint}}catch{};if([string]::IsNullOrWhiteSpace($signature)){$signature='Unknown'};$ctx.Details.Text=("State: {0}`nName: {1}`nCategory: {2}`nRisk: {3}`nPlacement: {4}`nPublisher: {5}`nIdentity: {6} ({7}% confidence)`nSignature: {8}`nSHA-256: {9}`nManual override: {10}`nEvidence: {11}`nWhy Unknown: {12}`nSources: {13}" -f $stateLabel,$r.Name,$r.Category,$r.Risk,$r.Placement,$r.Publisher,$identityState,$identityConfidence,$signature,$hash,$manual,$r.Reason,$unknownReason,$sources);if($null -ne $ctx.SelectedResearch){$liveStage=if($null -ne $r.PSObject.Properties['ResearchProgressStage']){[string]$r.ResearchProgressStage}else{''};$liveMessage=if($null -ne $r.PSObject.Properties['ResearchProgressMessage']){[string]$r.ResearchProgressMessage}else{''};$liveLine=if(-not [string]::IsNullOrWhiteSpace($liveStage)){("`nLive progress: {0} — {1}" -f $liveStage,$liveMessage)}else{''};$ctx.SelectedResearch.Text=("Research: {0}`nConfidence: {1}%`nComplete: {2}`nPerformed: {3}`nExhausted: {4}`nError: {5}{6}" -f [string]$r.ResearchStatus,[string]$r.ResearchConfidence,[bool]$r.ResearchComplete,[bool]$r.ResearchPerformed,[bool]$r.ResearchExhausted,[string]$r.ResearchErrorState,$liveLine)};if($null -ne $ctx.SelectedAction){$ctx.SelectedAction.Text=$(if([string]::IsNullOrWhiteSpace([string]$r.Recommendation) -or [string]$r.Recommendation -eq [string]$r.ActionLane){[string]$r.ActionLane}else{("{0}`n{1}" -f [string]$r.ActionLane,[string]$r.Recommendation)})}};try{if($null -ne $ctx.ManualOrganizationStatus){$ctx.ManualOrganizationStatus.Text=if([bool]$r.ManualOverride){('MANUAL OVERRIDE SAVED • ' + [string]$r.Category)}else{'No manual override selected.'}}}catch{}
             } catch { Write-YumLogException -Context 'Intelligence selection update failed' -Exception $_.Exception }
         })
 
@@ -1008,11 +1215,16 @@ $stateLabel=if($null -ne $r.StateText){[string]$r.StateText}else{if($r.Live){'LI
             if($null -eq $item){$ctx.ManualOrganizationStatus.Text='Select a record first.';return}
             $cat=[string]$ctx.ManualCategory.SelectedItem.Content
             if([string]::IsNullOrWhiteSpace($cat)){$ctx.ManualOrganizationStatus.Text='Choose a category first.';return}
+            # 5.5: choosing Review Queue is the same as Reset (it used to save a permanent 'review' override that
+            # also blocked research, so the item stayed Unknown forever).
+            if($cat -eq 'Review Queue'){$ctx.ClearOrganization.RaiseEvent((New-Object System.Windows.RoutedEventArgs([System.Windows.Controls.Primitives.ButtonBase]::ClickEvent)));return}
             $placement=switch($cat){'Games / Gaming'{'Games / Gaming'};'User Background Apps'{'User Background Apps'};'Identified Applications'{'Identified Applications'};'Security'{'Security'};'Drivers / Hardware'{'Drivers / Hardware'};'Startup Inventory'{'Startup Inventory'};'Review Queue'{'Review Queue'};default{'Unknown / Quarantine for Review'}}
             $action=switch($cat){'Games / Gaming'{'Protect during gaming'};'User Background Apps'{'Candidate only under memory pressure'};'Identified Applications'{'Candidate under memory pressure when research supports it'};'Security'{'Protect; never manage automatically'};'Drivers / Hardware'{'Protect; never manage automatically'};'Startup Inventory'{'Review startup behavior before changes'};'Review Queue'{'Research/review before management'};default{'Never manage automatically'}}
             $loadedOrgs=Load-YumManualOrganizations;$previousOrgs=@{};foreach($k in $loadedOrgs.Keys){$previousOrgs[$k]=$loadedOrgs[$k]}
             $org=Set-YumManualOrganization -Item $item -Category $cat -Placement $placement -ActionLane $action
             $item.Category=$org.Category;$item.Placement=$org.Placement;$item.ActionLane=$org.ActionLane;$item.Recommendation=$org.ActionLane;$item.ManualOverride=$true;$item.ManualOrganizationUpdated=$org.Updated
+            # 5.5: a decision resolves the item (risk + status), so it no longer shows as Unknown afterwards.
+            [void](Set-YumManualDecisionState -Record $item -Risk ([string]$org.Risk) -Category $cat)
             $stable='';try{$stable=[string](Get-YumStableIntelligenceKey -Record $item)}catch{};$key=if(-not [string]::IsNullOrWhiteSpace($stable)){$stable}else{[string]$item.Key}
             if(-not [string]::IsNullOrWhiteSpace($key)){
                 $script:Yum.IntelligenceDb[$key]=$item
@@ -1124,13 +1336,15 @@ $stateLabel=if($null -ne $r.StateText){[string]$r.StateText}else{if($r.Live){'LI
         try { [void](Refresh-YumIntelligenceView -State $state) } catch { Write-YumLogException -Context 'Initial Intelligence view refresh failed' -Exception $_.Exception }
         # Attach this Intelligence window to a Research pass that is already running elsewhere.
         try {
-            $statusPath=Join-Path $script:Yum.Root 'research-status.json'
+            $statusPath=Get-YumResearchStatusPath
             if(Test-Path -LiteralPath $statusPath){
                 $statusRaw=Get-Content -LiteralPath $statusPath -Raw -ErrorAction Stop
                 if(-not [string]::IsNullOrWhiteSpace($statusRaw)){
                     $status=$statusRaw|ConvertFrom-Json -ErrorAction Stop
                     $stage=[string]$status.Stage
-                    if($stage -in @('Started','Queued','Researching Item','Researching Local','Researching Online')){
+                    # 5.5: only a status written by THIS YUMRAM process is a live run. A file left by a closed or
+                    # crashed run used to mark research busy forever, so Run Scan never researched anything again.
+                    if($stage -in @('Started','Queued','Researching Item','Researching Local','Researching Online') -and (Test-YumResearchStatusLive -Status $status)){
                         $state.ResearchBusy=$true
                         [void](Merge-YumLiveResearchResults -State $state)
                         [void](Get-YumResearchStatusForUi -State $state)
@@ -1150,10 +1364,16 @@ $stateLabel=if($null -ne $r.StateText){[string]$r.StateText}else{if($r.Live){'LI
     }
 }
 
+function Test-YumResearchStatusLive {
+    # Research runs in a runspace inside this process, so a running status must carry this process id.
+    param($Status)
+    try{ return ($null -ne $Status -and $null -ne $Status.PSObject.Properties['Pid'] -and [int]$Status.Pid -eq $PID) }catch{ return $false }
+}
+
 function Get-YumResearchStatusForUi {
     param([hashtable]$State)
     try {
-        $statusPath=Join-Path $script:Yum.Root 'research-status.json'
+        $statusPath=Get-YumResearchStatusPath
         if(-not (Test-Path -LiteralPath $statusPath)){return $false}
         $raw=Get-Content -LiteralPath $statusPath -Raw -ErrorAction Stop
         if([string]::IsNullOrWhiteSpace($raw)){return $false}
@@ -1164,7 +1384,7 @@ function Get-YumResearchStatusForUi {
         $total=[int]$status.Total
         $message=[string]$status.Message
         if($stage -in @('Started','Queued','Researching Item','Researching Local','Researching Online','Organized','Unknown','Research Error','Error','Complete')){
-            if($stage -in @('Started','Queued','Researching Item','Researching Local','Researching Online')){
+            if($stage -in @('Started','Queued','Researching Item','Researching Local','Researching Online') -and (Test-YumResearchStatusLive -Status $status)){
                 $State.ResearchBusy=$true
                 try {
                     if($null -ne $State.Data -and $null -ne $State.Data.PSObject.Properties['Records']){
@@ -1195,8 +1415,13 @@ function Get-YumResearchStatusForUi {
                 elseif($total -gt 0){ $State.ResearchProgress.Text=('Research {0}/{1} • {2}' -f $index,$total,$stage); try{$State.ActivityStatus.Text=('RESEARCHING • {0}/{1}' -f $index,$total);$State.ActivityDetail.Text=('{0} • {1}' -f $stage,$name);$State.ActivityProgress.IsIndeterminate=$false;$State.ActivityProgress.Value=[math]::Min(100,[math]::Max(0,($index / [double]$total)*100))}catch{} }
                 else { $State.ResearchProgress.Text=('Research • {0}' -f $stage) }
             }
-            if($stage -in @('Organized','Unknown','Research Error','Error','Complete','Skipped')){
-                $State.ResearchBusy=$false
+            # 5.5: per-item results (Organized/Unknown/...) used to clear ResearchBusy between items while the
+            # worker was still running. Only the queue's own Complete, written by this process after the
+            # current run started, ends it here; the worker poll ends it in every other case.
+            if($stage -eq 'Complete' -and (Test-YumResearchStatusLive -Status $status)){
+                $fresh=$true
+                try{if($State.ContainsKey('ResearchStartedAt') -and $null -ne $State.ResearchStartedAt){$fresh=([datetime]$status.Updated -ge [datetime]$State.ResearchStartedAt)}}catch{}
+                if($fresh){$State.ResearchBusy=$false}
             }
             if($null -ne $State.Summary -and $stage -in @('Queued','Researching Item','Researching Local','Researching Online')){
                 $State.Summary.Text=('Scan complete • Research {0}/{1} • {2} • {3}' -f $index,$total,$stage,$name)
@@ -1424,6 +1649,7 @@ function Start-YumIntelligenceResearchAsync {
         $State.ResearchLastMergedCompleted=0
         $State.ResearchConcurrency=1; $State.ResearchProgressCount=0; $State.ResearchProgressText=('Queued • {0} items • 1 at a time' -f $researchRecords.Count)
         $State.ResearchRunId=$runId
+        $State.ResearchStartedAt=Get-Date
     $workerTimeout=1800
         try{if($null -ne $config.PSObject.Properties['ResearchWorkerTimeoutSeconds']){$workerTimeout=[math]::Max(300,[int]$config.ResearchWorkerTimeoutSeconds)}}catch{}
         $poll.Tag=@{Worker=$worker;Async=$async;State=$State;Started=(Get-Date);TimeoutSeconds=$workerTimeout;RunId=$runId;QueuePath=$queuePath;ConfigPath=$configPath;LiveResultsPath=$liveResultsPath}
@@ -1724,7 +1950,7 @@ function Start-YumIntelligenceScanAsync {
                 }
                 # Build the unresolved queue BEFORE using it in completion UI.
                 # StrictMode otherwise throws here and leaves the visual activity state stuck at SCANNING.
-                $researchInput=@($ctx.State.Data.Records | Where-Object { $null -ne $_ -and [bool]$_.Live -and (Test-YumResearchUnresolved -Record $_) })
+                $researchInput=@($ctx.State.Data.Records | Where-Object { $null -ne $_ -and ([bool]$_.Live -or [string]$_.ResearchStatus -eq 'Unknown') -and (Test-YumResearchUnresolved -Record $_) })
                 Write-YumLog ('Research queue prepared: {0} unresolved records.' -f $researchInput.Count)
                 Update-YumIntelligenceList -State $ctx.State
                 $ctx.State.LastScan.Text=('Updated {0:HH:mm:ss} — {1} processes, {2} services, {3} apps' -f [datetime]$ctx.State.Data.Timestamp,$ctx.State.Data.ProcessCount,$ctx.State.Data.ServiceCount,$ctx.State.Data.AppCount)
@@ -1820,6 +2046,7 @@ function Update-YumIntelligenceList {
     if($signature -ne [string]$State.LastListSignature){
         $selectedKey=''; try{if($null -ne $State.ListView.SelectedItem){$selectedKey=[string]$State.ListView.SelectedItem.Key}}catch{}
         $State.ListView.ItemsSource=[object[]]@($rows)
+        try{if($State.ContainsKey('ResultCount') -and $null -ne $State.ResultCount){$State.ResultCount.Text=('{0:N0} of {1:N0} items' -f $rows.Count,$all.Count)}}catch{}
         $State.LastListSignature=$signature
         $State.LastRenderedRevision=$revision
         if(-not [string]::IsNullOrWhiteSpace($selectedKey)){
@@ -1839,7 +2066,7 @@ function Update-YumIntelligenceList {
         elseif($null -ne $r.PSObject.Properties['ResearchStatus'] -and [string]$r.ResearchStatus -eq 'Researching'){$researching++}
     }
     try{if($null -ne $State.Data.PSObject.Properties['CachedCount']){$cached=[int]$State.Data.CachedCount}}catch{}
-    $State.ScannedCount.Text=[string]$live.Count
+    $State.ScannedCount.Text=[string]@($State.Data.Records).Count   # 5.5: "ALL ITEMS" card = everything in the list (live + saved)
     $State.ReviewCount.Text=[string]$needs.Count
     $State.ResearchingCount.Text=if($State.ResearchBusy){if($null -ne $State.ResearchProgressCount){[string]$State.ResearchProgressCount}else{[string]$researching}}else{[string]$researching}
     $State.ResolvedCount.Text=[string]$resolved.Count
@@ -1884,6 +2111,14 @@ function Show-YumMemoryReclaim {
         foreach($n in $state.Keys){if($n -ne 'Window' -and $null -eq $state[$n]){throw "RAM Reclaim Center control missing: $n"}}
         $window.Tag=$state
         $reclaimState=$state
+        # 5.5: show up front whether the memory-area steps (marked *) can run.
+        try{
+            $adminText=$window.FindName('AdminText')
+            if($null -ne $adminText){
+                if(Test-YumIsElevated){$adminText.Text='✓ Administrator: full reclaim';$adminText.Foreground=Get-YumBrush '#86EFAC'}
+                else{$adminText.Text='Not administrator: * steps skipped';$adminText.Foreground=Get-YumBrush '#FDE68A';$adminText.ToolTip='Restart YUMRAM with "Run as administrator" to include the steps marked *.'}
+            }
+        }catch{}
         try{
             $work=[System.Windows.SystemParameters]::WorkArea
             $window.Width=[math]::Min([double]$window.Width,[double]$work.Width-30)
@@ -1902,7 +2137,7 @@ function Show-YumMemoryReclaim {
             $rebuild=(-not $State.ContainsKey('RenderedVersion') -or [int]$State['RenderedVersion'] -ne $version -or -not $view.HasResult)
             if($rebuild){$State.Items.Items.Clear();$State['RenderedVersion']=$version}
             if(-not $view.HasResult){
-                [void]$State.Items.Items.Add([pscustomobject]@{Type='Status';Process='No completed reclaim';PID='—';BeforeMB='—';AfterMB='—';ReducedMB='—';CPU='—';Result='Ready';Reason='Preview scanning is disabled to keep the Center responsive. Run FREE RAM NOW or DEEP RAM RECLAIM first.'})
+                [void]$State.Items.Items.Add([pscustomobject]@{Type='Status';Process='Nothing yet';PID='—';BeforeMB='—';AfterMB='—';ReducedMB='—';CPU='—';Result='Ready';Reason='Run Free RAM now or Deep reclaim to see each step here. Run FREE RAM NOW or DEEP RAM RECLAIM first.'})
                 $current=Get-YumMemoryReclaimSnapshot -Fast
                 $State.Available.Text='{0:N2} GB' -f $current.AvailableGB
                 $State.Cache.Text=if($null -eq $current.CacheGB){'N/A'}else{'{0:N2} GB' -f $current.CacheGB}

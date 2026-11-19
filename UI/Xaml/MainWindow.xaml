@@ -25,19 +25,25 @@
 
     <!-- ================= Header ================= -->
     <DockPanel Grid.Row="0" Margin="0,0,0,14" LastChildFill="False">
+      <!-- 5.5: every tool is one click away in the header (the Tools card used to sit below the fold). -->
       <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" VerticalAlignment="Center">
-        <TextBlock Text="YUMRAM" Style="{StaticResource AppTitle}" VerticalAlignment="Center"/>
-        <TextBlock Text="Memory reclaim &amp; monitor" Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="12,5,0,0"/>
-      </StackPanel>
-      <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
-        <Border Style="{StaticResource Pill}" Margin="0,0,8,0" ToolTip="Current memory mode">
+        <TextBlock Text="YUMRAM" Style="{StaticResource AppTitle}" VerticalAlignment="Center" Margin="0,0,14,0"/>
+        <Border Style="{StaticResource Pill}" Margin="0,0,8,0" VerticalAlignment="Center" ToolTip="Current memory mode">
           <TextBlock x:Name="Mode" Text="BALANCED" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource Pink}"/>
         </Border>
-        <Border Style="{StaticResource Pill}" Margin="0,0,12,0" ToolTip="Automatic monitoring state">
+        <Border Style="{StaticResource Pill}" VerticalAlignment="Center" ToolTip="Automatic monitoring state">
           <TextBlock x:Name="Status" Text="● Paused" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource Warning}"/>
         </Border>
+      </StackPanel>
+      <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+        <Button x:Name="Processes" Content="📊  What's using RAM" Style="{StaticResource GhostButton}"
+                ToolTip="See every program using memory, explained in plain words. Updates live."/>
+        <Button x:Name="ReclaimCenter" Content="♻  Reclaim Center" Style="{StaticResource GhostButton}"
+                ToolTip="Run a reclaim and see exactly what was trimmed and what Windows actually returned."/>
+        <Button x:Name="Intelligence" Content="🧠  Intelligence" Style="{StaticResource GhostButton}"
+                ToolTip="Scan and identify every program, service and app; unknown items are researched automatically."/>
         <Button x:Name="Settings" Content="⚙  Settings" Style="{StaticResource GhostButton}"/>
-        <Button x:Name="About" Content="About" Style="{StaticResource GhostButton}"/>
+        <Button x:Name="About" Content="ⓘ  About" Style="{StaticResource GhostButton}"/>
       </StackPanel>
     </DockPanel>
 
@@ -170,18 +176,6 @@
             </StackPanel>
           </Border>
 
-          <!-- Tools -->
-          <Border Style="{StaticResource Card}" Margin="0,0,0,12">
-            <StackPanel>
-              <TextBlock Text="Tools" Style="{StaticResource SectionTitle}"/>
-              <Button x:Name="Intelligence" Content="Intelligence &amp; research" HorizontalContentAlignment="Left"
-                      ToolTip="Scan and identify every program, service and app; unknown items are researched automatically."/>
-              <Button x:Name="ReclaimCenter" Content="RAM Reclaim Center" Margin="0,8,0,0"
-                      ToolTip="Run a reclaim and see exactly what was trimmed and what Windows actually returned."/>
-              <Button x:Name="Processes" Content="Top memory processes" Margin="0,8,0,0"
-                      ToolTip="See which programs use the most RAM right now."/>
-            </StackPanel>
-          </Border>
 
           <!-- Game protection -->
           <Expander Header="Game protection" IsExpanded="False" Margin="0,0,0,12">

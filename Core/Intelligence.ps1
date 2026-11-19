@@ -168,10 +168,33 @@ function Get-YumManualOrganization {
     }
     return $null
 }
+function Set-YumManualDecisionState {
+    # 5.5: a user decision is a terminal research result. Previously only the category changed, so the
+    # item kept Risk/Status "Unknown" and the decision looked like it had not worked.
+    param([Parameter(Mandatory)]$Record,[string]$Risk,[string]$Category)
+    $resolved=($Category -notin @('Review Queue','Unknown / Quarantine'))
+    $status=if($resolved){'Organized'}elseif($Category -eq 'Unknown / Quarantine'){'Unknown'}else{'Review'}
+    foreach($pair in @(@('Risk',$Risk),@('ResearchStatus',$status),@('ResearchComplete',$resolved),@('ResearchConfidence',$(if($resolved){100}else{0})),@('IdentityState',$(if($resolved){'User decision'}else{'Unknown'})))){
+        try{if($null -eq $Record.PSObject.Properties[$pair[0]]){$Record|Add-Member -NotePropertyName $pair[0] -NotePropertyValue $pair[1] -Force}else{$Record.($pair[0])=$pair[1]}}catch{}
+    }
+    return $Record
+}
 function Apply-YumManualOrganizationToRecord {
     param([Parameter(Mandatory)]$Record)
     $org=Get-YumManualOrganization -Item $Record
-    if($null -eq $org){return $Record}
+    if($null -eq $org){
+        # A saved record can still carry ManualOverride from an old "Review Queue" choice whose key no
+        # longer matches; that flag blocked research forever. Without a saved decision it is cleared.
+        try{if($null -ne $Record.PSObject.Properties['ManualOverride'] -and [bool]$Record.ManualOverride -and [string]$Record.Category -eq 'Review Queue'){$Record.ManualOverride=$false}}catch{}
+        return $Record
+    }
+    # Old saved "Review Queue" overrides (5.4 and earlier) pinned items as Unknown and blocked research;
+    # they are ignored so the item is researched normally.
+    if([string]$org.Category -eq 'Review Queue'){
+        try{if($null -ne $Record.PSObject.Properties['ManualOverride']){$Record.ManualOverride=$false}}catch{}
+        return $Record
+    }
+    try{[void](Set-YumManualDecisionState -Record $Record -Risk ([string]$org.Risk) -Category ([string]$org.Category))}catch{}
     foreach($pair in @(@('Category',[string]$org.Category),@('Placement',[string]$org.Placement),@('ActionLane',[string]$org.ActionLane),@('Risk',[string]$org.Risk),@('ManualOverride',$true),@('ManualOrganizationUpdated',[string]$org.Updated),@('Recommendation',[string]$org.ActionLane))){try{if($null -eq $Record.PSObject.Properties[$pair[0]]){$Record|Add-Member -NotePropertyName $pair[0] -NotePropertyValue $pair[1]}else{$Record.($pair[0])=$pair[1]}}catch{}}
     return $Record
 }

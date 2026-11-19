@@ -1,5 +1,46 @@
 # Changelog
 
+# YUMRAM 5.5.0 — Stays at target, no more Unknowns, plain-language process view (branch `visual-overhaul`)
+
+Memory (from the 5.4 field test: Deep gained +1.2 to +3.5 GB, Free RAM Now +0.3 GB, and automatic
+care logged "Target not reachable" every 30-120 s just under a 9 GB goal):
+- **Free RAM Now is much closer to Deep.** It now also trims the system file cache (pages move to
+  standby, so files stay cached) and flushes the modified list, and considers 24 processes / 12 trims
+  (was 16 / 8). Deep alone still purges standby and empties every working set at once.
+- **Automatic care keeps up.** When trimming alone falls short, it runs the same file-cache +
+  modified-list step (administrator only, never during a game, at most every 45 s). The "reachable"
+  estimate includes it.
+- **Per-pass limits were silently capped** at 4 / 6 / 10 (Safe / Balanced / Aggressive), so higher
+  values in Settings did nothing. Caps are now 10 / 16 / 24; defaults raised to 6 / 10 / 16, clean
+  interval 30 → 15 s (old defaults migrate; your own values are kept).
+
+Intelligence:
+- **Unknowns resolved on this PC: 0 left (was 2-8).** Protected processes (audiodg, sppsvc,
+  SearchProtocolHost, NVIDIA containers, Gaming Services) hide their path from non-admin programs;
+  YUMRAM now finds the binary through its Windows service or System32 and lets Windows verify the
+  signature. Microsoft's own Store package IDs resolve as Windows components.
+- **Research could stop working for good**: a status file left by a closed or crashed run made every
+  later Run Scan think research was still running. Status files now carry the process id, and per-item
+  results no longer end the run early.
+- **Manual decisions now work visibly**: choosing a category resolves the item (risk + status) instead
+  of leaving it "Unknown"; "Review Queue" now means reset (it used to pin items as Unknown forever).
+- Clicking a summary card switches the Show view and outlines the card; the selected item gets a
+  header, the decision panel starts from the item's current category, the search box has a hint, and
+  there is a result count. Status appears once (activity strip) instead of four times.
+- Saved records that are still Unknown are re-checked on Run Scan, not only running programs.
+
+Windows:
+- **What's using my RAM** (was Top memory processes): one row per program (Chrome's 17 processes = 1
+  row), memory bars, plain type labels, updates itself every 2 s without losing your selection
+  (Pause available), and a "What is this?" panel in everyday words: what it is, how much RAM, can I
+  close it, what YUMRAM does with it, where it is, and **Show in File Explorer**.
+- **RAM Reclaim Center**: the two options side by side with exactly what each does, an administrator
+  badge, coloured results, clearer empty state.
+- **Main window**: all tools in the header (the Tools card was below the fold).
+- **About**: feature tiles and quick links (YUMRAM folder, log, project page).
+
+Tests: 47/47 (new Release55BehaviorTest; two text-contract tests updated for the new code).
+
 # YUMRAM 5.4.0 — Visual overhaul and faster, more complete research (branch `visual-overhaul`)
 
 Design (researched against Microsoft PC Manager, Wise Memory Optimizer, IObit and Windows 11

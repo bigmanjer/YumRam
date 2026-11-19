@@ -173,7 +173,15 @@ function Get-YumReachableEstimate {
     $retention=Get-YumRetentionRatio
     $samples=0;try{if($null -ne $script:Yum.GlobalRetention){$samples=[int]$script:Yum.GlobalRetention.Samples}}catch{}
     $reclaimGB=($wsMB*$retention)/1024.0
-    [pscustomobject]@{Timestamp=Get-Date;Mode=$Mode;AvailableGB=[double]$m.AvailableGB;TotalGB=[double]$m.TotalGB;CandidateCount=$eligible.Count;CandidateMB=[math]::Round($wsMB);Retention=$retention;RetentionSamples=$samples;ReclaimableGB=[math]::Round($reclaimGB,2);ReachableGB=[math]::Round([double]$m.AvailableGB+$reclaimGB,2)}
+    # 5.4: with administrator rights the memory-area assist can also move the system file cache's working
+    # set and the modified list into Available. Counted at 80% (some is re-touched immediately).
+    $areaGB=0.0
+    if(Test-YumIsElevated){
+        try{$pm=Get-CimInstance -ClassName Win32_PerfRawData_PerfOS_Memory -Property SystemCacheResidentBytes,ModifiedPageListBytes -ErrorAction Stop
+            $areaGB=0.8*(([double]$pm.SystemCacheResidentBytes+[double]$pm.ModifiedPageListBytes)/1GB)}catch{}
+    }
+    $reclaimGB+=$areaGB
+    [pscustomobject]@{Timestamp=Get-Date;Mode=$Mode;AvailableGB=[double]$m.AvailableGB;TotalGB=[double]$m.TotalGB;CandidateCount=$eligible.Count;CandidateMB=[math]::Round($wsMB);Retention=$retention;RetentionSamples=$samples;MemoryAreaGB=[math]::Round($areaGB,2);ReclaimableGB=[math]::Round($reclaimGB,2);ReachableGB=[math]::Round([double]$m.AvailableGB+$reclaimGB,2)}
 }
 
 function Save-YumReclaimLearning {
@@ -300,8 +308,9 @@ function Get-YumFastReclaimCandidates {
 }
 
 function Invoke-YumNativeMemoryCommand {
-    param([Parameter(Mandatory)][ValidateSet('EmptyWorkingSets','FlushModifiedList','PurgeStandby','PurgeLowPriorityStandby')][string]$Command)
+    param([Parameter(Mandatory)][ValidateSet('EmptyWorkingSets','FlushModifiedList','PurgeStandby','PurgeLowPriorityStandby','TrimSystemFileCache')][string]$Command)
     $map=@{EmptyWorkingSets=2;FlushModifiedList=3;PurgeStandby=4;PurgeLowPriorityStandby=5}
+    if($Command -eq 'TrimSystemFileCache'){ $r=Invoke-YumTrimSystemFileCache; return [pscustomobject]@{Success=$r.Success;Command=$Command;Status=$r.Status;Reason=$r.Reason;ErrorCategory=$r.ErrorCategory} }
     try {
         if($Command -ne 'EmptyWorkingSets'){
             $priv=Enable-YumNativePrivilege -Privilege 'SeProfileSingleProcessPrivilege'
@@ -455,11 +464,19 @@ function Invoke-YumMemoryReclaim {
 
         # 5.3.0: was "-TopN (if(...){16}else{10})" which PowerShell runs as a command named 'if'.
         $maxActions=[math]::Max(1,[int]$script:Yum.Config.ReclaimMaxProcessActions)
-        if($Mode -eq 'Deep'){$topN=32;$maxActions=[math]::Max(16,$maxActions*2)}else{$topN=16;$maxActions=[math]::Max(8,$maxActions)}
+        # 5.4: Free RAM Now considers more processes (24 / 12 actions, was 16 / 8).
+        if($Mode -eq 'Deep'){$topN=32;$maxActions=[math]::Max(16,$maxActions*2)}else{$topN=24;$maxActions=[math]::Max(12,$maxActions)}
         $processPass=Invoke-YumReclaimProcessPass -TopN $topN -MaxActions $maxActions -MinimumWorkingSetMB ([int]$script:Yum.Config.ReclaimMinimumWorkingSetMB) -AllowActive:($Force -and $Mode -eq 'Deep')
         foreach($r in @($processPass.Rows)){[void]$rows.Add($r)}
 
-        if($Mode -eq 'Deep' -and [bool]$script:Yum.Config.ReclaimModifiedPageList -and $Force -and -not $gameActive){ & $runMemoryArea 'FlushModifiedList' 'Modified page list' }
+        # 5.4: both modes now trim the system file cache and flush the modified list (no cache is lost:
+        # pages move to standby, which counts as Available). Previously only Deep did any of this, which
+        # is why Deep gained 3-4x more. Deep still alone purges standby and empties every working set.
+        $elevated=Test-YumIsElevated
+        $assistOk=($elevated -and -not $gameActive -and ($Force -or $Mode -eq 'Deep'))
+        if($assistOk -and $(if($script:Yum.Config.Contains('ReclaimSystemFileCache')){[bool]$script:Yum.Config['ReclaimSystemFileCache']}else{$true})){ & $runMemoryArea 'TrimSystemFileCache' 'System file cache' }
+        if($assistOk -and [bool]$script:Yum.Config.ReclaimModifiedPageList){ & $runMemoryArea 'FlushModifiedList' 'Modified page list' }
+        if(-not $elevated){[void]$notes.Add('Not running as administrator: the system file cache and Windows memory lists were skipped (process trimming only).')}
         if($Mode -eq 'Deep' -and [bool]$script:Yum.Config.ReclaimStandbyList){ & $runMemoryArea 'PurgeStandby' 'Standby list' }
 
         # A manual deep reclaim can optionally clear system working sets last.
