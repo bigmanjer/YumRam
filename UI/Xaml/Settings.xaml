@@ -98,6 +98,25 @@
         </ScrollViewer>
       </TabItem>
 
+      <!-- ============ CPU (5.8) ============ -->
+      <TabItem Header="CPU">
+        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+          <Border Style="{StaticResource Card}" Margin="0,4,4,4"><StackPanel>
+            <CheckBox x:Name="CpuBalanceEnabled" Content="CPU balance: keep the app I am using smooth when a background program hogs the CPU"/>
+            <TextBlock Text="YUMRAM briefly lowers the busy background program to Below Normal priority and puts it back as soon as it calms down. It still gets plenty of CPU; it just waits its turn. The app you are using, your game, Windows and services are never touched. Works whether or not memory monitoring is on." Style="{StaticResource Caption}" Margin="27,2,0,14" TextWrapping="Wrap"/>
+            <Grid Style="{StaticResource Row}"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="140"/></Grid.ColumnDefinitions>
+              <StackPanel><TextBlock Text="Step in when the whole PC is at least (%)" Style="{StaticResource RowLabel}"/><TextBlock Text="Total CPU use. Below this nothing is changed. Default 70." Style="{StaticResource RowHint}"/></StackPanel>
+              <TextBox x:Name="CpuSystemPercent" Grid.Column="1" VerticalAlignment="Top"/></Grid>
+            <Grid Style="{StaticResource Row}"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="140"/></Grid.ColumnDefinitions>
+              <StackPanel><TextBlock Text="...and one background program uses at least (%)" Style="{StaticResource RowLabel}"/><TextBlock Text="Share of all CPU cores, for 2 seconds in a row. Default 10." Style="{StaticResource RowHint}"/></StackPanel>
+              <TextBox x:Name="CpuProcessPercent" Grid.Column="1" VerticalAlignment="Top"/></Grid>
+            <Grid Style="{StaticResource Row}" Margin="0"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="240"/></Grid.ColumnDefinitions>
+              <StackPanel><TextBlock Text="Never hold back" Style="{StaticResource RowLabel}"/><TextBlock Text="Program names separated by commas, e.g. handbrake, obs64" Style="{StaticResource RowHint}"/></StackPanel>
+              <TextBox x:Name="CpuExclusions" Grid.Column="1" VerticalAlignment="Top" AutomationProperties.Name="Programs CPU balance never holds back"/></Grid>
+          </StackPanel></Border>
+        </ScrollViewer>
+      </TabItem>
+
       <!-- ============ Monitoring ============ -->
       <TabItem Header="Monitoring">
         <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">

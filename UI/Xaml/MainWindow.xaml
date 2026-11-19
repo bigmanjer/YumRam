@@ -273,6 +273,22 @@
                 </StackPanel>
               </Border>
 
+              <!-- 5.8: CPU balance (ProBalance-style) -->
+              <Border Style="{StaticResource Card}" Margin="0,0,0,12" Padding="14,12"
+                      ToolTip="When the PC is busy and a background program hogs the CPU, YUMRAM briefly lowers that program's priority so the app you are using stays smooth. It is put back as soon as it calms down. The app you are using and your game are never touched.">
+                <StackPanel>
+                  <DockPanel Margin="0,0,0,6">
+                    <CheckBox x:Name="CpuBalanceToggle" DockPanel.Dock="Right" Content="On" VerticalAlignment="Center" AutomationProperties.Name="CPU balance"/>
+                    <Border x:Name="CpuBalancePill" DockPanel.Dock="Right" Style="{StaticResource Pill}" Margin="0,0,8,0" Visibility="Collapsed">
+                      <TextBlock Text="ACTIVE" FontSize="10.5" FontWeight="SemiBold" Foreground="{StaticResource Warning}"/>
+                    </Border>
+                    <TextBlock Text="CPU BALANCE" Style="{StaticResource StatLabel}" VerticalAlignment="Center"/>
+                  </DockPanel>
+                  <TextBlock x:Name="CpuBalanceText" Text="Starting…" Style="{StaticResource Caption}" TextWrapping="Wrap"/>
+                  <TextBlock x:Name="CpuBalanceCount" Text="" Style="{StaticResource Caption}" Foreground="{StaticResource TextFaint}" Margin="0,4,0,0"/>
+                </StackPanel>
+              </Border>
+
               <!-- Memory goal -->
               <Border Style="{StaticResource Card}" Margin="0,0,0,12">
                 <StackPanel>

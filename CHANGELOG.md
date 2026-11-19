@@ -1,5 +1,33 @@
 # Changelog
 
+# YUMRAM 5.8.0 — CPU balance (ProBalance-style) (branch `visual-overhaul`)
+
+Last big competitor gap: Process Lasso's ProBalance. Researched from Bitsum's own documentation: it
+temporarily lowers a background CPU hog's priority class to Below Normal, restores it when the
+condition passes, ignores the foreground app and processes with a non-Normal priority, and works by
+lowering offenders rather than boosting the foreground ("far safer").
+
+- **CPU balance** (Overview card, Settings › CPU; on by default). Its own worker checks once a second
+  (~25–40 ms of work). When total CPU ≥ 70 % and a background program uses ≥ 10 % of all cores for 2 s,
+  it is lowered to Below Normal; it is restored after 3 s under 4 % or when the PC drops below 50 %,
+  the moment you switch to it, when CPU balance is turned off, and when YUMRAM closes. Never touched:
+  the foreground app and other processes of the same app or its children, the detected game, YUMRAM,
+  Windows core processes, services, protected/excluded programs, programs with their own priority.
+  Only undoes its own change (same process instance, still Below Normal); a crash leaves a small file
+  so the next start puts anything left behind back to Normal.
+- **Measured on this PC** (16 threads, CPU hog with 32 busy threads at Normal priority, PC at 97 %),
+  wake-up delay of a normal program: idle 1.8 ms avg / 4.7 ms max; hog without CPU balance 33.8 ms /
+  82.9 ms; hog with CPU balance 2.0 ms / 2.7 ms. Held back 4.6 s after the hog started, restored ~4 s
+  after it went quiet.
+- Found while measuring and fixed before release: a blanket "skip anything in C:\Windows" rule and the
+  trim list's `powershell` entry made real hogs (scripts) ineligible; the worker's own check took
+  366 ms under full load until its thread was raised one notch; crash recovery missed entries because
+  of the PowerShell 5.1 `ConvertFrom-Json` array quirk.
+- Right after Start Monitoring the status said "Paused" (and after a pause, "Telemetry delayed")
+  until the first sample arrived; it now says "Starting…".
+- About lists CPU balance and privacy. Tests: new `Release58CpuBalanceTest`; 50/50 pass. Full UI probe
+  (51 steps, covers the card, toggle and Settings › CPU): 0 failures.
+
 # YUMRAM 5.7.1 — Full bug test of every view and setting (branch `visual-overhaul`)
 
 A new UI test (`Tests\UI\FullUiProbe.ps1`) drives the real app through every page, setting, button and
