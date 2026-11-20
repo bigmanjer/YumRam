@@ -80,55 +80,51 @@ function Update-YumGraph {
         }
         $step=$w/[math]::Max(1,$script:Yum.GraphPointsLimit-1)
 
-        # CPU/GPU retain a true 0-100% scale.
-        $fixedSeries=@(
+        # 5.11: every line on the same true 0-100 % scale (the header says so). RAM used to be auto-zoomed while
+        # CPU/GPU were not - two scales on one chart, so 58 % RAM was drawn near the top. Dataviz rule: one axis.
+        $series=@(
+            @{Values=$script:Yum.GraphMemory;Line=$script:Yum.GraphMemoryLine},
+            @{Values=$script:Yum.GraphMemoryAvailable;Line=$script:Yum.GraphMemoryAvailableLine},
             @{Values=$script:Yum.GraphCPU;Line=$script:Yum.GraphCPULine},
             @{Values=$script:Yum.GraphGPU;Line=$script:Yum.GraphGPULine}
         )
-        foreach($s in $fixedSeries){
+        foreach($s in $series){
             $points=$s.Line.Points;$points.Clear()
             if($s.Values.Count -lt 2){continue}
-            $step=$w/[math]::Max(1,$s.Values.Count-1)
+            $step=$w/[math]::Max(1,$script:Yum.GraphPointsLimit-1)
+            $offset=($script:Yum.GraphPointsLimit-$s.Values.Count)*$step   # new data enters from the right
             for($i=0;$i -lt $s.Values.Count;$i++){
                 $v=[math]::Max(0,[math]::Min(100,[double]$s.Values[$i]))
-                [void]$points.Add((New-Object System.Windows.Point(($i*$step),($h-(($v/100)*$h)))))
-            }
-        }
-
-        # RAM uses one shared auto-scaled range so Used and Available remain truthful relative to each other.
-        $memorySeries=@(
-            @{Values=$script:Yum.GraphMemory;Line=$script:Yum.GraphMemoryLine},
-            @{Values=$script:Yum.GraphMemoryAvailable;Line=$script:Yum.GraphMemoryAvailableLine}
-        )
-        # 5.8.1: plain loops instead of pipelines + Measure-Object (ran 2x per second).
-        $valCount=0;$min=[double]::MaxValue;$max=[double]::MinValue
-        foreach($s in $memorySeries){foreach($v in $s.Values){$valCount++;$d=[double]$v;if($d -lt $min){$min=$d};if($d -gt $max){$max=$d}}}
-        if($valCount -ge 2){
-            $span=$max-$min
-            $minimumSpan=6.0
-            if($span -lt $minimumSpan){
-                $mid=($min+$max)/2;$min=$mid-($minimumSpan/2);$max=$mid+($minimumSpan/2)
-            } else {
-                $padding=[math]::Max(1.0,$span*0.10);$min-=$padding;$max+=$padding
-            }
-            if($min -lt 0){$min=0};if($max -gt 100){$max=100}
-            if(($max-$min) -lt 0.5){$max=[math]::Min(100,$min+0.5)}
-            $localSpan=[math]::Max(0.5,$max-$min)
-            foreach($s in $memorySeries){
-                $points=$s.Line.Points;$points.Clear();if($s.Values.Count -lt 2){continue}
-                $step=$w/[math]::Max(1,$s.Values.Count-1)
-                for($i=0;$i -lt $s.Values.Count;$i++){
-                    $v=[math]::Max($min,[math]::Min($max,[double]$s.Values[$i]));$normalized=($v-$min)/$localSpan
-                    [void]$points.Add((New-Object System.Windows.Point(($i*$step),($h-($normalized*$h)))))
-                }
+                [void]$points.Add((New-Object System.Windows.Point(($offset+$i*$step),($h-(($v/100)*$h)))))
             }
         }
     }catch{Write-YumLogException -Context 'Graph update failed' -Exception $_.Exception}
 }
 function Get-YumUiSnapshot {return Get-YumSnapshotCopy}
+function Update-YumRing {
+    # 5.11: circular meter (RAM and CPU). Arc from 12 o'clock clockwise; the fill carries severity
+    # (series colour -> amber -> red) with the state also written as a word; the track is a light step
+    # of the same colour (set in XAML).
+    param($Ring,$Label,$StateLabel,$Track,[double]$Percent,[string]$NormalHex,[double]$Warn,[double]$Danger,[string[]]$Words=@('calm','busy','high'))
+    try{
+        if($null -eq $Ring){return}
+        $p=[math]::Min(99.99,[math]::Max(0.0,$Percent))
+        if($null -ne $Label){$Label.Text=('{0:N0}%' -f $Percent)}
+        $size=[double]$Ring.Parent.Width;if($size -le 0 -or [double]::IsNaN($size)){$size=92.0};$thick=[double]$Ring.StrokeThickness;$r=($size-$thick)/2.0;$c=$size/2.0
+        $angle=($p/100.0)*2*[math]::PI
+        $fig=New-Object System.Windows.Media.PathFigure;$fig.StartPoint=(New-Object System.Windows.Point($c,($c-$r)));$fig.IsClosed=$false
+        $end=New-Object System.Windows.Point(($c+$r*[math]::Sin($angle)),($c-$r*[math]::Cos($angle)))
+        [void]$fig.Segments.Add((New-Object System.Windows.Media.ArcSegment($end,(New-Object System.Windows.Size($r,$r)),0.0,($p -gt 50),[System.Windows.Media.SweepDirection]::Clockwise,$true)))
+        $geo=New-Object System.Windows.Media.PathGeometry;[void]$geo.Figures.Add($fig);$geo.Freeze();$Ring.Data=$geo
+        $hex=if($Percent -ge $Danger){'#F87171'}elseif($Percent -ge $Warn){'#FBBF24'}else{$NormalHex}
+        $Ring.Stroke=Get-YumBrush $hex;if($null -ne $Track){$Track.Stroke=Get-YumBrush $hex}
+        if($null -ne $StateLabel){$StateLabel.Text=if($Percent -ge $Danger){$Words[2]}elseif($Percent -ge $Warn){$Words[1]}else{$Words[0]}}
+    }catch{}
+}
 function Update-YumMemoryRing {
     # 5.4: RAM-in-use gauge. Draws an arc from 12 o'clock clockwise, sized to the ring's Grid.
     param([double]$Percent)
+    try{ if($null -ne $script:Yum.Ui['MemoryRingTrack']){ Update-YumRing -Ring $script:Yum.Ui.MemoryRing -Label $script:Yum.Ui.MemoryRingText -StateLabel $script:Yum.Ui.MemoryRingState -Track $script:Yum.Ui.MemoryRingTrack -Percent $Percent -NormalHex '#CFA8FF' -Warn 70 -Danger 85 -Words @('comfy','filling up','very full'); return } }catch{}
     try{
         $ring=$script:Yum.Ui.MemoryRing;$label=$script:Yum.Ui.MemoryRingText
         if($null -eq $ring){return}
@@ -169,7 +165,7 @@ function Update-YumTargetUi {
         }
         $script:Yum.Ui.Target.Text=$text
         $script:Yum.Ui.TargetBar.Value=$ratio
-        $script:Yum.Ui.TargetStatus.Text=if($m.AvailableGB -ge $target){'[OK]'}elseif($outOfReach){'[OUT OF REACH]'}else{'[LOW]'}
+        $script:Yum.Ui.TargetStatus.Text=if($m.AvailableGB -ge $target){'On target'}elseif($outOfReach){'Out of reach'}else{'Below goal'}
         if($m.AvailableGB -ge $target){$brush='#86EFAC'}elseif($outOfReach -or $m.AvailableGB -ge ($target*.75)){$brush='#FDE68A'}else{$brush='#FCA5A5'}
         $script:Yum.Ui.TargetStatus.Foreground=Get-YumBrush $brush
         $script:Yum.Ui.TargetBar.Foreground=Get-YumBrush $brush
@@ -211,6 +207,7 @@ function Update-YumUiFromSnapshot {
             $script:Yum.Ui.Usage.Text='{0:N2} / {1:N2} GB  •  Available {2:N2} GB ({3:N1}%)' -f $m.UsedGB,$m.TotalGB,$m.AvailableGB,$availablePct
             $script:Yum.Ui.MemoryBar.Value=[math]::Min(100,[math]::Max(0,$m.UsedPercent))
             Update-YumMemoryRing -Percent ([double]$m.UsedPercent)
+            Update-YumRing -Ring $script:Yum.Ui.CpuRing -Label $script:Yum.Ui.CpuRingText -StateLabel $script:Yum.Ui.CpuRingState -Track $script:Yum.Ui.CpuRingTrack -Percent ([double]$s.CPU) -NormalHex '#FF9ECD' -Warn 70 -Danger 90 -Words @('calm','busy','maxed out')
             Update-YumTray -Percent ([double]$m.UsedPercent) -AvailableGB ([double]$m.AvailableGB)
             Update-YumSidebarStatus -UsedPercent ([double]$m.UsedPercent) -AvailableGB ([double]$m.AvailableGB) -TotalGB ([double]$m.TotalGB)
             if(-not $forcedRefresh){[void]$script:Yum.GraphMemory.Add([double]$m.UsedPercent)};while($script:Yum.GraphMemory.Count -gt $script:Yum.GraphPointsLimit){$script:Yum.GraphMemory.RemoveAt(0)}
@@ -235,6 +232,7 @@ function Update-YumUiFromSnapshot {
                 $script:Yum.LastPausedMemoryRead=Get-Date
                 try{$pm=Get-YumMemoryTelemetry;if($null -ne $pm){Update-YumSidebarStatus -UsedPercent ([double]$pm.UsedPercent) -AvailableGB ([double]$pm.AvailableGB) -TotalGB ([double]$pm.TotalGB);Update-YumTray -Percent ([double]$pm.UsedPercent) -AvailableGB ([double]$pm.AvailableGB);Update-YumMemoryRing -Percent ([double]$pm.UsedPercent);$script:Yum.Ui.Available.Text='{0:N2} GB' -f $pm.AvailableGB;try{Update-YumSnapshotMemory -Memory $pm}catch{};$script:Yum.UiNeedsFullRefresh=$true}}catch{}
             }
+            try{$script:Yum.Ui.CpuRingText.Text='--';$script:Yum.Ui.CpuRingState.Text='paused';$script:Yum.Ui.CpuRing.Data=$null;$script:Yum.Ui.CpuRing.ToolTip='CPU is measured while monitoring is on'}catch{}
             if($null -ne $script:Yum.Ui.TelemetryStatus){$script:Yum.Ui.TelemetryStatus.Text='Monitoring paused'};if($null -ne $script:Yum.Ui.QuickMonitorTelemetry){$script:Yum.Ui.QuickMonitorTelemetry.Text='Automatic care is off.'}
             return
         }
@@ -292,13 +290,39 @@ function Invoke-YumInstallUpdate {
     if($r.Success){Set-YumFooter ([string]$r.Message);$script:Yum.Ui.UpdateText.Text=[string]$r.Message;$script:Yum.Window.Close()}
     else{$script:Yum.Ui.UpdateInstall.IsEnabled=$true;$script:Yum.Ui.UpdateText.Text=('Not installed: {0}' -f $r.Message);Set-YumFooter ('⚠ Update not installed: '+[string]$r.Message)}
 }
+function Update-YumCpuCardUi {
+    # 5.11: the Overview CPU card (same layout as RAM): speed, processes/threads, busiest, CPU care state.
+    try{
+        $ui=$script:Yum.Ui;if($null -eq $ui -or $null -eq $ui['CpuSpeed']){return}
+        $c=$script:Yum.TelemetryCache
+        $paused=($null -eq $script:Yum.TelemetryTimer)
+        $mhz=0.0;try{$mhz=[double]$c['CpuMHz']}catch{}
+        $base=0.0;try{$base=[double]$c['CpuBaseMHz']}catch{}
+        if($paused -or $mhz -le 0){$ui.CpuSpeed.Text='-- GHz'}else{$ui.CpuSpeed.Text=('{0:N2} GHz' -f ($mhz/1000.0))}
+        $ui.CpuSpeed.ToolTip=if($base -gt 0){'Current effective speed across all cores. Base speed {0:N2} GHz; above it = boost, below it = saving power or held back by heat.' -f ($base/1000.0)}else{'Current effective speed across all cores.'}
+        $pr=Get-YumCpuProfile
+        $procs=0;$threads=0;try{$procs=[int]$c['Processes'];$threads=[int]$c['Threads']}catch{}
+        $ui.CpuDetails.Text=if($paused -or $procs -le 0){'{0} cores • {1} threads (start monitoring for live CPU)' -f $pr.Cores,$pr.Logical}else{'{0:N0} processes • {1:N0} threads • {2} cores / {3} logical' -f $procs,$threads,$pr.Cores,$pr.Logical}
+        $ui.CpuDetails.ToolTip=$pr.Summary
+        $st=Get-YumCpuBalanceState
+        $top=@();try{$top=@($st['Top'])}catch{}
+        $ui.CpuBusiest.Text=if($top.Count -gt 0){'Busiest: '+($top -join ', ')}else{''}
+        $cfg=Get-YumCpuBalanceSettings
+        $held=@($st.Restrained.Values).Count
+        $status=if(-not $cfg.Enabled){'Care off'}elseif([bool]$st['Gaming']){'Gaming'}elseif($held -gt 0){'Holding back {0}' -f $held}else{'Watching'}
+        $ui.CpuCareStatus.Text=$status
+        $ui.CpuCareStatus.Foreground=if(-not $cfg.Enabled){Get-YumBrush '#FDE68A'}elseif($held -gt 0){Get-YumBrush '#FBBF24'}else{Get-YumBrush '#86EFAC'}
+    }catch{}
+}
 function Update-YumCpuBalanceUi {
+    try{ Update-YumCpuCardUi }catch{}
     try{
         $ui=$script:Yum.Ui;if($null -eq $ui -or $null -eq $ui['CpuBalanceText']){return}
         $s=Get-YumCpuBalanceSummary
         $ui.CpuBalanceText.Text=[string]$s.Text
         $ui.CpuBalanceCount.Text=if(-not $s.Count){''}elseif([string]$s.Count -match '^0 '){'Has not needed to step in today.'}else{'Stepped in '+[string]$s.Count+'.'}
         $ui.CpuBalancePill.Visibility=if($s.Active){'Visible'}else{'Collapsed'}
+        try{$cst=Get-YumCpuBalanceState;$lv=[string]$cst['Level'];if(-not $lv){$lv=Get-YumCpuCareLevel};$ui.CpuCareTitle.Text=('CPU CARE · {0}{1}' -f $lv.ToUpperInvariant(),$(if([bool]$cst['Gaming']){' · GAMING'}else{''}));$ui.CpuCareTitle.ToolTip=(Get-YumCpuProfile).Summary}catch{}
     }catch{}
 }
 function Start-YumMonitoring {
@@ -319,7 +343,7 @@ function Invoke-YumApplyTarget {
 function Test-YumSingleInstance {try{$mutex=New-Object System.Threading.Mutex($false,'Local\YUMRAM-V5-SingleInstance');$owned=$false;try{$owned=$mutex.WaitOne(0)}catch [System.Threading.AbandonedMutexException]{$owned=$true};if(-not $owned){$mutex.Dispose();[System.Windows.MessageBox]::Show('YUMRAM is already running.','YUMRAM','OK','Information')|Out-Null;return $false};$script:Yum.SingleInstanceMutex=$mutex;$script:Yum.SingleInstanceOwned=$true;return $true}catch{Write-YumLogException -Context 'Single instance check failed' -Exception $_.Exception;return $true}}
 function Stop-YumSingleInstance {try{if($script:Yum.SingleInstanceOwned -and $script:Yum.SingleInstanceMutex){try{$script:Yum.SingleInstanceMutex.ReleaseMutex()}catch{};$script:Yum.SingleInstanceMutex.Dispose()}}catch{}finally{$script:Yum.SingleInstanceMutex=$null;$script:Yum.SingleInstanceOwned=$false}}
 function Start-YumApplicationUi {
-    $path=Join-Path $script:Yum.Root 'UI\Xaml\MainWindow.xaml';if(-not(Test-Path -LiteralPath $path)){throw "Missing main window XAML: $path"};[xml]$xaml=Read-YumXamlText -Path $path;$reader=New-Object System.Xml.XmlNodeReader $xaml;$script:Yum.Window=[Windows.Markup.XamlReader]::Load($reader);$script:Yum.Ui=[ordered]@{};foreach($n in @('Intelligence','TelemetryStatus','QuickMonitorStatus','QuickMonitorTelemetry','ModeHelp','Mode','Status','Available','Memory','CPU','GPU','Game','Usage','MemoryBar','Target','TargetStatus','TargetBar','Graph','FreeRam','DeepReclaim','ReclaimCenter','ReclaimStatus','Monitor','ModeBox','TargetBox','Apply','AutoGame','ProtectGame','AutoClean','PriorityBox','Processes','Settings','About','Footer','VersionStatus','MemoryRing','MemoryRingText','NavOverview','Startup','PageHost','OverviewPage','Sidebar','SidebarToggle','SideBrand','SideVersion','SideStatusPanel','SideRamText','SideRamBar','SideRamCompact','HotkeyHint','FreedToday','FreedTodayRuns','FreedTotal','FreedTotalRuns','CpuBalanceToggle','CpuBalanceText','CpuBalanceCount','CpuBalancePill','UpdateBanner','UpdateNotes','UpdateInstall','UpdateTitle','UpdateText')){$script:Yum.Ui[$n]=$script:Yum.Window.FindName($n)};Apply-YumUiConfig;if($null -ne $script:Yum.Ui.VersionStatus){$script:Yum.Ui.VersionStatus.Text=('YUMRAM V{0}' -f [string]$script:Yum.Config.Version)};if($null -ne $script:Yum.Ui.SideVersion){$script:Yum.Ui.SideVersion.Text=('version {0}' -f [string]$script:Yum.Config.Version)}
+    $path=Join-Path $script:Yum.Root 'UI\Xaml\MainWindow.xaml';if(-not(Test-Path -LiteralPath $path)){throw "Missing main window XAML: $path"};[xml]$xaml=Read-YumXamlText -Path $path;$reader=New-Object System.Xml.XmlNodeReader $xaml;$script:Yum.Window=[Windows.Markup.XamlReader]::Load($reader);$script:Yum.Ui=[ordered]@{};foreach($n in @('Intelligence','TelemetryStatus','QuickMonitorStatus','QuickMonitorTelemetry','ModeHelp','Mode','Status','Available','Memory','CPU','GPU','Game','Usage','MemoryBar','Target','TargetStatus','TargetBar','Graph','FreeRam','DeepReclaim','ReclaimCenter','ReclaimStatus','Monitor','ModeBox','TargetBox','Apply','AutoGame','ProtectGame','AutoClean','PriorityBox','Processes','Settings','About','Footer','VersionStatus','MemoryRing','MemoryRingText','MemoryRingTrack','MemoryRingState','CpuRing','CpuRingText','CpuRingTrack','CpuRingState','CpuSpeed','CpuDetails','CpuBusiest','CpuCareStatus','NavOverview','Startup','PageHost','OverviewPage','Sidebar','SidebarToggle','SideBrand','SideVersion','SideStatusPanel','SideRamText','SideRamBar','SideRamCompact','HotkeyHint','FreedToday','FreedTodayRuns','FreedTotal','FreedTotalRuns','CpuBalanceToggle','CpuBalanceText','CpuBalanceCount','CpuBalancePill','CpuCareTitle','UpdateBanner','UpdateNotes','UpdateInstall','UpdateTitle','UpdateText')){$script:Yum.Ui[$n]=$script:Yum.Window.FindName($n)};Apply-YumUiConfig;if($null -ne $script:Yum.Ui.VersionStatus){$script:Yum.Ui.VersionStatus.Text=('YUMRAM V{0}' -f [string]$script:Yum.Config.Version)};if($null -ne $script:Yum.Ui.SideVersion){$script:Yum.Ui.SideVersion.Text=('version {0}' -f [string]$script:Yum.Config.Version)}
     # 5.6: one window - the sidebar opens every tool as a page (UI\Shell.ps1).
     Initialize-YumShell
     # 5.3.1: reclaim runs on the controller worker; the UI timer shows the result (Update-YumReclaimResultUI).
@@ -366,7 +390,7 @@ function Start-YumApplicationUi {
     # 5.4: the main window runs with Show() + a DispatcherFrame instead of ShowDialog(), because hiding a
     # ShowDialog window (minimize to tray) ends the dialog and would quit YUMRAM.
     $script:Yum.MainFrame=New-Object System.Windows.Threading.DispatcherFrame
-    $script:Yum.Window.Add_Closed({try{if($null -ne $script:Yum.PageFrame){$script:Yum.PageFrame.Continue=$false}}catch{};try{if($null -ne $script:Yum.Hotkey){$script:Yum.Hotkey.Dispose();$script:Yum.Hotkey=$null}}catch{};try{Remove-YumTray}catch{};$script:Yum.StopRequested=$true;Stop-YumMonitoring;try{Stop-YumControllerWorker}catch{};try{Stop-YumCpuBalanceWorker}catch{};try{if($null -ne $script:Yum.UiTimer){$script:Yum.UiTimer.Stop()}}catch{};Restart-YumOptionalServices;Write-YumLog 'YUMRAM closed.';Stop-YumSingleInstance;try{$script:Yum.MainFrame.Continue=$false}catch{}})
+    $script:Yum.Window.Add_Closed({try{if($null -ne $script:Yum.PageFrame){$script:Yum.PageFrame.Continue=$false}}catch{};try{if($null -ne $script:Yum.Hotkey){$script:Yum.Hotkey.Dispose();$script:Yum.Hotkey=$null}}catch{};try{Remove-YumTray}catch{};$script:Yum.StopRequested=$true;Stop-YumMonitoring;try{Stop-YumControllerWorker}catch{};try{[YumForegroundHook]::Stop()}catch{};try{Stop-YumCpuBalanceWorker}catch{};try{if($null -ne $script:Yum.UiTimer){$script:Yum.UiTimer.Stop()}}catch{};Restart-YumOptionalServices;Write-YumLog 'YUMRAM closed.';Stop-YumSingleInstance;try{$script:Yum.MainFrame.Continue=$false}catch{}})
     $script:Yum.Window.Add_StateChanged({
         try{ if($script:Yum.Window.WindowState -eq [System.Windows.WindowState]::Minimized -and $null -ne $script:Yum.TrayIcon -and [bool]$script:Yum.Config['MinimizeToTray']){ Hide-YumToTray } }catch{}
     })
@@ -381,6 +405,7 @@ function Start-YumApplicationUi {
     try{Start-YumControllerWorker}catch{Write-YumLogException -Context 'Controller worker start failed' -Exception $_.Exception}
     # 5.8: CPU balance runs on its own worker (independent of memory monitoring, like ProBalance).
     try{Start-YumCpuBalanceWorker}catch{Write-YumLogException -Context 'CPU balance worker start failed' -Exception $_.Exception}
+    try{ if(-not [YumForegroundHook]::Start()){Write-YumLog 'Foreground hook unavailable; CPU care checks app switches every second.'} }catch{}
     if([bool]$script:Yum.Config.StartMonitoringAutomatically){Start-YumMonitoring}
     $script:Yum.Window.Show()
     try{ Register-YumGlobalHotkey }catch{}
@@ -408,8 +433,23 @@ function Update-YumReclaimResultUI {
         $text=[string]$r.Summary
         # 5.6: count the measured Available gain once per reclaim (verification updates reuse the version counter).
         try{$key=if($r.PSObject.Properties['Timestamp']){([datetime]$r.Timestamp).Ticks.ToString()}else{$text};if($key -ne [string]$script:Yum.LastStatReclaimKey -and $r.PSObject.Properties['AvailableGainGB']){$script:Yum.LastStatReclaimKey=$key;Add-YumFreedStat -GainGB ([double]$r.AvailableGainGB) -Source 'Reclaim'}}catch{}
+        # 5.11: Available often keeps rising for a few seconds after the result; show the highest gain and
+        # count the extra in the "RAM freed" card once.
+        try{
+            if($r.PSObject.Properties['PeakGainGB'] -and [double]$r.PeakGainGB -gt ([double]$r.AvailableGainGB+0.15)){
+                $text+=(' It kept rising to +{0:N2} GB after {1} s as Windows finished.' -f [double]$r.PeakGainGB,[int]$r.PeakGainAtSeconds)
+                $peakKey=([string]$script:Yum.LastStatReclaimKey)+'|peak'
+                if([string]$script:Yum['LastStatPeakKey'] -ne $peakKey -or [double]$script:Yum['LastStatPeakGB'] -lt [double]$r.PeakGainGB){
+                    $already=if([string]$script:Yum['LastStatPeakKey'] -eq $peakKey){[double]$script:Yum['LastStatPeakGB']}else{[double]$r.AvailableGainGB}
+                    $extra=[double]$r.PeakGainGB-$already
+                    if($extra -gt 0.01){Add-YumFreedStat -GainGB $extra -Source 'Reclaim (kept rising)' -SameReclaim}
+                    $script:Yum['LastStatPeakKey']=$peakKey;$script:Yum['LastStatPeakGB']=[double]$r.PeakGainGB
+                }
+            }
+        }catch{}
         if($r.PSObject.Properties['RetainedGainGB'] -and $null -ne $r.RetainedGainGB){$text+=(' Retained after 30s: +{0:N2} GB.' -f [double]$r.RetainedGainGB)}
         $script:Yum.Ui.ReclaimStatus.Text=$text
+        $script:Yum.Ui.ReclaimStatus.ToolTip=$text
         Set-YumFooter ('💜 '+$text)
         # A reclaim started from the tray reports back there while the window is hidden.
         if([bool]$script:Yum.TrayReclaimPending -and -not (Test-YumReclaimBusy)){

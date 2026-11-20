@@ -334,14 +334,14 @@ function Get-YumFreedStats {
 
 function Add-YumFreedStat {
     # Counts Available RAM actually gained (measured after Windows settles), never trimmed working set.
-    param([double]$GainGB,[string]$Source='')
+    param([double]$GainGB,[string]$Source='',[switch]$SameReclaim)
     try{
         if($GainGB -le 0.01){return}
         $s=Get-YumFreedStats
         $today=(Get-Date).ToString('yyyy-MM-dd')
         if([string]$s.Day -ne $today){$s.Day=$today;$s.TodayGB=0.0;$s.TodayRuns=0}
-        $s.TodayGB=[math]::Round([double]$s.TodayGB+$GainGB,3);$s.TodayRuns=[int]$s.TodayRuns+1
-        $s.TotalGB=[math]::Round([double]$s.TotalGB+$GainGB,3);$s.TotalRuns=[int]$s.TotalRuns+1
+        $s.TodayGB=[math]::Round([double]$s.TodayGB+$GainGB,3);if(-not $SameReclaim){$s.TodayRuns=[int]$s.TodayRuns+1}
+        $s.TotalGB=[math]::Round([double]$s.TotalGB+$GainGB,3);if(-not $SameReclaim){$s.TotalRuns=[int]$s.TotalRuns+1}
         if($GainGB -gt [double]$s.BestGB){$s.BestGB=[math]::Round($GainGB,3)}
         try{ ([pscustomobject]$s | ConvertTo-Json) | Set-Content -LiteralPath (Get-YumStatsPath) -Encoding UTF8 }catch{}
         Update-YumFreedStatsUi

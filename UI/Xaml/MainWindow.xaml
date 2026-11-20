@@ -100,7 +100,7 @@
 
         <!-- Pages -->
         <StackPanel>
-          <Button x:Name="NavOverview" Style="{StaticResource NavButton}" ToolTip="Overview: live memory, goal and one-click reclaim (Ctrl+1)" AutomationProperties.Name="Overview">
+          <Button x:Name="NavOverview" Style="{StaticResource NavButton}" ToolTip="Overview: live RAM and CPU, goal and one-click reclaim (Ctrl+1)" AutomationProperties.Name="Overview">
             <StackPanel Orientation="Horizontal"><TextBlock Text="🏠" Width="24" TextAlignment="Center"/><TextBlock Text="Overview" Margin="10,0,0,0"/></StackPanel>
           </Button>
           <Button x:Name="Processes" Style="{StaticResource NavButton}" ToolTip="Every program using memory or CPU, explained in plain words. Updates live. (Ctrl+2)" AutomationProperties.Name="What's running">
@@ -141,7 +141,7 @@
         <DockPanel Grid.Row="0" Margin="0,0,0,14" LastChildFill="False">
           <StackPanel DockPanel.Dock="Left">
             <TextBlock Text="Overview" Style="{StaticResource AppTitle}"/>
-            <TextBlock Text="Live memory, your goal, and one-click reclaim." Style="{StaticResource Caption}"/>
+            <TextBlock Text="Live RAM and CPU, your memory goal, and one-click reclaim." Style="{StaticResource Caption}"/>
           </StackPanel>
           <TextBlock x:Name="HotkeyHint" DockPanel.Dock="Right" Text="" Style="{StaticResource Caption}" VerticalAlignment="Bottom"
                      ToolTip="Global shortcut for Free RAM now. Works even when YUMRAM is hidden in the tray. Change it in Settings."/>
@@ -161,28 +161,30 @@
           </DockPanel>
         </Border>
 
-        <!-- Top row: status + primary actions -->
+        <!-- 5.11 top row: RAM and CPU side by side (same layout: ring + headline + details), then the actions.
+             Rings are circular meters drawn by Update-YumRing: fill = severity (series colour -> amber -> red),
+             track = a light step of the same colour, numbers in text colour, state also written as a word. -->
         <Grid Grid.Row="2" Margin="0,0,0,14">
           <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="*" MinWidth="360"/>
-            <ColumnDefinition Width="250"/>
+            <ColumnDefinition Width="*" MinWidth="300"/>
+            <ColumnDefinition Width="*" MinWidth="300"/>
             <ColumnDefinition Width="270"/>
           </Grid.ColumnDefinitions>
 
-          <!-- Available RAM vs target -->
+          <!-- RAM -->
           <Border Grid.Column="0" Style="{StaticResource Card}" Margin="0,0,12,0">
             <Grid>
               <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-              <!-- RAM-in-use ring (drawn by Update-YumMemoryRing in UI\MainWindow.ps1) -->
-              <Grid Width="104" Height="104" Margin="0,0,20,0" VerticalAlignment="Center" ToolTip="Share of physical RAM in use">
-                <Ellipse Stroke="{StaticResource Surface2}" StrokeThickness="10"/>
-                <Path x:Name="MemoryRing" Stroke="{StaticResource SeriesMemory}" StrokeThickness="10" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+              <Grid Width="92" Height="92" Margin="0,0,16,0" VerticalAlignment="Center" ToolTip="Share of physical RAM in use">
+                <Ellipse x:Name="MemoryRingTrack" Stroke="{StaticResource SeriesMemory}" StrokeThickness="9" Opacity="0.22"/>
+                <Path x:Name="MemoryRing" Stroke="{StaticResource SeriesMemory}" StrokeThickness="9" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
                 <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
-                  <TextBlock x:Name="MemoryRingText" Text="--%" FontSize="22" FontWeight="Bold" HorizontalAlignment="Center"/>
-                  <TextBlock Text="in use" Style="{StaticResource Caption}" HorizontalAlignment="Center" Margin="0,-2,0,0"/>
+                  <TextBlock Text="RAM" Style="{StaticResource Caption}" HorizontalAlignment="Center" FontSize="10.5"/>
+                  <TextBlock x:Name="MemoryRingText" Text="--%" FontSize="19" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,-2,0,-2"/>
+                  <TextBlock x:Name="MemoryRingState" Text="" Style="{StaticResource Caption}" HorizontalAlignment="Center" FontSize="10.5"/>
                 </StackPanel>
               </Grid>
-              <Grid Grid.Column="1">
+              <Grid Grid.Column="1" VerticalAlignment="Center">
                 <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                 <DockPanel>
                   <Border DockPanel.Dock="Right" Style="{StaticResource Pill}" VerticalAlignment="Top">
@@ -197,30 +199,52 @@
             </Grid>
           </Border>
 
-          <!-- Automatic care -->
+          <!-- CPU (same layout as RAM) -->
           <Border Grid.Column="1" Style="{StaticResource Card}" Margin="0,0,12,0">
+            <Grid>
+              <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+              <Grid Width="92" Height="92" Margin="0,0,16,0" VerticalAlignment="Center" ToolTip="Share of all CPU cores in use right now">
+                <Ellipse x:Name="CpuRingTrack" Stroke="{StaticResource SeriesCpu}" StrokeThickness="9" Opacity="0.22"/>
+                <Path x:Name="CpuRing" Stroke="{StaticResource SeriesCpu}" StrokeThickness="9" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                  <TextBlock Text="CPU" Style="{StaticResource Caption}" HorizontalAlignment="Center" FontSize="10.5"/>
+                  <TextBlock x:Name="CpuRingText" Text="--%" FontSize="19" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,-2,0,-2"/>
+                  <TextBlock x:Name="CpuRingState" Text="" Style="{StaticResource Caption}" HorizontalAlignment="Center" FontSize="10.5"/>
+                </StackPanel>
+              </Grid>
+              <Grid Grid.Column="1" VerticalAlignment="Center">
+                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                <DockPanel>
+                  <Border DockPanel.Dock="Right" Style="{StaticResource Pill}" VerticalAlignment="Top" ToolTip="What CPU care is doing (Settings › CPU)">
+                    <TextBlock x:Name="CpuCareStatus" Text="--" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource Success}"/>
+                  </Border>
+                  <TextBlock Text="CPU SPEED" Style="{StaticResource StatLabel}"/>
+                </DockPanel>
+                <TextBlock x:Name="CpuSpeed" Grid.Row="1" Text="-- GHz" Style="{StaticResource HeroValue}" Foreground="{StaticResource Text}" Margin="0,2,0,2" ToolTip="Current effective clock speed (all cores), from Windows' processor performance counter"/>
+                <TextBlock x:Name="CpuDetails" Grid.Row="2" Text="-- processes • -- threads" Style="{StaticResource Caption}" Margin="0,0,0,2" TextTrimming="CharacterEllipsis"/>
+                <TextBlock x:Name="CpuBusiest" Grid.Row="3" Text="" Style="{StaticResource Caption}" TextTrimming="CharacterEllipsis"/>
+              </Grid>
+            </Grid>
+          </Border>
+
+          <!-- Actions: reclaim + automatic care -->
+          <Border Grid.Column="2" Style="{StaticResource Card}">
             <StackPanel>
-              <DockPanel Margin="0,0,0,10">
+              <TextBlock Text="RECLAIM NOW" Style="{StaticResource StatLabel}" Margin="0,0,0,8"/>
+              <Button x:Name="FreeRam" Content="Free RAM now" Style="{StaticResource PrimaryButton}" MinHeight="38"
+                      ToolTip="Trim idle, identified programs once. Protected programs, the active window and games are never touched."/>
+              <Button x:Name="DeepReclaim" Content="Deep reclaim" Margin="0,8,0,0"
+                      ToolTip="Free RAM now, plus flush and purge Windows memory lists (needs administrator). Skipped while a game runs."/>
+              <TextBlock x:Name="ReclaimStatus" Text="Results are measured after Windows settles (about 2 s)." Style="{StaticResource Caption}" Margin="2,6,0,0" MaxHeight="34" TextTrimming="CharacterEllipsis" TextWrapping="Wrap"/>
+              <DockPanel Margin="0,10,0,0">
                 <Border DockPanel.Dock="Right" Style="{StaticResource Pill}">
                   <TextBlock x:Name="QuickMonitorStatus" Text="PAUSED" FontSize="10.5" FontWeight="SemiBold" Foreground="{StaticResource Warning}"/>
                 </Border>
                 <TextBlock Text="AUTOMATIC CARE" Style="{StaticResource StatLabel}" VerticalAlignment="Center"/>
               </DockPanel>
-              <Button x:Name="Monitor" Content="▶ Start Monitoring" MinHeight="40" FontWeight="SemiBold"
+              <Button x:Name="Monitor" Content="▶ Start Monitoring" Margin="0,6,0,0" FontWeight="SemiBold"
                       ToolTip="On: YUMRAM keeps Available RAM above your goal automatically. Off: nothing happens automatically."/>
-              <TextBlock x:Name="QuickMonitorTelemetry" Text="Telemetry: --" Style="{StaticResource Caption}" Margin="2,8,0,0"/>
-            </StackPanel>
-          </Border>
-
-          <!-- Reclaim now -->
-          <Border Grid.Column="2" Style="{StaticResource Card}">
-            <StackPanel>
-              <TextBlock Text="RECLAIM NOW" Style="{StaticResource StatLabel}" Margin="0,0,0,10"/>
-              <Button x:Name="FreeRam" Content="Free RAM now" Style="{StaticResource PrimaryButton}" MinHeight="40"
-                      ToolTip="Trim idle, identified programs once. Protected programs, the active window and games are never touched."/>
-              <Button x:Name="DeepReclaim" Content="Deep reclaim" Margin="0,8,0,0"
-                      ToolTip="Free RAM now, plus flush and purge Windows memory lists (needs administrator). Skipped while a game runs."/>
-              <TextBlock x:Name="ReclaimStatus" Text="Results are measured after Windows settles (about 2 s)." Style="{StaticResource Caption}" Margin="2,8,0,0" MaxHeight="48" TextTrimming="CharacterEllipsis"/>
+              <TextBlock x:Name="QuickMonitorTelemetry" Text="Telemetry: --" Style="{StaticResource Caption}" Margin="2,4,0,0" Visibility="Collapsed"/>
             </StackPanel>
           </Border>
         </Grid>
@@ -234,18 +258,27 @@
             <Grid>
               <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
               <DockPanel Margin="0,0,0,10">
-                <TextBlock DockPanel.Dock="Right" Text="last 30 seconds · 0–100%" Style="{StaticResource Caption}" VerticalAlignment="Center"/>
-                <TextBlock Text="Live memory" Style="{StaticResource SectionTitle}" Margin="0"/>
+                <TextBlock DockPanel.Dock="Right" Text="last 30 seconds · % of total" Style="{StaticResource Caption}" VerticalAlignment="Center"/>
+                <TextBlock Text="Live usage" Style="{StaticResource SectionTitle}" Margin="0"/>
               </DockPanel>
-              <Border Grid.Row="1" Background="{StaticResource Bg}" CornerRadius="8" ClipToBounds="True">
-                <Canvas x:Name="Graph" Background="{StaticResource Bg}" SnapsToDevicePixels="True" ClipToBounds="True" Margin="6"/>
-              </Border>
-              <!-- Legend sits outside the canvas so it never covers the lines. -->
+              <!-- 5.11: one true 0-100 % scale for every line, with quiet axis labels. -->
+              <Grid Grid.Row="1">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                <Grid Margin="0,2,6,2">
+                  <TextBlock Text="100%" Style="{StaticResource Caption}" FontSize="10.5" VerticalAlignment="Top" HorizontalAlignment="Right"/>
+                  <TextBlock Text="50%" Style="{StaticResource Caption}" FontSize="10.5" VerticalAlignment="Center" HorizontalAlignment="Right"/>
+                  <TextBlock Text="0%" Style="{StaticResource Caption}" FontSize="10.5" VerticalAlignment="Bottom" HorizontalAlignment="Right"/>
+                </Grid>
+                <Border Grid.Column="1" Background="{StaticResource Bg}" CornerRadius="8" ClipToBounds="True">
+                  <Canvas x:Name="Graph" Background="{StaticResource Bg}" SnapsToDevicePixels="True" ClipToBounds="True" Margin="6"/>
+                </Border>
+              </Grid>
+              <!-- Legend sits outside the canvas so it never covers the lines; the dot carries the colour, the words stay text-coloured. -->
               <WrapPanel Grid.Row="2" Margin="0,10,0,10" HorizontalAlignment="Left">
-                <TextBlock Text="● AVAILABLE RAM" Foreground="{StaticResource SeriesAvailable}" FontSize="11.5" FontWeight="SemiBold" Margin="0,0,16,0"/>
-                <TextBlock Text="● MEMORY USED" Foreground="{StaticResource SeriesMemory}" FontSize="11.5" FontWeight="SemiBold" Margin="0,0,16,0"/>
-                <TextBlock Text="● CPU" Foreground="{StaticResource SeriesCpu}" FontSize="11.5" FontWeight="SemiBold" Margin="0,0,16,0"/>
-                <TextBlock Text="● GPU 3D" Foreground="{StaticResource SeriesGpu}" FontSize="11.5" FontWeight="SemiBold"/>
+                <TextBlock FontSize="11.5" Margin="0,0,16,0" Foreground="{StaticResource TextMuted}"><Run Text="● " Foreground="{StaticResource SeriesAvailable}"/><Run Text="Available RAM"/></TextBlock>
+                <TextBlock FontSize="11.5" Margin="0,0,16,0" Foreground="{StaticResource TextMuted}"><Run Text="● " Foreground="{StaticResource SeriesMemory}"/><Run Text="RAM in use"/></TextBlock>
+                <TextBlock FontSize="11.5" Margin="0,0,16,0" Foreground="{StaticResource TextMuted}"><Run Text="● " Foreground="{StaticResource SeriesCpu}"/><Run Text="CPU"/></TextBlock>
+                <TextBlock FontSize="11.5" Foreground="{StaticResource TextMuted}"><Run Text="● " Foreground="{StaticResource SeriesGpu}"/><Run Text="GPU 3D"/></TextBlock>
               </WrapPanel>
               <StackPanel Grid.Row="3">
                 <DockPanel Margin="0,0,0,6">
@@ -262,11 +295,12 @@
             <StackPanel>
               <!-- Quick stats -->
               <Border Style="{StaticResource Card}" Margin="0,0,0,12" Padding="14,12">
-                <UniformGrid Columns="2" Rows="2">
-                  <StackPanel Margin="0,0,8,10"><TextBlock Text="MEMORY USED" Style="{StaticResource StatLabel}"/><TextBlock x:Name="Memory" Text="--%" Style="{StaticResource StatValue}" Foreground="{StaticResource SeriesMemory}"/></StackPanel>
-                  <StackPanel Margin="0,0,0,10"><TextBlock Text="CPU" Style="{StaticResource StatLabel}"/><TextBlock x:Name="CPU" Text="--%" Style="{StaticResource StatValue}" Foreground="{StaticResource SeriesCpu}"/></StackPanel>
-                  <StackPanel Margin="0,0,8,0"><TextBlock Text="GPU 3D" Style="{StaticResource StatLabel}"/><TextBlock x:Name="GPU" Text="--%" Style="{StaticResource StatValue}" Foreground="{StaticResource SeriesGpu}"/></StackPanel>
-                  <StackPanel><TextBlock Text="GAME" Style="{StaticResource StatLabel}"/><TextBlock x:Name="Game" Text="None" Style="{StaticResource StatValue}" FontSize="16" Margin="0,6,0,0" Foreground="{StaticResource SeriesAvailable}"/></StackPanel>
+                <!-- 5.11: RAM % and CPU % now live in the rings; this card keeps what the rings do not show. -->
+                <UniformGrid Columns="2" Rows="1">
+                  <StackPanel Visibility="Collapsed"><TextBlock x:Name="Memory" Text="--%"/></StackPanel>
+                  <StackPanel Visibility="Collapsed"><TextBlock x:Name="CPU" Text="--%"/></StackPanel>
+                  <StackPanel Margin="0,0,8,0"><TextBlock Style="{StaticResource StatLabel}"><Run Text="● " Foreground="{StaticResource SeriesGpu}"/><Run Text="GPU 3D"/></TextBlock><TextBlock x:Name="GPU" Text="--%" Style="{StaticResource StatValue}"/></StackPanel>
+                  <StackPanel><TextBlock Text="GAME" Style="{StaticResource StatLabel}"/><TextBlock x:Name="Game" Text="None" Style="{StaticResource StatValue}" FontSize="16" Margin="0,6,0,0" TextTrimming="CharacterEllipsis"/></StackPanel>
                 </UniformGrid>
               </Border>
 
@@ -288,7 +322,7 @@
                 </StackPanel>
               </Border>
 
-              <!-- 5.8: CPU balance (ProBalance-style) -->
+              <!-- 5.8/5.11: CPU care (ProBalance-style priority + making room on whole cores) -->
               <Border Style="{StaticResource Card}" Margin="0,0,0,12" Padding="14,12"
                       ToolTip="When the PC is busy and a background program hogs the CPU, YUMRAM briefly lowers that program's priority so the app you are using stays smooth. It is put back as soon as it calms down. The app you are using and your game are never touched.">
                 <StackPanel>
@@ -297,7 +331,7 @@
                     <Border x:Name="CpuBalancePill" DockPanel.Dock="Right" Style="{StaticResource Pill}" Margin="0,0,8,0" Visibility="Collapsed">
                       <TextBlock Text="ACTIVE" FontSize="10.5" FontWeight="SemiBold" Foreground="{StaticResource Warning}"/>
                     </Border>
-                    <TextBlock Text="CPU BALANCE" Style="{StaticResource StatLabel}" VerticalAlignment="Center"/>
+                    <TextBlock x:Name="CpuCareTitle" Text="CPU CARE" Style="{StaticResource StatLabel}" VerticalAlignment="Center"/>
                   </DockPanel>
                   <TextBlock x:Name="CpuBalanceText" Text="Starting…" Style="{StaticResource Caption}" TextWrapping="Wrap"/>
                   <TextBlock x:Name="CpuBalanceCount" Text="" Style="{StaticResource Caption}" Foreground="{StaticResource TextFaint}" Margin="0,4,0,0"/>

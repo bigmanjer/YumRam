@@ -324,6 +324,17 @@ function Invoke-YumNativeMemoryCommand {
     }
 }
 
+function Get-YumMemoryListsGB {
+    # 5.11: Windows' own breakdown. "Free" (free + zeroed pages) is what Resource Monitor calls Free;
+    # "Available" = Free + Standby (cached files/pages that can be handed out at once). Deep empties the
+    # standby cache, so Free jumps by GBs - but that cache already counted as Available.
+    try{
+        $o=Get-CimInstance Win32_PerfRawData_PerfOS_Memory -ErrorAction Stop
+        $standby=[double]$o.StandbyCacheCoreBytes+[double]$o.StandbyCacheNormalPriorityBytes+[double]$o.StandbyCacheReserveBytes
+        return [pscustomobject]@{FreeGB=[math]::Round([double]$o.FreeAndZeroPageListBytes/1GB,3);StandbyGB=[math]::Round($standby/1GB,3);ModifiedGB=[math]::Round([double]$o.ModifiedPageListBytes/1GB,3)}
+    }catch{ return $null }
+}
+
 function Start-YumReclaimEffectivenessMonitor {
     # 5.3.0: the 5.2.90 System.Timers.Timer verifier never ran under Windows PowerShell 5.1.
     # Verification is now sampled lazily by Update-YumReclaimVerification, which the main UI
@@ -351,6 +362,14 @@ function Update-YumReclaimVerification {
         $sample={ [math]::Max(0.0,[double](Get-YumMemoryReclaimSnapshot -Fast).AvailableGB-$before) }
         if($age -ge 5 -and $null -eq $Result.Verification5sGB){$Result.Verification5sGB=& $sample;$Result.VerificationStatus='5s measured';$changed=$true}
         if($age -ge 15 -and $null -eq $Result.Verification15sGB){$Result.Verification15sGB=& $sample;$Result.VerificationStatus='15s measured';$changed=$true}
+        # 5.11: Available often keeps rising for a few seconds after a reclaim (Windows finishes writing out
+        # and compressing). Keep the highest gain seen so the result can say so.
+        try{
+            $peak=[double]$Result.AvailableGainGB;$peakAt=0
+            foreach($pair in @(@(5,$Result.Verification5sGB),@(15,$Result.Verification15sGB))){ if($null -ne $pair[1] -and [double]$pair[1] -gt $peak){$peak=[double]$pair[1];$peakAt=[int]$pair[0]} }
+            $Result | Add-Member -NotePropertyName PeakGainGB -NotePropertyValue $peak -Force
+            $Result | Add-Member -NotePropertyName PeakGainAtSeconds -NotePropertyValue $peakAt -Force
+        }catch{}
         if($age -ge 30 -and $null -eq $Result.Verification30sGB){
             $Result.Verification30sGB=& $sample
             $Result.RetainedGainGB=$Result.Verification30sGB
@@ -440,6 +459,7 @@ function Invoke-YumMemoryReclaim {
         if($script:Yum.ReclaimRunning){return [pscustomobject]@{Success=$true;Skipped=$true;Reason='Reclaim already running.'}}
         $script:Yum.ReclaimRunning=$true
         $before=Get-YumMemoryReclaimSnapshot
+        $listsBefore=Get-YumMemoryListsGB
         $rows=New-Object System.Collections.Generic.List[object]
         $notes=New-Object System.Collections.Generic.List[string]
         $gameActive=$false
@@ -457,8 +477,11 @@ function Invoke-YumMemoryReclaim {
             Start-Sleep -Milliseconds 80
             $areaAfter=Get-YumMemoryReclaimSnapshot -Fast
             $gain=[math]::Max(0.0,[double]$areaAfter.AvailableGB-[double]$areaBefore.AvailableGB)
-            [void]$rows.Add([pscustomobject]@{Type='Memory Area';PID='—';Process=$Label;BeforeMB=[math]::Round([double]$areaBefore.AvailableGB*1024,0);AfterMB=[math]::Round([double]$areaAfter.AvailableGB*1024,0);ReducedMB=[math]::Round($gain*1024,0);Action='Purge';Result=if($r.Success){'Completed'}else{'Failed'};Reason=$r.Reason;CPU='—';Score=0})
-            if(-not $r.Success){[void]$notes.Add(('{0} was unavailable or denied.' -f $Label))}
+            # 5.11: a step that needs administrator is 'Skipped', not a red 'Failed'.
+            $areaResult=if($r.Success){'Completed'}elseif(-not (Test-YumIsElevated) -or [string]$r.Reason -match '(?i)privilege'){'Skipped'}else{'Failed'}
+            $areaReason=if($areaResult -eq 'Skipped'){'Needs YUMRAM to run as administrator.'}else{[string]$r.Reason}
+            [void]$rows.Add([pscustomobject]@{Type='Memory Area';PID='—';Process=$Label;BeforeMB=[math]::Round([double]$areaBefore.AvailableGB*1024,0);AfterMB=[math]::Round([double]$areaAfter.AvailableGB*1024,0);ReducedMB=[math]::Round($gain*1024,0);Action='Purge';Result=$areaResult;Reason=$areaReason;CPU='—';Score=0})
+            if(-not $r.Success -and $areaResult -ne 'Skipped'){[void]$notes.Add(('{0} was unavailable or denied.' -f $Label))}
         }
         if([bool]$script:Yum.Config.ReclaimLowPriorityStandby){ & $runMemoryArea 'PurgeLowPriorityStandby' 'Low-priority standby list' }
 
@@ -511,9 +534,23 @@ function Invoke-YumMemoryReclaim {
             [void]$notes.Add(('Nothing left to trim: no idle program above {0} MB right now (automatic care may already have trimmed them, or they are protected).' -f [int]$script:Yum.Config.ReclaimMinimumWorkingSetMB))
         }
         $success=($availableGain -gt 0.0 -or $wsReduced -gt 0.0 -or @($rows|Where-Object{$_.Result -eq 'Completed'}).Count -gt 0)
+        # 5.11 (user report: "Deep said 2.90 GB but free RAM jumped a lot more"): also measure Windows' Free
+        # list. Emptying the standby cache moves GBs from Standby to Free, which Resource Monitor shows as a big
+        # jump in "Free" - but standby already counted as Available, so it is not extra room. Say so.
+        $listsAfter=Get-YumMemoryListsGB
+        $freeJump=0.0;$freeNote=''
+        if($null -ne $listsBefore -and $null -ne $listsAfter){
+            $freeJump=[math]::Round([double]$listsAfter.FreeGB-[double]$listsBefore.FreeGB,2)
+            if($freeJump -gt ($availableGain+0.5)){
+                $freeNote=(' Windows'' "Free" memory went up +{0:N1} GB because the standby cache was emptied; that cache already counted as available, so the real extra room is the +{1:N2} GB above.' -f $freeJump,$availableGain)
+                [void]$notes.Add($freeNote.Trim())
+            }
+        }
         $result=[pscustomobject]@{
             Success=$success;Skipped=$false;Mode=$Mode;Before=$before;After=$after;AvailableGainGB=$availableGain;WorkingSetReducedMB=$wsReduced;Actions=$rows.Count;Rows=$rows.ToArray();Notes=$notes.ToArray();Timestamp=Get-Date
-            Summary=('Available RAM {0:N2} → {1:N2} GB (+{2:N2} GB). Process working sets reduced {3:N0} MB. {4} actions completed.{5}' -f $before.AvailableGB,$after.AvailableGB,$availableGain,$wsReduced,(@($rows|Where-Object{$_.Result -eq 'Completed'}).Count),$(if($wsReduced -le 0){' Nothing left to trim right now - idle programs were already trimmed.'}else{''}))
+            FreeBeforeGB=$(if($listsBefore){$listsBefore.FreeGB}else{$null});FreeAfterGB=$(if($listsAfter){$listsAfter.FreeGB}else{$null});FreeJumpGB=$freeJump
+            StandbyBeforeGB=$(if($listsBefore){$listsBefore.StandbyGB}else{$null});StandbyAfterGB=$(if($listsAfter){$listsAfter.StandbyGB}else{$null})
+            Summary=('Available RAM {0:N2} → {1:N2} GB (+{2:N2} GB). Process working sets reduced {3:N0} MB. {4} completed.{5}{6}' -f $before.AvailableGB,$after.AvailableGB,$availableGain,$wsReduced,$($doneCount=@($rows|Where-Object{$_.Result -eq 'Completed'}).Count;if($doneCount -eq 1){'1 action'}else{'{0} actions' -f $doneCount}),$(if($wsReduced -le 0){' Nothing left to trim right now - idle programs were already trimmed.'}else{''}),$freeNote)
         }
         try {
             $script:Yum.LastReclaim=$result

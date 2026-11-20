@@ -1,5 +1,62 @@
 # Changelog
 
+# YUMRAM 5.11.0 — CPU care: automatic help for the CPU, like the RAM goal (branch `visual-overhaul`)
+
+**Research** (primary sources): Task Manager's Efficiency mode = Idle priority + EcoQoS; Microsoft
+measured 14–76 % better responsiveness against a background CPU hog. EcoQoS was tuned first for Intel
+10th/11th-gen mobile, Ryzen 5000 mobile and Qualcomm. ProBalance (Process Lasso) = Below Normal; its
+"Efficiency mode while restrained" is off by default. Process Lasso's CPU Limiter constrains affinity;
+anti-cheat blocks opening game processes. Dual-cache-group / X3D users report moving background work off
+the game's cores keeps 1 % lows higher. Open source: EnergyStar (EcoQoS for background apps, reacts to
+the foreground event), Seanox Process Balancer. Laptop vs desktop matters (shared power/heat budget).
+
+**Measured on this PC** (Ryzen 7 4800H laptop: 8 cores / 16 threads, 2 cache groups of 4 cores, AC):
+- Priority alone fixes stutter (wake 5.1 → 2.0 ms) but not speed: SMT siblings are still shared.
+- **EcoQoS: no measurable effect on this Zen 2 chip** (same clocks, same work) — as expected from
+  Microsoft's tuning list.
+- Keeping a hog off one whole cache group made a 4-thread job 35 % faster than priority alone.
+- **Simulated 8-thread game** with a 32-thread hog — no hog 153 FPS (1 % low 131); CPU care off 11 FPS;
+  Gentle (priority only) 131–135 FPS / 1 % low 75; **Balanced 147–152 FPS / 1 % low 97–123**.
+
+**What it does** (Settings › CPU; Overview card "CPU care"):
+- **Gentle** = Below Normal (CPU balance, 5.8). **Balanced** (default) = + *make room*: a hog that keeps
+  going while you actively use an app (8 s; a game: 1 s) is kept off whole cores so your app gets full
+  cores — then YUMRAM **checks your app really got more CPU and undoes it if not**. **Strong** = Efficiency
+  mode for hogs (Idle priority + EcoQoS + low memory priority so Windows drops their cached pages first),
+  room after 3 s. A laptop **on battery uses Strong** automatically (can be turned off).
+- **No CPU database:** Windows reports the exact layout at runtime — cores, SMT siblings, efficiency
+  cores, cache groups. Hybrid Intel: hogs go to the efficiency cores. Several cache groups (AMD CCX/CCD,
+  X3D): your app keeps the largest-cache group. Otherwise half the cores. Never splits a core.
+- **App switches are instant:** a Windows foreground hook (idea from EnergyStar) wakes CPU care, so a
+  program you click on gets its priority back within milliseconds.
+- Everything is undone when the program calms down, when you switch to it, when CPU care is turned off,
+  when YUMRAM closes, and after a crash (saved state) — only on the same process and only where nobody
+  else changed it since.
+- **Found while measuring and fixed:** a flip-flop where making room lowered PC load, which looked
+  "calm", restored the hog, which took everything again.
+- Tests: new `Release511CpuCareTest` (profile, never splits a core, full undo incl. crash recovery,
+  leaves others' changes alone).
+
+**CPU shown like RAM, and a visual pass** (dataviz rules: one axis per chart, meters carry severity with
+a same-colour track, state written as a word, text in text colour):
+- **Overview:** RAM and CPU cards side by side with the same layout — a ring (meter) each, then the
+  headline: Available RAM / goal on one side, **CPU speed (GHz), processes, threads, cores, busiest
+  programs and what CPU care is doing** on the other (Windows' own counters, the ones Task Manager uses).
+  Actions (Free RAM now, Deep reclaim, Automatic care) share one card.
+- **Live graph fixed:** RAM was auto-zoomed while CPU/GPU were 0–100 % on the same chart (two scales;
+  58 % RAM was drawn near the top). Every line is now on one true 0–100 % scale with 0/50/100 % labels;
+  new data enters from the right; title "Live usage". Legend and stat values in text colour (the dot
+  carries the series colour). The quick-stats card no longer repeats what the rings show.
+- Status pills say "On target / Below goal / Out of reach" instead of "[OK] / [LOW] / [OUT OF REACH]".
+
+**Deep reclaim numbers** (user report: "said 2.90 GB but free RAM jumped a lot more"): Windows has two
+"free" numbers. Deep empties the standby cache, so **Free** (Resource Monitor) jumps by GBs, but that
+cache already counted as **Available**. The result now says so with both numbers, and if Available keeps
+rising after the result (Windows finishing), it reports the highest gain ("kept rising to +X GB after
+N s") and counts it in RAM freed. The Reclaim Center's broken "System cache: N/A" / "Commit: N/A"
+cards are now **Standby cache** and **Free (unused)** — Available = Free + Standby at a glance. Steps that
+need administrator show "Skipped" instead of a red "Failed"; buttons in sentence case.
+
 # YUMRAM 5.10.0 — YUMRAM.exe and updates from GitHub (branch `visual-overhaul`)
 
 Research: PS2EXE builds (script wrapped in its own PowerShell host) are repeatedly flagged by antivirus

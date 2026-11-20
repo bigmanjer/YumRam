@@ -31,9 +31,9 @@
       <Border Style="{StaticResource Card}" Padding="12,10" Margin="0,0,10,0" ToolTip="RAM Windows can hand to programs right now (free + standby).">
         <StackPanel><TextBlock Text="AVAILABLE RAM" Style="{StaticResource StatLabel}"/><TextBlock x:Name="Available" Text="-- GB" Style="{StaticResource StatValue}" Foreground="{StaticResource Success}"/></StackPanel></Border>
       <Border Style="{StaticResource Card}" Padding="12,10" Margin="0,0,10,0" ToolTip="File cache held by Windows (reusable; counts toward Available).">
-        <StackPanel><TextBlock Text="SYSTEM CACHE" Style="{StaticResource StatLabel}"/><TextBlock x:Name="Cache" Text="-- GB" Style="{StaticResource StatValue}" Foreground="{StaticResource Brand}"/></StackPanel></Border>
+        <StackPanel ToolTip="Cached files and pages Windows can hand out instantly. It already counts as Available RAM. Deep reclaim empties it, which moves it to Free."><TextBlock Text="STANDBY CACHE" Style="{StaticResource StatLabel}"/><TextBlock x:Name="Cache" Text="-- GB" Style="{StaticResource StatValue}"/></StackPanel></Border>
       <Border Style="{StaticResource Card}" Padding="12,10" Margin="0,0,10,0" ToolTip="Memory promised to programs, as a share of RAM + page file.">
-        <StackPanel><TextBlock Text="COMMIT CHARGE" Style="{StaticResource StatLabel}"/><TextBlock x:Name="Commit" Text="--%" Style="{StaticResource StatValue}" Foreground="{StaticResource Warning}"/></StackPanel></Border>
+        <StackPanel ToolTip="Completely unused memory (what Resource Monitor calls Free). Available RAM = Free + Standby cache, so a big jump here after Deep reclaim is mostly cache moving over, not extra room."><TextBlock Text="FREE (UNUSED)" Style="{StaticResource StatLabel}"/><TextBlock x:Name="Commit" Text="-- GB" Style="{StaticResource StatValue}"/></StackPanel></Border>
       <Border Style="{StaticResource Card}" Padding="12,10" Margin="0,0,10,0" ToolTip="Working-set memory trimmed by the last reclaim.">
         <StackPanel><TextBlock Text="TRIMMED LAST RUN" Style="{StaticResource StatLabel}"/><TextBlock x:Name="Potential" Text="-- MB" Style="{StaticResource StatValue}" Foreground="{StaticResource Brand}"/></StackPanel></Border>
       <Border Style="{StaticResource Card}" Padding="12,10" Margin="0,0,10,0" ToolTip="Available RAM gained by the last reclaim, measured after Windows settled.">
@@ -83,7 +83,7 @@
               <TextBlock Style="{StaticResource Tick}" Text="✓  Moves the Windows file cache to standby *"/>
               <TextBlock Style="{StaticResource Tick}" Text="✓  Writes out changed memory waiting in RAM *"/>
               <TextBlock Style="{StaticResource Tick}" Text="No slowdown: nothing you are using is touched." Foreground="{StaticResource TextMuted}" Margin="0,6,0,10"/>
-              <Button x:Name="FreeRam" Content="💜 FREE RAM NOW" Style="{StaticResource PrimaryButton}" MinHeight="40"/>
+              <Button x:Name="FreeRam" Content="💜  Free RAM now" Style="{StaticResource PrimaryButton}" MinHeight="40"/>
             </StackPanel>
           </Border>
           <!-- Option 2 -->
@@ -96,7 +96,7 @@
               <TextBlock Style="{StaticResource Tick}" Text="✓  Empties every program's memory at once *"/>
               <TextBlock Style="{StaticResource Tick}" Text="✓  Clears the standby cache *"/>
               <TextBlock Style="{StaticResource Tick}" Text="Programs may feel slower for a few seconds while they reload. Skipped parts while a game runs." Foreground="{StaticResource TextMuted}" Margin="0,6,0,10"/>
-              <Button x:Name="DeepReclaim" Content="💜 DEEP RAM RECLAIM"/>
+              <Button x:Name="DeepReclaim" Content="💜  Deep reclaim"/>
             </StackPanel>
           </Border>
           <TextBlock Text="* needs YUMRAM to run as administrator" Style="{StaticResource Caption}" Margin="4,0,0,12"/>

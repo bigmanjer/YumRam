@@ -104,7 +104,22 @@
         <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
           <Border Style="{StaticResource Card}" Margin="0,4,4,4"><StackPanel>
             <CheckBox x:Name="CpuBalanceEnabled" Content="CPU balance: keep the app I am using smooth when a background program hogs the CPU"/>
-            <TextBlock Text="YUMRAM briefly lowers the busy background program to Below Normal priority and puts it back as soon as it calms down. It still gets plenty of CPU; it just waits its turn. The app you are using, your game, Windows and services are never touched. Works whether or not memory monitoring is on." Style="{StaticResource Caption}" Margin="27,2,0,14" TextWrapping="Wrap"/>
+            <TextBlock Text="YUMRAM briefly lowers the busy background program's priority and puts it back as soon as it calms down. The app you are using, your game, Windows and services are never touched. Works whether or not memory monitoring is on." Style="{StaticResource Caption}" Margin="27,2,0,14" TextWrapping="Wrap"/>
+            <Grid Style="{StaticResource Row}"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="240"/></Grid.ColumnDefinitions>
+              <StackPanel><TextBlock Text="How strong" Style="{StaticResource RowLabel}"/>
+                <TextBlock Text="Gentle: lower priority only (like Process Lasso's ProBalance). Balanced: also keeps a long-running hog off some whole cores so your app or game gets them, and checks that it really helped. Strong: Windows Efficiency mode for hogs (lowest priority + EcoQoS + low memory priority), sooner." Style="{StaticResource RowHint}" TextWrapping="Wrap"/></StackPanel>
+              <ComboBox x:Name="CpuCareLevel" Grid.Column="1" VerticalAlignment="Top">
+                <ComboBoxItem Content="Gentle" Tag="Gentle"/>
+                <ComboBoxItem Content="Balanced — recommended" Tag="Balanced"/>
+                <ComboBoxItem Content="Strong" Tag="Strong"/>
+              </ComboBox></Grid>
+            <CheckBox x:Name="CpuCareStrongOnBattery" Content="Use Strong automatically on a laptop running on battery (saves power and heat)" Margin="0,0,0,10"/>
+            <Border Background="{StaticResource Bg}" CornerRadius="8" Padding="12,10" Margin="0,0,0,14">
+              <StackPanel>
+                <TextBlock Text="THIS PC" Style="{StaticResource StatLabel}"/>
+                <TextBlock x:Name="CpuProfileText" Text="" Style="{StaticResource Caption}" TextWrapping="Wrap" Margin="0,4,0,0"/>
+              </StackPanel>
+            </Border>
             <Grid Style="{StaticResource Row}"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="140"/></Grid.ColumnDefinitions>
               <StackPanel><TextBlock Text="Step in when the whole PC is at least (%)" Style="{StaticResource RowLabel}"/><TextBlock Text="Total CPU use. Below this nothing is changed. Default 70." Style="{StaticResource RowHint}"/></StackPanel>
               <TextBox x:Name="CpuSystemPercent" Grid.Column="1" VerticalAlignment="Top"/></Grid>

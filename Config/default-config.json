@@ -1,5 +1,5 @@
 ﻿{
-  "Version": "5.10.0",
+  "Version": "5.11.0",
   "TelemetryIntervalSeconds": 0.5,
   "UIRefreshIntervalSeconds": 0.25,
   "GPUIntervalSeconds": 5.0,
@@ -346,6 +346,8 @@
   "UpdateFeedUrl": "",
   "UpdateLastCheck": "",
   "CpuBalanceEnabled": true,
+  "CpuCareLevel": "Balanced",
+  "CpuCareStrongOnBattery": true,
   "CpuBalanceSystemPercent": 70,
   "CpuBalanceProcessPercent": 10,
   "CpuBalanceHotSeconds": 2,
@@ -370,7 +372,7 @@
     "GitHub Repository Corroboration",
     "Reddit Community Context"
   ],
-  "ResearchEngineVersion": "5.10.0",
+  "ResearchEngineVersion": "5.11.0",
   "CleanupStepDelayMs": 200,
   "CleanupMaxPassMilliseconds": 750,
   "CleanupMaxTrimMBPerPass": 384,

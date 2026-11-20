@@ -2,7 +2,7 @@
 
 **Yumes Ultimate Memory Reclaim & Monitor**
 
-Version: 5.10.0
+Version: 5.11.0
 Stage: alpha
 
 **YUMRAM keeps Windows responsive by keeping Available RAM above a target you choose.** It trims the
@@ -18,7 +18,7 @@ It is a single-folder Windows PowerShell 5.1 + WPF app: no installer, no runtime
 - **One window**: a sidebar (like Windows 11 Task Manager) opens Overview, What's using RAM, Reclaim
   Center, Startup apps, Intelligence, Settings and About (What's running shows live RAM and CPU per program) as pages in the same window. `Ctrl+1`…`Ctrl+7`
   jump between them, and the sidebar shrinks to icons when the window is narrow.
-- **CPU balance** (like Process Lasso's ProBalance): when the PC is busy and a background program hogs
+- **CPU care** (Settings › CPU: Gentle / Balanced / Strong; Balanced makes room on whole cores for the app or game you are using, checks it helped, and adapts to your CPU layout, laptop or desktop, battery or plugged in). Measured on a Ryzen 7 4800H laptop with a simulated 8-thread game and a CPU hog: 11 FPS with nothing, 131–135 FPS with priority alone, 147–152 FPS with Balanced (153 FPS without the hog). Its first level is **CPU balance** (like Process Lasso's ProBalance): when the PC is busy and a background program hogs
   the CPU, YUMRAM temporarily lowers it to Below Normal priority so the app you are using stays smooth,
   and puts it back as soon as it calms down. The foreground app, games, Windows core processes,
   services and programs with their own priority are never touched. Measured here with an all-core CPU

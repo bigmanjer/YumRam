@@ -124,12 +124,22 @@ if($Mode -eq 'Core'){
     $cpu=0.0
     $lastCpu=Get-Date
     $nextCpu=(Get-Date).AddSeconds(1.0)
+    # 5.11: CPU card on the Overview - effective clock speed (base MHz x '% Processor Performance', the
+    # value Task Manager shows as Speed), processes and threads. Same once-a-second cadence as CPU %.
+    $perfCounter=$null;$procCounter=$null;$threadCounter=$null;$baseMHz=0.0
+    try{ $perfCounter=New-Object System.Diagnostics.PerformanceCounter('Processor Information','% Processor Performance','_Total'); [void]$perfCounter.NextValue() }catch{ $perfCounter=$null }
+    try{ $procCounter=New-Object System.Diagnostics.PerformanceCounter('System','Processes'); $threadCounter=New-Object System.Diagnostics.PerformanceCounter('System','Threads') }catch{}
+    try{ $baseMHz=[double](Get-CimInstance Win32_Processor -ErrorAction Stop | Select-Object -First 1).MaxClockSpeed }catch{}
     while(-not $StopEvent.IsSet){
         try {
             $memory=Get-MemoryFast
             if($null -eq $memory){ throw 'Memory sample unavailable' }
             $now=Get-Date
-            if($cpuCounter -and $now -ge $nextCpu){ $cpu=[math]::Round([double]$cpuCounter.NextValue(),1); $nextCpu=$now.AddSeconds(1.0) }
+            if($cpuCounter -and $now -ge $nextCpu){
+                $cpu=[math]::Round([double]$cpuCounter.NextValue(),1); $nextCpu=$now.AddSeconds(1.0)
+                try{ if($perfCounter -and $baseMHz -gt 0){ $Cache['CpuMHz']=[math]::Round($baseMHz*[double]$perfCounter.NextValue()/100.0,0); $Cache['CpuBaseMHz']=$baseMHz } }catch{}
+                try{ if($procCounter){ $Cache['Processes']=[int]$procCounter.NextValue(); $Cache['Threads']=[int]$threadCounter.NextValue() } }catch{}
+            }
             Publish-Core -Memory $memory -CPU $cpu
         } catch { Fail-Worker $_.Exception }
         Start-Sleep -Milliseconds ([int][math]::Max(50,([double]$Config.TelemetryIntervalSeconds*1000)))
