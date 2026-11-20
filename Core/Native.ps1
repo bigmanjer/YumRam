@@ -185,6 +185,48 @@ function Get-YumForegroundProcessId {
     } catch { return 0 }
 }
 
+if (-not ('YumRamWorkingSet' -as [type])) {
+    Add-Type @'
+using System;
+using System.Runtime.InteropServices;
+public static class YumRamWorkingSet
+{
+    [DllImport("kernel32.dll", SetLastError=true)]
+    public static extern bool SetProcessWorkingSetSizeEx(IntPtr hProcess, UIntPtr min, UIntPtr max, uint flags);
+    [DllImport("kernel32.dll", SetLastError=true)]
+    public static extern bool GetProcessWorkingSetSizeEx(IntPtr hProcess, out UIntPtr min, out UIntPtr max, out uint flags);
+}
+'@
+}
+
+function Invoke-YumReduceWorkingSet {
+    # 5.13.1: partial trim for a program larger than the per-pass budget. A hard maximum makes Windows move
+    # the pages above it to the standby/modified lists right away (like EmptyWorkingSet, but only part);
+    # the limit is removed immediately afterwards (back to the soft defaults), so the program can grow
+    # again normally and pages back in what it needs.
+    param([Parameter(Mandatory)][System.Diagnostics.Process]$Process,[Parameter(Mandatory)][int64]$ReduceBytes)
+    try {
+        $before=[int64]$Process.WorkingSet64
+        if ($before -lt 100MB) { return [pscustomobject]@{Success=$false;Before=$before;After=$before;Reduced=0;Win32Error=0;Reason='Below threshold'} }
+        $keep=[math]::Max([int64]64MB,$before-$ReduceBytes)
+        if ($keep -ge $before) { return [pscustomobject]@{Success=$false;Before=$before;After=$before;Reduced=0;Win32Error=0;Reason='Nothing to trim'} }
+        $h=$Process.Handle
+        $min=[UIntPtr][uint64][math]::Min(16MB,[math]::Floor($keep/4))
+        # Soft limits only: QUOTA_LIMITS_HARDWS_MIN_DISABLE (0x2) | QUOTA_LIMITS_HARDWS_MAX_DISABLE (0x8).
+        # Measured: Windows trims to exactly the new maximum (2,014 -> 1,314 MB asked 1,314) and the program
+        # may grow past it again. Do NOT "restore" the old sizes: the default maximum is ~1.4 MB, and setting
+        # it back emptied the whole working set in testing.
+        $ok=[YumRamWorkingSet]::SetProcessWorkingSetSizeEx($h,$min,[UIntPtr][uint64]$keep,[uint32]10)
+        $code=[Runtime.InteropServices.Marshal]::GetLastWin32Error()
+        if (-not $ok) { return [pscustomobject]@{Success=$false;Before=$before;After=$before;Reduced=0;Win32Error=$code;Reason='SetProcessWorkingSetSizeEx failed'} }
+        $Process.Refresh()
+        $after=[int64]$Process.WorkingSet64
+        return [pscustomobject]@{Success=$true;Before=$before;After=$after;Reduced=[math]::Max([int64]0,$before-$after);Win32Error=0;Reason='Partly trimmed'}
+    } catch {
+        return [pscustomobject]@{Success=$false;Before=0;After=0;Reduced=0;Win32Error=$_.Exception.HResult;Reason=$_.Exception.Message}
+    }
+}
+
 function Invoke-YumEmptyWorkingSet {
     param([Parameter(Mandatory)][System.Diagnostics.Process]$Process)
     try {

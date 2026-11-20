@@ -51,6 +51,9 @@ function Get-YumCandidateProcesses {
                 if($cpuMap.Contains([int]$p.Id)){ $cpu=[double]$cpuMap[[int]$p.Id] }
                 else { try {$cpuSeconds=[double]$p.TotalProcessorTime.TotalSeconds;$ageSeconds=1.0;try{$ageSeconds=[math]::Max(1.0,((Get-Date)-$p.StartTime).TotalSeconds)}catch{};$cpu=[math]::Min(100.0,(($cpuSeconds/[math]::Max(1,[Environment]::ProcessorCount))/$ageSeconds)*100.0)} catch {} }
                 $priorityWeight = switch ($p.PriorityClass) {'Idle'{5};'BelowNormal'{3};'Normal'{1};'AboveNormal'{-2};'High'{-5};default{0}}
+                # 5.14: a low priority set by CPU care means "busy", not "idle" - no trim bonus for it (its memory
+                # would fault straight back in).
+                try{ $cb=$script:Yum['CpuBalance']; if($null -ne $cb -and $null -ne $cb.Restrained -and $cb.Restrained.ContainsKey([int]$p.Id)){ $priorityWeight=0 } }catch{}
                 $classification=Get-YumIntelligenceClassification -Process $p -Identity $identity -ForegroundPid $ForegroundPid -GamePid $GamePid -Cpu $cpu -MemoryMB $memoryMB
                 try {
                     if(Get-Command Get-YumManualOrganization -ErrorAction SilentlyContinue){

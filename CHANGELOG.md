@@ -1,5 +1,28 @@
 # Changelog
 
+# YUMRAM 5.14.0 — Beta: big programs trimmed in chunks, clearer graph, "applied" confirmations
+
+YUMRAM is now **beta**.
+
+- **Goal reached even when one program is huge.** Automatic care never trimmed a program bigger than its
+  per-pass budget (Balanced 2 GB), so one large browser tab — measured here: a 2.7 GB Chrome renderer, the
+  top-ranked candidate — was skipped forever. Small programs were trimmed, refilled within a minute, and a
+  reachable 6 GB goal sat at 4.6–5.5 GB. Now such a program is trimmed **in chunks** (only what the budget
+  and the gap allow, once a minute at most) with a soft working-set limit. **Measured on this PC:** the tab
+  went 2,931 → 1,332 MB and Available RAM 4.9 → 5.8 GB. Free RAM now / Deep reclaim still trim in full.
+- **CPU care no longer pauses or misleads RAM care.** (1) RAM care skipped every pass while total CPU was
+  ≥ 90 %; a background program CPU care had already slowed down still filled idle CPU, so RAM care stopped
+  for as long as it ran. CPU used by held-back programs no longer counts. (2) A program CPU care lowered to
+  Below Normal / Idle got a "low priority = idle" trim bonus, although it is busy and its memory faults
+  straight back — that bonus is gone for programs CPU care holds back.
+- **Graph: two lanes instead of four crossing lines.** Top: Available RAM with your goal as a dashed line
+  (below the line = below goal). Bottom: CPU and GPU. Available and RAM-in-use mirrored each other and
+  crossed near 50 %; CPU and GPU sat on top of each other. Gaps in the history now show as gaps instead of
+  long straight lines. Same in 30 s, 5 min, 1 h and 12 h.
+- **"Applied" confirmations.** A short pop-up confirms the memory goal ("Memory goal set to 6 GB", with a
+  warning when it is above what is reachable now), Settings › Apply and Mode changes.
+- Tests: new `Release514Test` (chunked plan + a real 1.6 GB test program trimmed by ~600 MB with no hard
+  limit left, CPU-care rules, graph, confirmations, beta).
 # YUMRAM 5.13.0 — Report a problem, safer uninstall, working issue forms
 
 - **Report a problem** (About page and tray menu): opens GitHub's bug form in the browser, filled in with

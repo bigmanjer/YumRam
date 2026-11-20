@@ -159,7 +159,7 @@ if($cleanup -match '\[Parameter\(Mandatory[^\)]*\)\]\s*\[object\[\]\]'){Add-Chec
 # UI/graph contract.
 foreach($n in @('IntelligenceResults','Filter','Search','Refresh','RunResearch','Close','Details','Summary','LastScan','ReviewCount','ResearchingCount','ResolvedCount','UnknownCount','ProtectedCount','CachedCount','ResearchErrorCount','DatabaseCount')){if($intelXaml -notmatch ('x:Name="'+[regex]::Escape($n)+'"')){Add-CheckError "Intelligence control missing: $n"}}
 if($mainXaml -notmatch '(?s)Grid\.Row="2".{0,400}AVAILABLE RAM'){Add-CheckError 'Monitor legend is not outside the graph canvas.'}
-if($mainPs -notmatch 'GraphMemoryAvailable' -or $mainPs -notmatch 'GraphMemoryAvailableLine'){Add-CheckError 'Available RAM graph series/line missing.'}
+if($mainPs -notmatch 'GraphMemoryAvailable' -or $mainPs -notmatch 'Set-YumGraphPath -Path \$L\.Avail'){Add-CheckError 'Available RAM graph series/line missing.'}
 
 # Safety baseline.
 if([bool]$cfg.EnableOptionalServiceCleanup){Add-CheckError 'Optional service cleanup must remain disabled.'}

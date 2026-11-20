@@ -698,7 +698,7 @@ function Show-YumSettings {
                 $restarted=$false
                 if($timingNow -ne [string]$sender.Tag.TimingAtOpen -and $null -ne $script:Yum.TelemetryTimer){try{Stop-YumMonitoring;Start-YumMonitoring;$restarted=$true}catch{Write-YumLogException -Context 'Monitoring restart after settings failed' -Exception $_.Exception}}
                 $sender.Tag.TimingAtOpen=$timingNow
-                $u.Validation.Foreground=Get-YumBrush '#86EFAC';$u.Validation.Text=if($restarted){'Settings saved and applied. Monitoring restarted with the new sampling intervals.'}else{'Settings saved and applied.'};Apply-YumUiConfig
+                $u.Validation.Foreground=Get-YumBrush '#86EFAC';$u.Validation.Text=if($restarted){'Settings saved and applied. Monitoring restarted with the new sampling intervals.'}else{'Settings saved and applied.'};Apply-YumUiConfig;try{Show-YumToast -Text ([string]$u.Validation.Text)}catch{}
             }catch{$u.Validation.Foreground=Get-YumBrush '#FCA5A5';$u.Validation.Text=$_.Exception.Message;Write-YumLogException -Context 'Settings apply failed' -Exception $_.Exception}
         })
         if(-not (Enter-YumPage -Key 'Settings' -Window $window)){$window.Owner=$script:Yum.Window;[void]$window.ShowDialog()}
@@ -711,7 +711,7 @@ function Show-YumAbout {
         [xml]$xaml=Read-YumXamlText -Path (Join-Path $script:Yum.Root 'UI\Xaml\About.xaml')
         $window=[Windows.Markup.XamlReader]::Load((New-Object System.Xml.XmlNodeReader $xaml))
         $admin=if(Test-YumIsElevated){'running as administrator'}else{'not running as administrator'}
-        $window.FindName('Version').Text=('Version {0}  •  {1}' -f [string]$script:Yum.Config.Version,$admin)
+        $window.FindName('Version').Text=('Version {0} beta  •  {1}' -f [string]$script:Yum.Config.Version,$admin)
         try{
             if([bool]$script:Yum.Config['GlobalHotkeyEnabled'] -and $null -ne $script:Yum.Hotkey){$window.FindName('HotkeyKeys').Text=[string]$script:Yum.HotkeyText}
             else{$window.FindName('HotkeyKeys').Text='(off)';$window.FindName('HotkeyText').Text=('Global Free RAM shortcut: {0}. Turn it on in Settings › General.' -f [string]$script:Yum.HotkeyStatus)}

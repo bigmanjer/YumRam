@@ -137,6 +137,22 @@ function Get-YumTrimPlan {
         [void]$selected.Add($entry.Candidate)
         $plannedMB += $wsMB
     }
+    # 5.13.1: a program bigger than the per-pass budget could never be chosen, so one large browser tab
+    # (measured here: a 2.7 GB Chrome renderer, the highest-scored candidate) was skipped forever while
+    # small programs were trimmed, refilled, and the goal was never reached. Now, if the plan still
+    # falls short, the best such program is trimmed PARTIALLY - only what the budget and gap allow.
+    if($plannedMB -lt $gapMB -and $selected.Count -lt $PassLimit){
+        $roomMB=[math]::Min([double]$MaxTrimMBPerPass-$plannedMB,($gapMB-$plannedMB)+128.0)
+        if($roomMB -ge 128){
+            $big=@($ranked | Where-Object { [double]$_.WorkingSetMB -gt [double]$MaxTrimMBPerPass } | Sort-Object @{Expression='Priority';Descending=$true} | Select-Object -First 1)
+            if($big.Count -eq 1){
+                $c=$big[0].Candidate
+                $part=[pscustomobject]@{Process=$c.Process;WorkingSet=$c.WorkingSet;Score=$c.Score;CPU=$c.CPU;TrimMB=[math]::Round($roomMB)}
+                foreach($p in $c.PSObject.Properties){ if(-not $part.PSObject.Properties[$p.Name]){ $part | Add-Member -NotePropertyName $p.Name -NotePropertyValue $p.Value } }
+                [void]$selected.Add($part)
+            }
+        }
+    }
     return $selected.ToArray()
 }
 
@@ -187,7 +203,12 @@ function Invoke-YumCleanupCore {
         if(-not $Force -and -not $FollowUp -and (($now-$script:Yum.LastCleanup).TotalSeconds -lt [double]$script:Yum.Config.MinimumCleanIntervalSeconds)){return [pscustomobject]@{Success=$true;Skipped=$true;Reason='Cooldown'}}
         if($SafeOnly){$effectiveMode='Safe'}else{$effectiveMode=[string]$script:Yum.Config.Mode}
         $decision=Get-YumPressureDecision -Memory $snapshot.Memory -Mode $effectiveMode
-        if(-not $decision.Emergency -and [double]$snapshot.CPU -ge [double]$script:Yum.Config.MaxCPUPercent){return [pscustomobject]@{Success=$true;Skipped=$true;Reason='CPU safety limit'}}
+        # 5.14: CPU used by programs CPU care is holding back (Below Normal / Idle) does not count here. They
+        # only use CPU nobody else wants, so a held-back background hog no longer pauses RAM care for as long
+        # as it runs (measured complaint: changing CPU care seemed to stop RAM cleaning).
+        $cpuForSafety=[double]$snapshot.CPU
+        try{ $cb=$script:Yum['CpuBalance']; if($null -ne $cb -and $null -ne $cb.Restrained){ $held=0.0; foreach($r in @($cb.Restrained.Values)){ try{$held+=[double]$r.LastPercent}catch{} }; $cpuForSafety=[math]::Max(0.0,$cpuForSafety-$held) } }catch{}
+        if(-not $decision.Emergency -and $cpuForSafety -ge [double]$script:Yum.Config.MaxCPUPercent){return [pscustomobject]@{Success=$true;Skipped=$true;Reason='CPU safety limit'}}
         if(-not $Force -and -not $decision.ShouldClean){return [pscustomobject]@{Success=$true;Skipped=$true;Reason=$decision.Reason}}
 
         $before=[double]$snapshot.Memory.AvailableGB
@@ -265,7 +286,9 @@ function Invoke-YumCleanupCore {
             if((((Get-Date)-$passStarted).TotalMilliseconds) -ge [double]$profile.MaxPassMilliseconds){break}
             $current=Get-YumSnapshotCopy
             if($current -and $current.Memory.AvailableGB -ge [double]$decision.StopTargetGB){break}
-            $r=Invoke-YumEmptyWorkingSet -Process $item.Process
+            $partialMB=0;try{if($item.PSObject.Properties['TrimMB']){$partialMB=[double]$item.TrimMB}}catch{}
+            if($partialMB -gt 0){ $r=Invoke-YumReduceWorkingSet -Process $item.Process -ReduceBytes ([int64]($partialMB*1MB)) }
+            else{ $r=Invoke-YumEmptyWorkingSet -Process $item.Process }
             # Record the attempt (success or failure) so neither a hot process nor one we cannot
             # open is retried on every pass.
             try{$script:Yum.ProcessCleanupTimes[[string][int]$item.Process.Id]=Get-Date}catch{}

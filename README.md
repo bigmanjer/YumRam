@@ -4,9 +4,9 @@
 
 **Keeps your Windows PC fast by keeping RAM free and the CPU fair — automatically.**
 
-[![Version](https://img.shields.io/badge/version-5.13.0-a855f7)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-5.14.0-a855f7)](CHANGELOG.md)
 [![Platform](https://img.shields.io/badge/Windows-10%20%7C%2011-0078d4)](#requirements)
-[![Stage](https://img.shields.io/badge/stage-alpha-f59e0b)](#status)
+[![Stage](https://img.shields.io/badge/stage-beta-22c55e)](#status)
 
 [Download](https://github.com/bigmanjer/YumRam/releases/latest) · [What's new](CHANGELOG.md) · [How it works](#how-it-works) · [FAQ](#faq)
 
@@ -146,6 +146,6 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) and [Docs/ARCHITECTURE.md](Docs/ARCHITECT
 
 ## Status
 
-YUMRAM is **alpha** software: tested on real hardware, but expect rough edges.
+YUMRAM is **beta** software: feature-complete for everyday use and tested on real hardware. Please report anything odd with **About › Report a problem**.
 No license has been chosen yet, so all rights are reserved by the YUMRAM contributors — you may read
 the code, but please ask before reusing or redistributing it.

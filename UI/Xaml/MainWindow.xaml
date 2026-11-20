@@ -265,24 +265,16 @@
                   <Button x:Name="Range1h" Content="1 h" Style="{StaticResource GhostButton}" Padding="8,2" ToolTip="Last hour"/>
                   <Button x:Name="Range12h" Content="12 h" Style="{StaticResource GhostButton}" Padding="8,2" ToolTip="Last 12 hours - kept across restarts as 1-minute averages"/>
                 </StackPanel>
-                <TextBlock Text="Usage" Style="{StaticResource SectionTitle}" Margin="0" ToolTip="RAM, CPU and GPU as a share of the total, on one 0-100 % scale"/>
+                <TextBlock Text="Usage" Style="{StaticResource SectionTitle}" Margin="0" ToolTip="Top: Available RAM with your goal as a dashed line. Bottom: CPU and GPU. Both 0-100 %."/>
               </DockPanel>
-              <!-- 5.11: one true 0-100 % scale for every line, with quiet axis labels. -->
-              <Grid Grid.Row="1">
-                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                <Grid Margin="0,2,6,2">
-                  <TextBlock Text="100%" Style="{StaticResource Caption}" FontSize="10.5" VerticalAlignment="Top" HorizontalAlignment="Right"/>
-                  <TextBlock Text="50%" Style="{StaticResource Caption}" FontSize="10.5" VerticalAlignment="Center" HorizontalAlignment="Right"/>
-                  <TextBlock Text="0%" Style="{StaticResource Caption}" FontSize="10.5" VerticalAlignment="Bottom" HorizontalAlignment="Right"/>
-                </Grid>
-                <Border Grid.Column="1" Background="{StaticResource Bg}" CornerRadius="8" ClipToBounds="True">
-                  <Canvas x:Name="Graph" Background="{StaticResource Bg}" SnapsToDevicePixels="True" ClipToBounds="True" Margin="6"/>
-                </Border>
-              </Grid>
+              <!-- 5.14: two lanes on one time axis (drawn with their own labels in Update-YumGraph). -->
+              <Border Grid.Row="1" Background="{StaticResource Bg}" CornerRadius="8" ClipToBounds="True">
+                <Canvas x:Name="Graph" Background="{StaticResource Bg}" SnapsToDevicePixels="True" ClipToBounds="True" Margin="6"/>
+              </Border>
               <!-- Legend sits outside the canvas so it never covers the lines; the dot carries the colour, the words stay text-coloured. -->
               <WrapPanel Grid.Row="2" Margin="0,10,0,10" HorizontalAlignment="Left">
                 <TextBlock FontSize="11.5" Margin="0,0,16,0" Foreground="{StaticResource TextMuted}"><Run Text="● " Foreground="{StaticResource SeriesAvailable}"/><Run Text="Available RAM"/></TextBlock>
-                <TextBlock FontSize="11.5" Margin="0,0,16,0" Foreground="{StaticResource TextMuted}"><Run Text="● " Foreground="{StaticResource SeriesMemory}"/><Run Text="RAM in use"/></TextBlock>
+                <TextBlock FontSize="11.5" Margin="0,0,16,0" Foreground="{StaticResource TextMuted}"><Run Text="- - " Foreground="#FBBF24"/><Run Text="Your goal"/></TextBlock>
                 <TextBlock FontSize="11.5" Margin="0,0,16,0" Foreground="{StaticResource TextMuted}"><Run Text="● " Foreground="{StaticResource SeriesCpu}"/><Run Text="CPU"/></TextBlock>
                 <TextBlock FontSize="11.5" Foreground="{StaticResource TextMuted}"><Run Text="● " Foreground="{StaticResource SeriesGpu}"/><Run Text="GPU 3D"/></TextBlock>
               </WrapPanel>
@@ -392,5 +384,16 @@
         <TextBlock x:Name="Footer" Text="Ready" Style="{StaticResource Caption}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"/>
       </DockPanel>
     </Grid>
+
+    <!-- 5.14: confirmation toast ("Settings applied", "Goal set to 6 GB"). Shown by Show-YumToast for ~3 s over
+         every page; never takes clicks. -->
+    <Border x:Name="Toast" Grid.ColumnSpan="9" Grid.RowSpan="9" Panel.ZIndex="100" IsHitTestVisible="False"
+            HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,56" Padding="16,10"
+            CornerRadius="10" Background="#2A1C3A" BorderBrush="#86EFAC" BorderThickness="1" Opacity="0" Visibility="Collapsed">
+      <StackPanel Orientation="Horizontal">
+        <TextBlock x:Name="ToastIcon" Text="✓" Foreground="#86EFAC" FontSize="15" FontWeight="SemiBold" Margin="0,0,10,0" VerticalAlignment="Center"/>
+        <TextBlock x:Name="ToastText" Text="" Foreground="{StaticResource Text}" FontSize="13.5" VerticalAlignment="Center" MaxWidth="560" TextWrapping="Wrap"/>
+      </StackPanel>
+    </Border>
   </Grid>
 </Window>
