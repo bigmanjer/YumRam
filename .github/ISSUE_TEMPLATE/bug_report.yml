@@ -1,0 +1,26 @@
+﻿name: Bug report
+description: Something in YUMRAM does not work as expected
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for helping make YUMRAM better. Please fill in what you can.
+  - type: input
+    id: version
+    attributes: { label: YUMRAM version, description: "About page, e.g. 5.12.0" }
+    validations: { required: true }
+  - type: dropdown
+    id: admin
+    attributes:
+      label: Administrator rights
+      options: [Ask each time, Start without asking, Never, Not sure]
+  - type: textarea
+    id: what
+    attributes: { label: What happened, description: What did you do, what did you expect, and what happened instead? }
+    validations: { required: true }
+  - type: textarea
+    id: pc
+    attributes: { label: Your PC, description: "Windows version, CPU, RAM (Settings > CPU > This PC shows the CPU line)" }
+  - type: textarea
+    id: log
+    attributes: { label: Log, description: "About > Log - paste the last 30 lines (they contain no personal data except program names)", render: text }

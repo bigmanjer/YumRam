@@ -25,6 +25,17 @@
 - **Your rules per program** in *What's running*: "Never trim this program" and "Never hold back its CPU".
 - Tests: new `Release512Test` (leak heuristic + a real leaking test program flagged, combining wiring,
   12 h history save/load, elevation choices, rules).
+- **A real program:** `YUMRAM-Setup-<version>.exe` (≈300 KB, built by `Tools\Build-Release.ps1`).
+  Installs for the current user to `%LOCALAPPDATA%\Programs\YUMRAM` (no administrator), adds Start menu
+  (+ optional desktop) shortcuts and an entry in **Settings › Apps** with version, publisher, icon and
+  Uninstall; reinstalling keeps settings and statistics; in-app updates keep the Apps version current.
+  `YUMRAM.exe --uninstall` closes YUMRAM and removes shortcuts, the sign-in entry, the no-prompt task,
+  the Apps entry and the folder. Tested: install → reinstall (settings kept) → uninstall (all removed).
+- **Smaller download:** the release package holds only YUMRAM.exe, App, Core, UI, Config, VERSION and
+  two docs (46 files); build scripts, launcher sources, tests and old .cmd/.vbs launchers stay in the
+  repository.
+- **GitHub page:** README rewritten (screenshots, features, install, how it works with measured numbers,
+  privacy, FAQ, development); bug-report and feature-request forms.
 
 # YUMRAM 5.11.0 — CPU care: automatic help for the CPU, like the RAM goal (branch `visual-overhaul`)
 

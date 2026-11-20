@@ -48,7 +48,7 @@ try{
 
 # --- Compile. ---
 $src=Join-Path $root 'Launcher\YumramLauncher.cs'
-$cscArgs=@('/nologo','/target:winexe','/optimize+','/platform:anycpu',('/out:"{0}"' -f $Out),('/win32icon:"{0}"' -f $ico),'/reference:System.Windows.Forms.dll')
+$cscArgs=@('/nologo','/target:winexe','/optimize+','/platform:anycpu',('/out:"{0}"' -f $Out),('/win32icon:"{0}"' -f $ico),'/reference:System.Windows.Forms.dll','/reference:System.Management.dll')
 if(-not $AsInvoker){$cscArgs+=('/win32manifest:"{0}"' -f (Join-Path $root 'Launcher\YUMRAM.manifest'))}
 $cscArgs+=('"{0}"' -f $src)
 $cscOut=& $csc @cscArgs 2>&1

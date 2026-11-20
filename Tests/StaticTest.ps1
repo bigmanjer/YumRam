@@ -28,7 +28,7 @@ try{[void](Read-TestText (Join-Path $root 'Config\default-config.json')|ConvertF
 
 $version=(Read-TestText (Join-Path $root 'VERSION')).Trim()
 $readmeText=Read-TestText (Join-Path $root 'README.md')
-if($readmeText -notmatch ('Version:\s*'+[regex]::Escape($version)+'(?:\r?\n|$)')){Add-CheckError "README version does not match canonical VERSION $version."}
+if($readmeText -notmatch ('Version:\s*'+[regex]::Escape($version)+'(?:\r?\n|$)') -and $readmeText -notmatch ('badge/version-'+[regex]::Escape($version)+'-')){Add-CheckError "README version does not match canonical VERSION $version."}
 $cfg=Read-TestText (Join-Path $root 'Config\default-config.json')|ConvertFrom-Json
 if([string]::IsNullOrWhiteSpace($version)){Add-CheckError 'VERSION is empty.'}
 if([string]$cfg.Version -ne $version){Add-CheckError "Config Version $($cfg.Version) does not match canonical VERSION $version."}

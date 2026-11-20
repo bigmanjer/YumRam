@@ -1,147 +1,152 @@
+<div align="center">
+
 # YUMRAM
 
-**Yumes Ultimate Memory Reclaim & Monitor**
+**Keeps your Windows PC fast by keeping RAM free and the CPU fair — automatically.**
 
-Version: 5.12.0
-Stage: alpha
+[![Version](https://img.shields.io/badge/version-5.12.0-a855f7)](CHANGELOG.md)
+[![Platform](https://img.shields.io/badge/Windows-10%20%7C%2011-0078d4)](#requirements)
+[![Tests](https://github.com/bigmanjer/YumRam/actions/workflows/tests.yml/badge.svg)](https://github.com/bigmanjer/YumRam/actions/workflows/tests.yml)
+[![Stage](https://img.shields.io/badge/stage-alpha-f59e0b)](#status)
 
-**YUMRAM keeps Windows responsive by keeping Available RAM above a target you choose.** It trims the
-memory of idle, identified background programs, never closes anything on its own, and stays out of
-the way of games and whatever you are using.
+[Download](https://github.com/bigmanjer/YumRam/releases/latest) · [What's new](CHANGELOG.md) · [How it works](#how-it-works) · [FAQ](#faq)
 
-It is a single-folder Windows PowerShell 5.1 + WPF app: no installer, no runtime to download.
+<img src="Docs/Screenshots/after/MainWindow.png" alt="YUMRAM Overview: RAM and CPU rings, usage graph, one-click reclaim" width="880">
 
-![tests](https://img.shields.io/badge/tests-Windows%20PowerShell%205.1-7c3aed)
+</div>
+
+## Why YUMRAM
+
+Most "RAM cleaners" flush everything and show a big number. YUMRAM is different:
+
+- **It keeps a goal, not a gimmick.** You say how much RAM should stay available; YUMRAM keeps it
+  there by trimming only idle, identified programs — never what you are using, never your game.
+- **It measures, honestly.** Every result is the Available RAM Windows really gave back, checked again
+  after 5, 15 and 30 seconds. It learns what works on *your* PC.
+- **It handles the CPU too.** When a background program hogs the CPU, the app or game you are using
+  gets priority and whole cores — and YUMRAM checks that it actually helped.
+- **It explains things in plain words.** Every program, startup item and setting says what it is and
+  whether it is safe to touch.
 
 ## Features
 
-- **One window**: a sidebar (like Windows 11 Task Manager) opens Overview, What's using RAM, Reclaim
-  Center, Startup apps, Intelligence, Settings and About (What's running shows live RAM and CPU per program) as pages in the same window. `Ctrl+1`…`Ctrl+7`
-  jump between them, and the sidebar shrinks to icons when the window is narrow.
-- **CPU care** (Settings › CPU: Gentle / Balanced / Strong; Balanced makes room on whole cores for the app or game you are using, checks it helped, and adapts to your CPU layout, laptop or desktop, battery or plugged in). Measured on a Ryzen 7 4800H laptop with a simulated 8-thread game and a CPU hog: 11 FPS with nothing, 131–135 FPS with priority alone, 147–152 FPS with Balanced (153 FPS without the hog). Its first level is **CPU balance** (like Process Lasso's ProBalance): when the PC is busy and a background program hogs
-  the CPU, YUMRAM temporarily lowers it to Below Normal priority so the app you are using stays smooth,
-  and puts it back as soon as it calms down. The foreground app, games, Windows core processes,
-  services and programs with their own priority are never touched. Measured here with an all-core CPU
-  hog: a normal program's wake-up delay went from 33.8 ms (no CPU balance) to 2.0 ms (1.8 ms idle).
-- **Memory-leak alerts**: a program whose private memory keeps rising (≥ 400 MB and ≥ 40 % over 10+ minutes) gets one tray notice and a "Growing" marker in What's running.
-- **History**: Usage graph with 30 s / 5 min / 1 h / 12 h, kept across restarts.
-- **Startup apps**: every program that starts when you sign in, how much RAM it uses right now, and
-  plain-language advice (Turn off / Your call / Careful / Keep). Turning one off uses the same switch
-  as Task Manager, so nothing is deleted and it can be turned back on in either place. Security and
-  anti-cheat software cannot be turned off from YUMRAM.
-- **Live dashboard**: Available RAM, memory use, CPU, GPU 3D and a 60-sample history graph, plus how
-  much RAM YUMRAM has freed today and in total (measured Available gain, not trimmed memory).
-- **Global shortcut**: `Ctrl+Alt+R` runs Free RAM now from anywhere, even when YUMRAM is in the tray
-  (change or turn it off in Settings).
-- **Automatic target maintenance**: while monitoring is on, YUMRAM trims eligible idle processes
-  in small paced passes until Available RAM is back above your target.
-- **Knows what is reachable**: it learns, on your PC, how much trimmed memory Windows actually turns
-  into Available RAM, and shows `reachable ≈ X GB` next to your target. Targets above that are
-  marked **[OUT OF REACH]** and retried with a back-off instead of hammering the system.
-- **FREE RAM NOW / DEEP RAM RECLAIM**: one-click reclaim with measured before/after results and
-  5 s / 15 s / 30 s verification of how much of the gain was retained.
-- **Smart Intelligence**: identifies every process, service, Store app and startup item (signatures,
-  installed-software records, services) and sorts them into Protected, Candidate, Review and Unknown.
-  Only identified, non-protected programs are ever trimmed.
-- **Game aware**: detects known games, protects the game and the foreground window, and can raise
-  game priority or clean up when a game starts.
+| | |
+|---|---|
+| **Automatic care** | Keeps Available RAM above your goal with small, paced trims; backs off when the goal is out of reach. |
+| **Free RAM now / Deep reclaim** | One click or <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>R</kbd> from anywhere. Deep also empties memory lists and merges identical pages. |
+| **CPU care** | ProBalance-style priority, plus *making room* on whole cores for your app or game. Adapts to your CPU (cores, SMT, efficiency cores, cache groups), laptop or desktop, battery or plugged in. |
+| **What's running** | Live RAM and CPU per program, sortable, explained in plain words, with your own rules (*never trim*, *never hold back*). |
+| **Memory-leak alerts** | Spots a program whose memory keeps rising and tells you once — restarting it gives the memory back. |
+| **Startup apps** | What starts with Windows, what it costs in RAM, and safe on/off using the same switch as Task Manager. |
+| **Intelligence** | Identifies every process, service and app (signatures, installed-software records, services, Store packages, optional web lookup). Only identified, non-protected programs are ever trimmed. |
+| **History** | Usage graph for 30 s, 5 min, 1 h and 12 h, kept across restarts. |
+| **Tray & updates** | Lives in the tray with live RAM %, low-RAM and leak notices; checks GitHub for updates and installs them verified. |
 
-## Requirements
+<details>
+<summary><b>More screenshots</b></summary>
 
-- Windows 10 or 11 (64-bit)
-- Windows PowerShell 5.1 and .NET Framework 4.x (both built into Windows)
-- Administrator rights for the full feature set (YUMRAM asks on launch). Without them it still
-  trims your own programs, but cannot purge the standby/modified memory lists.
+| What's running | Reclaim Center |
+|---|---|
+| <img src="Docs/Screenshots/after/TopProcesses.png" width="430"> | <img src="Docs/Screenshots/after/MemoryReclaim.png" width="430"> |
+| **Startup apps** | **CPU settings** |
+| <img src="Docs/Screenshots/after/Startup.png" width="430"> | <img src="Docs/Screenshots/after/Settings-CPU.png" width="430"> |
 
-## Getting started
+</details>
 
-1. Download the latest release zip from GitHub (or clone this repository) into any folder.
-2. Double-click **`YUMRAM.exe`**. It is a small launcher (source in `Launcher\`, built by
-   `Tools\Build-Launcher.ps1` with the C# compiler that ships with Windows) that starts the readable
-   scripts next to it with no console window. `Launch-YUMRAM.cmd` still works too.
-3. Accept the administrator prompt. To stop being asked every time, choose **Settings › General › Administrator rights › Start without asking** once (or *Never* to run without administrator).
+## Install
 
-**Updates:** YUMRAM checks GitHub Releases once a day (Settings › General to turn it off; nothing about
-you or your PC is sent). When a new version is out, the Overview shows *Install and restart*. The
-download is verified against its published SHA-256 before anything is installed, your settings and
-statistics are kept, and the previous version is kept in `.previous` (`YUMRAM.exe --rollback` to go
-back). Maintainers: `Tools\Build-Release.ps1` builds `dist\YUMRAM-<version>.zip` and `SHA256SUMS.txt`
-to attach to a GitHub Release tagged `v<version>`.
+1. Download **`YUMRAM-Setup-<version>.exe`** from [Releases](https://github.com/bigmanjer/YumRam/releases/latest).
+2. Run it. It installs for your user only (no administrator needed), adds YUMRAM to the Start menu and
+   to **Settings › Apps** (where you can uninstall it).
+3. Set your memory goal on the Overview and press **Start Monitoring**.
 
-The exe is not code-signed yet, so Windows SmartScreen may say "Windows protected your PC" the first
-time (More info › Run anyway).
-4. Set your **Available RAM target** and press **Start Monitoring**.
+> The installer is not code-signed yet, so Windows SmartScreen may say *"Windows protected your PC"*.
+> Choose **More info › Run anyway**. Every release lists SHA-256 checksums in `SHA256SUMS.txt`.
 
-Your settings are saved in `config.json` next to the program (created on first launch).
+**Administrator rights** make the strongest reclaim possible (file cache, memory lists, memory
+combining). In **Settings › General › Administrator rights** choose *Ask each time*, *Start without
+asking* (set up once; no prompt after that) or *Never*.
+
+**Portable:** prefer no installer? Download the `.zip`, extract anywhere and run `YUMRAM.exe`.
+
+## How it works
+
+| | |
+|---|---|
+| **Trim, don't kill** | Trimming asks Windows to move a program's idle pages out of RAM. Nothing is closed and nothing is lost; the program pages back in what it needs. |
+| **Available vs Free** | Available = Free + Standby cache. Deep reclaim empties the cache, so Windows' *Free* jumps by GBs — YUMRAM reports the real Available gain and tells you the difference. |
+| **CPU care** | Gentle = Below Normal priority for a background hog. Balanced = also keeps it off some whole cores while you use an app (games: within 1 s) and undoes that if your app did not get more CPU. Strong = Windows Efficiency mode (Idle priority + EcoQoS). Everything is undone when the program calms down. |
+| **Never touched** | Windows core processes, security software, drivers, your game, the window you are using, anything unidentified. |
+
+Measured on a Ryzen 7 4800H laptop: a simulated 8-thread game next to a 32-thread background hog ran at
+**11 FPS** with nothing, **131–135 FPS** with priority alone and **147–152 FPS** with CPU care Balanced
+(153 FPS without the hog). Details in the [changelog](CHANGELOG.md).
 
 ## Modes
 
-| Mode | What it may trim | Per pass |
+| Mode | What it may trim | Programs per pass |
 |---|---|---|
-| **Safe** | Identified, low-risk idle programs only | up to 3 processes / 512 MB |
-| **Balanced** (default) | Safe + programs with a valid publisher signature | up to 5 processes / 1 GB |
-| **Aggressive** | Balanced + other identified programs pending review | up to 8 processes / 2 GB |
-
-Protected items (Windows core, security software, drivers, games, launchers/overlays), the
-foreground window, the active game and anything unidentified are never trimmed in any mode.
-
-### Why "trim" and not "free"
-
-Trimming asks Windows to move a program's idle pages out of RAM. Nothing is closed and no data is
-lost: if the program needs a page again, Windows brings it back. Only part of a trimmed working set
-becomes Available RAM (about 40% on a typical PC, because of memory compression), and only after
-1-2 seconds. YUMRAM measures this on your machine and plans with your real number.
+| **Safe** | Identified, low-risk idle programs | up to 6 |
+| **Balanced** (default) | Safe + programs with a valid publisher signature | up to 10 |
+| **Aggressive** | Balanced + other identified programs | up to 16 |
 
 ## Privacy
 
-- **Online research is on by default.** When Intelligence cannot identify a program locally, it
-  searches Bing for the program's name, publisher and product name. No other data is sent.
-  Turn it off in **Settings → Privacy**; local identification keeps working.
-- Nothing else leaves your PC. There is no telemetry, account or update check.
-- Everything YUMRAM learns (`intelligence-db.json`, `research-*.json`, `reclaim-learning.json`,
-  `YUMRAM.log`) stays in the program folder and is excluded from git by `.gitignore`.
+- No account, no telemetry. Settings, statistics and learned data stay in the YUMRAM folder.
+- **Online research** (on by default, Settings › Privacy): only the name, publisher and product of a
+  program YUMRAM cannot identify locally is sent to Bing search.
+- **Update check** (once a day, can be turned off): one request to GitHub's public releases API.
 
-## Safety
+## Requirements
 
-- YUMRAM never terminates processes automatically. "End task" in Top Processes always asks twice.
-- Optional services are stopped only if you allow it in Settings, never Automatic/boot services or
-  services with running dependents, and they are restarted when YUMRAM exits (or on the next launch
-  after a crash).
-- The launcher starts PowerShell with `-ExecutionPolicy Bypass` for this process only; it does not
-  change your system execution policy.
+- Windows 10 or 11, 64-bit
+- Windows PowerShell 5.1 and .NET Framework 4.x — both built into Windows; nothing to install
 
-## Troubleshooting
+## FAQ
 
-| Symptom | What to check |
-|---|---|
-| Target shows **[OUT OF REACH]** | Your target is higher than this PC can free right now. Lower it, close apps, or use Aggressive. |
-| Deep reclaim rows say *Required privilege was not enabled* | Run as administrator. |
-| Nothing happens automatically | Monitoring must be on (green **ACTIVE**). |
-| Something failed | See `YUMRAM.log` in the program folder and `%TEMP%\YUMRAM-startup.log`. |
+<details><summary><b>Is trimming RAM safe? Will my programs lose data?</b></summary>
+Yes, it is safe, and no data is lost. Trimmed pages stay on disk or in the standby list and come back
+when the program needs them. Programs you are using and your game are never trimmed.
+</details>
+
+<details><summary><b>Why does Windows' "Free" memory jump more than YUMRAM reports?</b></summary>
+Deep reclaim empties the standby cache, which moves it to <i>Free</i>. That cache already counted as
+<i>Available</i>, so it is not extra room. YUMRAM reports the real Available gain.
+</details>
+
+<details><summary><b>My goal says "Out of reach".</b></summary>
+Your goal is higher than this PC can free right now without closing programs. Lower it, close apps, or
+use Aggressive mode. YUMRAM keeps trying with a back-off instead of hammering the system.
+</details>
+
+<details><summary><b>Does CPU care conflict with anti-cheat?</b></summary>
+No. YUMRAM never touches the game process; it only lowers background programs.
+</details>
+
+<details><summary><b>Something went wrong.</b></summary>
+Open <b>About › Log</b> (or <code>YUMRAM.log</code> in the YUMRAM folder) and
+<a href="https://github.com/bigmanjer/YumRam/issues/new/choose">open an issue</a> with the last lines.
+</details>
 
 ## Development
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File Tests\Run-AllTests.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File Tests\Run-AllTests.ps1     # 54 tests, each in its own process
+powershell -NoProfile -ExecutionPolicy Bypass -STA -File Tests\UI\FullUiProbe.ps1 -Root . -Out $env:TEMP\yum-ui
+powershell -NoProfile -ExecutionPolicy Bypass -File Tools\Build-Release.ps1    # dist\: setup, zip, SHA256SUMS
 ```
-
-Every test runs in its own Windows PowerShell 5.1 process. Behavioural tests fake the native memory
-calls, so running them never changes anything on your machine. GitHub Actions runs the same suite on
-every push. See [CONTRIBUTING.md](CONTRIBUTING.md) and [Docs/ARCHITECTURE.md](Docs/ARCHITECTURE.md).
 
 ```text
-App/        launcher entry point and module bootstrap
-Core/       memory engine, safety policy, intelligence, research, telemetry, controller worker
-UI/         WPF windows (XAML) and their PowerShell code
-Config/     default-config.json (shipped defaults)
-Tests/      test suite and Run-AllTests.ps1
-Docs/       architecture, review, and History/ (audit trail of earlier versions)
+App/        entry point and module bootstrap        Launcher/   YUMRAM.exe and the installer (C#)
+Core/       memory engine, CPU care, safety,        UI/         WPF pages (XAML) and their code
+            intelligence, research, telemetry       Tools/      build scripts
+Config/     shipped defaults                        Tests/      test suite + full UI probe
 ```
 
-## Status and license
+See [CONTRIBUTING.md](CONTRIBUTING.md) and [Docs/ARCHITECTURE.md](Docs/ARCHITECTURE.md).
 
-YUMRAM is **alpha** software: the memory engine, automatic maintenance and UI are tested on real
-hardware, but expect rough edges. See [CHANGELOG.md](CHANGELOG.md).
+## Status
 
-No license has been chosen yet, so all rights are reserved by the YUMRAM contributors. You may
-read the code, but please ask before reusing or redistributing it.
+YUMRAM is **alpha** software: tested on real hardware, but expect rough edges.
+No license has been chosen yet, so all rights are reserved by the YUMRAM contributors — you may read
+the code, but please ask before reusing or redistributing it.

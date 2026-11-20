@@ -19,9 +19,11 @@ New-Item -ItemType Directory -Path $stage -Force | Out-Null
 New-Item -ItemType Directory -Path $OutDir -Force | Out-Null
 try{
     # Program files only. User data (config.json, statistics, learned data, logs) is never packaged.
-    $include=@('App','Config','Core','UI','Launcher','Tools')
+    # 5.12: only what runs YUMRAM. Build scripts, launcher sources, tests and docs stay in the repository.
+    $include=@('App','Config','Core','UI')
     foreach($d in $include){ Copy-Item -LiteralPath (Join-Path $root $d) -Destination (Join-Path $stage $d) -Recurse -Force }
-    foreach($f in 'Launch-YUMRAM.cmd','Launch-YUMRAM.vbs','README.md','CHANGELOG.md','CONTRIBUTING.md'){ $src=Join-Path $root $f; if(Test-Path -LiteralPath $src){Copy-Item -LiteralPath $src -Destination $stage} }
+    New-Item -ItemType Directory -Path (Join-Path $stage 'Launcher') -Force | Out-Null; Copy-Item -LiteralPath (Join-Path $root 'Launcher\YUMRAM.ico') -Destination (Join-Path $stage 'Launcher')
+    foreach($f in 'README.md','CHANGELOG.md'){ $src=Join-Path $root $f; if(Test-Path -LiteralPath $src){Copy-Item -LiteralPath $src -Destination $stage} }
     [IO.File]::WriteAllText((Join-Path $stage 'VERSION'),$Version+"`r`n")
     $cfg=Join-Path $stage 'Config\default-config.json'
     $json=[IO.File]::ReadAllText($cfg)
@@ -36,9 +38,18 @@ try{
     if(Test-Path -LiteralPath $zip){Remove-Item -LiteralPath $zip -Force}
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     [IO.Compression.ZipFile]::CreateFromDirectory($stage,$zip,[IO.Compression.CompressionLevel]::Optimal,$false)
+    # 5.12: YUMRAM-Setup-<version>.exe - per-user installer with the zip embedded (Launcher\YumramSetup.cs).
+    $setupExe=Join-Path $OutDir ('YUMRAM-Setup-{0}.exe' -f $Version)
+    $csc=Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
+    $refs=@('System.Windows.Forms.dll','System.Drawing.dll','System.IO.Compression.dll','System.IO.Compression.FileSystem.dll','Microsoft.CSharp.dll','System.Core.dll') | ForEach-Object { '/reference:'+$_ }
+    $setupArgs=@('/nologo','/target:winexe','/optimize+',('/out:"{0}"' -f $setupExe),('/win32icon:"{0}"' -f (Join-Path $root 'Launcher\YUMRAM.ico')),('/resource:"{0}",YUMRAM.zip' -f $zip))+$refs+@(('"{0}"' -f (Join-Path $root 'Launcher\YumramSetup.cs')))
+    $setupOut=& $csc @setupArgs 2>&1
+    if($LASTEXITCODE -ne 0){throw ("Building the installer failed:`n{0}" -f ($setupOut -join "`n"))}
+    $setupHash=(Get-FileHash -LiteralPath $setupExe -Algorithm SHA256).Hash.ToLowerInvariant()
     $hash=(Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant()
-    [IO.File]::WriteAllText((Join-Path $OutDir 'SHA256SUMS.txt'),('{0}  {1}' -f $hash,[IO.Path]::GetFileName($zip))+"`n")
+    [IO.File]::WriteAllText((Join-Path $OutDir 'SHA256SUMS.txt'),(('{0}  {1}' -f $hash,[IO.Path]::GetFileName($zip))+"`n"+('{0}  {1}' -f $setupHash,[IO.Path]::GetFileName($setupExe))+"`n"))
+    Write-Host ('Installer: {0} ({1:N0} KB)' -f $setupExe,((Get-Item $setupExe).Length/1KB))
     Write-Host ('Release package: {0} ({1:N0} KB)' -f $zip,((Get-Item $zip).Length/1KB))
     Write-Host ('SHA-256: {0}' -f $hash)
-    Write-Host ('Next: create GitHub release tag v{0}, attach the zip and SHA256SUMS.txt.' -f $Version)
+    Write-Host ('Next: create GitHub release tag v{0}, attach YUMRAM-Setup-{0}.exe, the zip and SHA256SUMS.txt.' -f $Version)
 }finally{ Remove-Item -LiteralPath $stage -Recurse -Force -ErrorAction SilentlyContinue }

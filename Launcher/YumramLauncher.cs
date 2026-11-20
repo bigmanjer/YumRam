@@ -41,6 +41,7 @@ static class YumramLauncher
             string mode = args.Length > 0 ? args[0].ToLowerInvariant() : "";
             if (mode == "--apply-update") return ApplyUpdate(args, exeDir);
             if (mode == "--rollback") return Rollback(exeDir, Array.IndexOf(args, "--no-restart") < 0);
+            if (mode == "--uninstall") return Uninstall(exeDir, Array.IndexOf(args, "/S") >= 0);
             return StartYumram(exeDir);
         }
         catch (Exception ex)
@@ -108,6 +109,8 @@ static class YumramLauncher
             throw;
         }
         Log(target, "Updater: update applied. Previous version kept in .previous (YUMRAM.exe --rollback).");
+        // 5.12: keep Settings > Apps showing the right version after an in-app update.
+        try { using (var k = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Uninstall\YUMRAM", true)) { if (k != null && string.Equals(((string)k.GetValue("InstallLocation", "")).TrimEnd('\\'), target, StringComparison.OrdinalIgnoreCase)) k.SetValue("DisplayVersion", File.ReadAllText(Path.Combine(target, "VERSION")).Trim()); } } catch { }
         if (restart) StartYumram(target);
         return 0;
     }
@@ -161,6 +164,39 @@ static class YumramLauncher
     static void CleanupOldExe(string dir)
     {
         try { string old = Path.Combine(dir, "YUMRAM.exe.old"); if (File.Exists(old)) File.Delete(old); } catch { }
+    }
+
+    // 5.12: uninstall (Settings > Apps). Closes YUMRAM, removes shortcuts, the sign-in entry, the no-prompt
+    // scheduled task (asks for administrator only if that task exists), the Apps entry and the folder.
+    static int Uninstall(string root, bool silent)
+    {
+        if (!silent && MessageBox.Show("Remove YUMRAM and its settings from this PC?", "Uninstall YUMRAM", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return 2;
+        string script = Path.Combine(root, @"App\YUMRAM.ps1");
+        try
+        {
+            using (var s = new System.Management.ManagementObjectSearcher("SELECT ProcessId, CommandLine FROM Win32_Process WHERE Name='powershell.exe'"))
+                foreach (System.Management.ManagementObject o in s.Get())
+                {
+                    string cl = (o["CommandLine"] as string) ?? "";
+                    if (cl.IndexOf(script, StringComparison.OrdinalIgnoreCase) >= 0) { try { var p = Process.GetProcessById(Convert.ToInt32(o["ProcessId"])); p.CloseMainWindow(); if (!p.WaitForExit(8000)) p.Kill(); } catch { } }
+                }
+        }
+        catch { }
+        foreach (var f in new[] { Environment.SpecialFolder.Programs, Environment.SpecialFolder.DesktopDirectory })
+        { try { string lnk = Path.Combine(Environment.GetFolderPath(f), "YUMRAM.lnk"); if (File.Exists(lnk)) File.Delete(lnk); } catch { } }
+        try { using (var k = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run", true)) { if (k != null) k.DeleteValue("YUMRAM", false); } } catch { }
+        try
+        {
+            var q = Process.Start(new ProcessStartInfo("schtasks.exe", "/Query /TN YUMRAM") { CreateNoWindow = true, UseShellExecute = false, RedirectStandardOutput = true });
+            q.WaitForExit(10000);
+            if (q.ExitCode == 0) { var d = Process.Start(new ProcessStartInfo("schtasks.exe", "/Delete /TN YUMRAM /F") { Verb = "runas", UseShellExecute = true, WindowStyle = ProcessWindowStyle.Hidden }); d.WaitForExit(30000); }
+        }
+        catch { }
+        try { Microsoft.Win32.Registry.CurrentUser.DeleteSubKeyTree(@"Software\Microsoft\Windows\CurrentVersion\Uninstall\YUMRAM", false); } catch { }
+        // The folder (including this exe) is removed by a short-lived cmd after this process exits.
+        try { Process.Start(new ProcessStartInfo("cmd.exe", "/c ping -n 3 127.0.0.1 >nul & rmdir /s /q \"" + root + "\"") { CreateNoWindow = true, UseShellExecute = false, WorkingDirectory = Path.GetTempPath() }); } catch { }
+        if (!silent) MessageBox.Show("YUMRAM has been removed.", "Uninstall YUMRAM", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        return 0;
     }
 
     static void Log(string root, string line)
