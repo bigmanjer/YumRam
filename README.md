@@ -6,7 +6,6 @@
 
 [![Version](https://img.shields.io/badge/version-5.12.0-a855f7)](CHANGELOG.md)
 [![Platform](https://img.shields.io/badge/Windows-10%20%7C%2011-0078d4)](#requirements)
-[![Tests](https://github.com/bigmanjer/YumRam/actions/workflows/tests.yml/badge.svg)](https://github.com/bigmanjer/YumRam/actions/workflows/tests.yml)
 [![Stage](https://img.shields.io/badge/stage-alpha-f59e0b)](#status)
 
 [Download](https://github.com/bigmanjer/YumRam/releases/latest) · [What's new](CHANGELOG.md) · [How it works](#how-it-works) · [FAQ](#faq)
