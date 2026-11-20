@@ -31,7 +31,8 @@ function Get-YumReportDetails {
     try{ $c=@(Get-CimInstance Win32_Processor -ErrorAction Stop)[0]; $cpu=('{0} ({1} cores / {2} threads)' -f ([string]$c.Name).Trim(),$c.NumberOfCores,$c.NumberOfLogicalProcessors) }catch{}
     $admin='';try{$admin=$(if(Test-YumIsElevated){'running as administrator'}else{'running without administrator'})}catch{}
     $battery='';try{ if(@(Get-CimInstance Win32_Battery -ErrorAction Stop).Count){$battery='laptop (has a battery)'}else{$battery='desktop (no battery)'} }catch{}
-    $pc=(@($os,$cpu,$ram,$battery,$admin) | Where-Object {$_}) -join "`n"
+    # GitHub does not pre-fill dropdowns from the link, so the administrator setting is in this text too.
+    $pc=(@($os,$cpu,$ram,$battery,$admin,('YUMRAM administrator setting: '+$mode)) | Where-Object {$_}) -join "`n"
     $log=''
     try{ $p=[string](Get-YumLogPath); if(Test-Path -LiteralPath $p){ $log=(@(Get-Content -LiteralPath $p -Tail $LogLines -ErrorAction Stop) -join "`n") } }catch{}
     return [pscustomobject]@{Version=$version;Admin=$mode;Pc=(Protect-YumReportText $pc);Log=(Protect-YumReportText $log)}
