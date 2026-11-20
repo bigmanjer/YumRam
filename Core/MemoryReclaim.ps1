@@ -499,6 +499,14 @@ function Invoke-YumMemoryReclaim {
         $assistOk=($elevated -and -not $gameActive -and ($Force -or $Mode -eq 'Deep'))
         if($assistOk -and $(if($script:Yum.Config.Contains('ReclaimSystemFileCache')){[bool]$script:Yum.Config['ReclaimSystemFileCache']}else{$true})){ & $runMemoryArea 'TrimSystemFileCache' 'System file cache' }
         if($assistOk -and [bool]$script:Yum.Config.ReclaimModifiedPageList){ & $runMemoryArea 'FlushModifiedList' 'Modified page list' }
+        # 5.12: memory combining (identical pages kept once). Measured here: first run +0.26 GB Available (261 MB
+        # combined, 3.5 s); repeats within minutes find only 10-16 MB. Deep always; Free RAM now every 15 min.
+        $combineOn=$true;try{if($script:Yum.Config.Contains('ReclaimCombineMemory')){$combineOn=[bool]$script:Yum.Config['ReclaimCombineMemory']}}catch{}
+        $lastCombine=[datetime]::MinValue;try{if($null -ne $script:Yum['LastMemoryCombine']){$lastCombine=[datetime]$script:Yum['LastMemoryCombine']}}catch{}
+        if($assistOk -and $combineOn -and ($Mode -eq 'Deep' -or ((Get-Date)-$lastCombine).TotalMinutes -ge 15)){
+            $cb=Invoke-YumCombineMemory;$script:Yum['LastMemoryCombine']=Get-Date
+            [void]$rows.Add([pscustomobject]@{Type='Memory Area';PID='—';Process='Identical pages (memory combining)';BeforeMB='—';AfterMB='—';ReducedMB=[math]::Round([double]$cb.SavedMB,0);Action='Combine';Result=$(if($cb.Success){'Completed'}else{'Skipped'});Reason=[string]$cb.Reason;CPU='—';Score=0})
+        }
         if(-not $elevated){[void]$notes.Add('Not running as administrator: the system file cache and Windows memory lists were skipped (process trimming only).')}
         if($Mode -eq 'Deep' -and [bool]$script:Yum.Config.ReclaimStandbyList){ & $runMemoryArea 'PurgeStandby' 'Standby list' }
 

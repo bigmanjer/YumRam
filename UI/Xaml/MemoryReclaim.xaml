@@ -82,6 +82,7 @@
               <TextBlock Style="{StaticResource Tick}" Text="✓  Trims up to 12 idle, identified programs"/>
               <TextBlock Style="{StaticResource Tick}" Text="✓  Moves the Windows file cache to standby *"/>
               <TextBlock Style="{StaticResource Tick}" Text="✓  Writes out changed memory waiting in RAM *"/>
+                  <TextBlock Style="{StaticResource Tick}" Text="✓  Merges identical memory pages (every 15 min) *"/>
               <TextBlock Style="{StaticResource Tick}" Text="No slowdown: nothing you are using is touched." Foreground="{StaticResource TextMuted}" Margin="0,6,0,10"/>
               <Button x:Name="FreeRam" Content="💜  Free RAM now" Style="{StaticResource PrimaryButton}" MinHeight="40"/>
             </StackPanel>
@@ -95,6 +96,7 @@
               <TextBlock Style="{StaticResource Tick}" Text="✓  Trims active programs too (up to 32)"/>
               <TextBlock Style="{StaticResource Tick}" Text="✓  Empties every program's memory at once *"/>
               <TextBlock Style="{StaticResource Tick}" Text="✓  Clears the standby cache *"/>
+                  <TextBlock Style="{StaticResource Tick}" Text="✓  Merges identical memory pages, every time *"/>
               <TextBlock Style="{StaticResource Tick}" Text="Programs may feel slower for a few seconds while they reload. Skipped parts while a game runs." Foreground="{StaticResource TextMuted}" Margin="0,6,0,10"/>
               <Button x:Name="DeepReclaim" Content="💜  Deep reclaim"/>
             </StackPanel>

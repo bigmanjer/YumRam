@@ -4,8 +4,8 @@
   <trustInfo xmlns="urn:schemas-microsoft-com:asm.v2">
     <security>
       <requestedPrivileges xmlns="urn:schemas-microsoft-com:asm.v3">
-        <!-- YUMRAM needs administrator for the full reclaim; asking here makes the prompt say "YUMRAM". -->
-        <requestedExecutionLevel level="requireAdministrator" uiAccess="false"/>
+        <!-- 5.12: asInvoker. YUMRAM decides itself: start through its no-prompt scheduled task, ask Windows once, or run without administrator (Settings > General). -->
+        <requestedExecutionLevel level="asInvoker" uiAccess="false"/>
       </requestedPrivileges>
     </security>
   </trustInfo>

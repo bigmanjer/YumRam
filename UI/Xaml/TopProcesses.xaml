@@ -114,6 +114,9 @@
               <TextBlock Text="WHERE IS IT?" Style="{StaticResource Question}"/>
               <TextBlock x:Name="ExplainPath" Style="{StaticResource Caption}" TextWrapping="Wrap"/>
               <Button x:Name="OpenLocation" Content="📂  Show in File Explorer" Margin="0,8,0,0" HorizontalAlignment="Left" ToolTip="Open the folder that contains this program, with the file selected."/>
+              <TextBlock Text="YOUR RULES FOR IT" Style="{StaticResource Question}"/>
+              <CheckBox x:Name="RuleNeverTrim" Content="Never trim this program" ToolTip="Free RAM now, Deep reclaim and automatic care will leave its memory alone."/>
+              <CheckBox x:Name="RuleNeverHold" Content="Never hold back its CPU" Margin="0,6,0,0" ToolTip="CPU care will never lower its priority or move it off cores."/>
             </StackPanel>
           </StackPanel>
         </ScrollViewer>

@@ -258,8 +258,14 @@
             <Grid>
               <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
               <DockPanel Margin="0,0,0,10">
-                <TextBlock DockPanel.Dock="Right" Text="last 30 seconds · % of total" Style="{StaticResource Caption}" VerticalAlignment="Center"/>
-                <TextBlock Text="Live usage" Style="{StaticResource SectionTitle}" Margin="0"/>
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                  <TextBlock x:Name="GraphCaption" Text="last 30 seconds" Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                  <Button x:Name="Range30s" Content="30 s" Style="{StaticResource GhostButton}" Padding="8,2" ToolTip="Live: last 30 seconds"/>
+                  <Button x:Name="Range5m" Content="5 min" Style="{StaticResource GhostButton}" Padding="8,2" ToolTip="Last 5 minutes"/>
+                  <Button x:Name="Range1h" Content="1 h" Style="{StaticResource GhostButton}" Padding="8,2" ToolTip="Last hour"/>
+                  <Button x:Name="Range12h" Content="12 h" Style="{StaticResource GhostButton}" Padding="8,2" ToolTip="Last 12 hours - kept across restarts as 1-minute averages"/>
+                </StackPanel>
+                <TextBlock Text="Usage" Style="{StaticResource SectionTitle}" Margin="0" ToolTip="RAM, CPU and GPU as a share of the total, on one 0-100 % scale"/>
               </DockPanel>
               <!-- 5.11: one true 0-100 % scale for every line, with quiet axis labels. -->
               <Grid Grid.Row="1">

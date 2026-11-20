@@ -404,6 +404,8 @@ function Invoke-YumCleanupToTarget {
             $assistBefore=$afterAdaptive
             $c1=Invoke-YumNativeMemoryCommand -Command TrimSystemFileCache
             $c2=$null;if([bool]$script:Yum.Config.ReclaimModifiedPageList){$c2=Invoke-YumNativeMemoryCommand -Command FlushModifiedList}
+            # 5.12: combine identical pages too, at most every 30 min (measured +0.26 GB the first time).
+            try{ $lc=[datetime]::MinValue;if($null -ne $script:Yum['LastMemoryCombine']){$lc=[datetime]$script:Yum['LastMemoryCombine']}; $co=$true;if($script:Yum.Config.Contains('ReclaimCombineMemory')){$co=[bool]$script:Yum.Config['ReclaimCombineMemory']}; if($co -and ((Get-Date)-$lc).TotalMinutes -ge 30){$cbr=Invoke-YumCombineMemory;$script:Yum['LastMemoryCombine']=Get-Date;try{Write-YumLog ('Memory-area assist: '+[string]$cbr.Reason)}catch{}} }catch{}
             Start-Sleep -Milliseconds 400
             $fresh=Get-YumMemoryTelemetry
             if($fresh){Update-YumSnapshotMemory -Memory $fresh;$afterAdaptive=[double]$fresh.AvailableGB}

@@ -1,5 +1,31 @@
 # Changelog
 
+# YUMRAM 5.12.0 — Leak alerts, memory combining, 12 h history, no UAC prompt (branch `visual-overhaul`)
+
+- **No administrator prompt every time** (Settings › General › Administrator rights):
+  *Ask each time* (default) · *Start without asking* — one-time setup creates a scheduled task that runs
+  YUMRAM with highest privileges, and YUMRAM starts through it. **Verified here:** started from a
+  non-administrator shell, the task ran as administrator with no prompt · *Never* — run without the
+  admin-only steps. *Start YUMRAM when I sign in* uses the task (no prompt) or the normal Run entry.
+  YUMRAM.exe no longer forces UAC itself. Trade-off stated in Settings: with *Start without asking*, any
+  program running as you could change YUMRAM's files and get administrator through the task.
+- **Memory-leak alerts.** Microsoft's guidance: a leak shows as private memory rising steadily, not as
+  a big number. YUMRAM samples every program's private memory once a minute (30 min kept, on the CPU care
+  worker's existing process list) and flags a program that grew ≥ 400 MB and ≥ 40 %, mostly upward, and
+  is still at its peak. One tray notice per program; *What's running* shows "Growing +X GB" and explains
+  that closing and reopening it gives the memory back. Nothing is closed automatically.
+- **Memory combining** (Windows 10/11; Mem Reduct's "combine memory lists"): identical memory pages are
+  kept once. **Measured here:** first run combined 261 MB, Available +0.26 GB in 3.5 s; repeats within
+  minutes found only 10–16 MB. So Deep always combines, Free RAM now every 15 min, automatic care every
+  30 min. Administrator only.
+- **History graph:** 30 s / 5 min / 1 h / **12 h** buttons. A point every 5 s (also while hidden in the
+  tray); 12 h kept and saved as 1-minute averages when YUMRAM closes, so a restart keeps it.
+- **Low-RAM warning:** a tray notice (at most hourly) when Available stays 1 GB+ under the goal for 2
+  minutes and automatic care is off or cannot fix it.
+- **Your rules per program** in *What's running*: "Never trim this program" and "Never hold back its CPU".
+- Tests: new `Release512Test` (leak heuristic + a real leaking test program flagged, combining wiring,
+  12 h history save/load, elevation choices, rules).
+
 # YUMRAM 5.11.0 — CPU care: automatic help for the CPU, like the RAM goal (branch `visual-overhaul`)
 
 **Research** (primary sources): Task Manager's Efficiency mode = Idle priority + EcoQoS; Microsoft

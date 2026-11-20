@@ -127,6 +127,25 @@ function Invoke-YumSetSystemMemoryListCommand {
     finally {if($ptr -ne [IntPtr]::Zero){[Runtime.InteropServices.Marshal]::FreeHGlobal($ptr)}}
 }
 
+function Invoke-YumCombineMemory {
+    # 5.12: Windows 10+ memory combining (Mem Reduct's "combine memory lists"): the kernel finds identical
+    # physical pages across processes and keeps one copy. NtSetSystemInformation(SystemCombinePhysical-
+    # MemoryInformation = 130, MEMORY_COMBINE_INFORMATION_EX {Handle, PagesCombined, Flags}).
+    # Needs administrator (SeProfileSingleProcessPrivilege). Returns pages combined and MB saved.
+    $ptr=[IntPtr]::Zero
+    try{
+        [void](Enable-YumNativePrivilege -Privilege 'SeProfileSingleProcessPrivilege')
+        $ptr=[Runtime.InteropServices.Marshal]::AllocHGlobal(24)
+        for($i=0;$i -lt 24;$i+=4){[Runtime.InteropServices.Marshal]::WriteInt32($ptr,$i,0)}
+        $sw=[Diagnostics.Stopwatch]::StartNew()
+        $status=[YumRamNative]::NtSetSystemInformation(130,$ptr,24)
+        $ms=$sw.ElapsedMilliseconds
+        $pages=[int64][Runtime.InteropServices.Marshal]::ReadInt64($ptr,8)
+        [pscustomobject]@{Success=($status -ge 0);Status=$status;PagesCombined=$pages;SavedMB=[math]::Round($pages*4096/1MB,1);Milliseconds=$ms;Reason=$(if($status -ge 0){'Combined {0:N0} identical pages ({1:N0} MB).' -f $pages,($pages*4096/1MB)}else{'Windows refused (status 0x{0:X8}); needs administrator.' -f [BitConverter]::ToUInt32([BitConverter]::GetBytes([int32]$status),0)})}
+    }catch{ [pscustomobject]@{Success=$false;Status=-1;PagesCombined=0;SavedMB=0;Milliseconds=0;Reason=$_.Exception.Message} }
+    finally{ if($ptr -ne [IntPtr]::Zero){[Runtime.InteropServices.Marshal]::FreeHGlobal($ptr)} }
+}
+
 if (-not ('YumRamCacheNative' -as [type])) {
     Add-Type @'
 using System;

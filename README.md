@@ -2,7 +2,7 @@
 
 **Yumes Ultimate Memory Reclaim & Monitor**
 
-Version: 5.11.0
+Version: 5.12.0
 Stage: alpha
 
 **YUMRAM keeps Windows responsive by keeping Available RAM above a target you choose.** It trims the
@@ -23,6 +23,8 @@ It is a single-folder Windows PowerShell 5.1 + WPF app: no installer, no runtime
   and puts it back as soon as it calms down. The foreground app, games, Windows core processes,
   services and programs with their own priority are never touched. Measured here with an all-core CPU
   hog: a normal program's wake-up delay went from 33.8 ms (no CPU balance) to 2.0 ms (1.8 ms idle).
+- **Memory-leak alerts**: a program whose private memory keeps rising (≥ 400 MB and ≥ 40 % over 10+ minutes) gets one tray notice and a "Growing" marker in What's running.
+- **History**: Usage graph with 30 s / 5 min / 1 h / 12 h, kept across restarts.
 - **Startup apps**: every program that starts when you sign in, how much RAM it uses right now, and
   plain-language advice (Turn off / Your call / Careful / Keep). Turning one off uses the same switch
   as Task Manager, so nothing is deleted and it can be turned back on in either place. Security and
@@ -57,7 +59,7 @@ It is a single-folder Windows PowerShell 5.1 + WPF app: no installer, no runtime
 2. Double-click **`YUMRAM.exe`**. It is a small launcher (source in `Launcher\`, built by
    `Tools\Build-Launcher.ps1` with the C# compiler that ships with Windows) that starts the readable
    scripts next to it with no console window. `Launch-YUMRAM.cmd` still works too.
-3. Accept the administrator prompt (it says "YUMRAM").
+3. Accept the administrator prompt. To stop being asked every time, choose **Settings › General › Administrator rights › Start without asking** once (or *Never* to run without administrator).
 
 **Updates:** YUMRAM checks GitHub Releases once a day (Settings › General to turn it off; nothing about
 you or your PC is sent). When a new version is out, the Overview shows *Install and restart*. The

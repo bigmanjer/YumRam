@@ -291,6 +291,7 @@ function Invoke-YumCpuBalanceTick {
         }
     }
     $st.Last=$newLast
+    try{ Update-YumLeakWatch -ById $byId -State $st }catch{ try{Write-YumLogException -Context 'Leak watch failed' -Exception $_.Exception}catch{} }
     if($elapsedMs -le 0){return}
     $total=[math]::Min(100.0,$total);$st.SystemPercent=$total
     $fgName='';if($fgPid -gt 0 -and $byId.ContainsKey($fgPid)){$fgName=[string]$byId[$fgPid].ProcessName}
@@ -430,7 +431,7 @@ function Start-YumCpuBalanceWorker {
     $ps=[powershell]::Create();$ps.Runspace=$rs
     [void]$ps.AddScript($script:YumCpuBalanceWorkerScript.ToString())
     [void]$ps.AddArgument($script:Yum);[void]$ps.AddArgument([string]$script:Yum.Root);[void]$ps.AddArgument($stop)
-    [void]$ps.AddArgument([string[]]@('Core\Logging.ps1','Core\Config.ps1','Core\Native.ps1','Core\Telemetry.ps1','Core\CpuBalance.ps1'))
+    [void]$ps.AddArgument([string[]]@('Core\Logging.ps1','Core\Config.ps1','Core\Native.ps1','Core\Telemetry.ps1','Core\CpuBalance.ps1','Core\LeakWatch.ps1'))
     $script:Yum['CpuBalanceStop']=$stop;$script:Yum['CpuBalanceRunspace']=$rs;$script:Yum['CpuBalancePowerShell']=$ps;$script:Yum['CpuBalanceAsync']=$ps.BeginInvoke()
 }
 
