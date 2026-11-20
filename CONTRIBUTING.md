@@ -33,7 +33,7 @@ before/after (after the 1.5 s settle), YUMRAM CPU while monitoring, and anything
 ## Style
 
 - Source files are UTF-8 **with BOM** and CRLF (`.gitattributes` enforces CRLF; the BOM is checked
-  by `Tests\StaticTest.ps1`). `Launch-YUMRAM.cmd` must stay ANSI without a BOM.
+  by `Tests\StaticTest.ps1`). YUMRAM is started by `YUMRAM.exe` (built from `Launcher\YumramLauncher.cs` by `Tools\Build-Launcher.ps1`).
 - Do not touch WPF objects from a worker runspace; publish data and let the UI timer render it.
 - Bump `VERSION` for releases; `Config/default-config.json` `Version` and `ResearchEngineVersion`
   must match it.

@@ -9,7 +9,7 @@ $root=Split-Path -Parent $PSScriptRoot
 $expectedYumramVersion = (Get-Content -LiteralPath (Join-Path $root 'VERSION') -Raw).Trim()
 $script:Errors=New-Object System.Collections.Generic.List[string]
 $required=@(
- 'App\YUMRAM.ps1','App\Bootstrap.ps1','Core\Logging.ps1','Core\Config.ps1','Core\Native.ps1','Core\Games.ps1','Core\Safety.ps1','Core\Bloatware.ps1','Core\Scanner.ps1','Core\Telemetry.ps1','Core\TelemetryWorker.ps1','Core\Cleanup.ps1','Core\Intelligence.ps1','Core\Research.ps1','UI\Dialogs.ps1','UI\MainWindow.ps1','UI\Xaml\MainWindow.xaml','UI\Xaml\Settings.xaml','UI\Xaml\Intelligence.xaml','Config\default-config.json','VERSION','Launch-YUMRAM.cmd')
+ 'App\YUMRAM.ps1','App\Bootstrap.ps1','Core\Logging.ps1','Core\Config.ps1','Core\Native.ps1','Core\Games.ps1','Core\Safety.ps1','Core\Bloatware.ps1','Core\Scanner.ps1','Core\Telemetry.ps1','Core\TelemetryWorker.ps1','Core\Cleanup.ps1','Core\Intelligence.ps1','Core\Research.ps1','UI\Dialogs.ps1','UI\MainWindow.ps1','UI\Xaml\MainWindow.xaml','UI\Xaml\Settings.xaml','UI\Xaml\Intelligence.xaml','Config\default-config.json','VERSION','YUMRAM.exe')
 foreach($rel in $required){if(-not(Test-Path -LiteralPath (Join-Path $root $rel))){Add-CheckError "Missing required file: $rel"}}
 
 # Windows PowerShell 5.1 parser + BOM validation.
