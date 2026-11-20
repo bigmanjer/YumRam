@@ -4,7 +4,7 @@
 
 **Keeps your Windows PC fast by keeping RAM free and the CPU fair — automatically.**
 
-[![Version](https://img.shields.io/badge/version-5.12.0-a855f7)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-5.12.1-a855f7)](CHANGELOG.md)
 [![Platform](https://img.shields.io/badge/Windows-10%20%7C%2011-0078d4)](#requirements)
 [![Stage](https://img.shields.io/badge/stage-alpha-f59e0b)](#status)
 

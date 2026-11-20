@@ -170,8 +170,13 @@ static class YumramLauncher
     // scheduled task (asks for administrator only if that task exists), the Apps entry and the folder.
     static int Uninstall(string root, bool silent)
     {
-        if (!silent && MessageBox.Show("Remove YUMRAM and its settings from this PC?", "Uninstall YUMRAM", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return 2;
         string script = Path.Combine(root, @"App\YUMRAM.ps1");
+        if (!File.Exists(script) || Directory.Exists(Path.Combine(root, ".git")))
+        {
+            if (!silent) MessageBox.Show(Directory.Exists(Path.Combine(root, ".git")) ? "This is a development copy of YUMRAM (a git folder). Nothing was removed." : "This folder does not look like a YUMRAM install. Nothing was removed.", "Uninstall YUMRAM", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return 3;
+        }
+        if (!silent && MessageBox.Show("Remove YUMRAM and its settings from this PC?", "Uninstall YUMRAM", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return 2;
         try
         {
             using (var s = new System.Management.ManagementObjectSearcher("SELECT ProcessId, CommandLine FROM Win32_Process WHERE Name='powershell.exe'"))
@@ -182,21 +187,57 @@ static class YumramLauncher
                 }
         }
         catch { }
+        // 5.12.1: touch only THIS copy. Another install (or a portable copy) keeps its shortcuts, sign-in
+        // entry, task and Apps entry, and only YUMRAM's own files are deleted - never the whole folder, which
+        // could be Downloads or the Desktop when the portable zip was extracted "here".
+        string rootFull = Path.GetFullPath(root).TrimEnd('\\');
+        string exePath = Path.Combine(rootFull, "YUMRAM.exe");
         foreach (var f in new[] { Environment.SpecialFolder.Programs, Environment.SpecialFolder.DesktopDirectory })
-        { try { string lnk = Path.Combine(Environment.GetFolderPath(f), "YUMRAM.lnk"); if (File.Exists(lnk)) File.Delete(lnk); } catch { } }
-        try { using (var k = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run", true)) { if (k != null) k.DeleteValue("YUMRAM", false); } } catch { }
+        { try { string lnk = Path.Combine(Environment.GetFolderPath(f), "YUMRAM.lnk"); if (File.Exists(lnk) && PointsInto(ShortcutTarget(lnk), rootFull)) File.Delete(lnk); } catch { } }
+        try { using (var k = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run", true)) { if (k != null && ((k.GetValue("YUMRAM") as string) ?? "").IndexOf(rootFull, StringComparison.OrdinalIgnoreCase) >= 0) k.DeleteValue("YUMRAM", false); } } catch { }
         try
         {
-            var q = Process.Start(new ProcessStartInfo("schtasks.exe", "/Query /TN YUMRAM") { CreateNoWindow = true, UseShellExecute = false, RedirectStandardOutput = true });
+            var q = Process.Start(new ProcessStartInfo("schtasks.exe", "/Query /TN YUMRAM /XML") { CreateNoWindow = true, UseShellExecute = false, RedirectStandardOutput = true });
+            string xml = q.StandardOutput.ReadToEnd();
             q.WaitForExit(10000);
-            if (q.ExitCode == 0) { var d = Process.Start(new ProcessStartInfo("schtasks.exe", "/Delete /TN YUMRAM /F") { Verb = "runas", UseShellExecute = true, WindowStyle = ProcessWindowStyle.Hidden }); d.WaitForExit(30000); }
+            if (q.ExitCode == 0 && xml.IndexOf(script, StringComparison.OrdinalIgnoreCase) >= 0) { var d = Process.Start(new ProcessStartInfo("schtasks.exe", "/Delete /TN YUMRAM /F") { Verb = "runas", UseShellExecute = true, WindowStyle = ProcessWindowStyle.Hidden }); d.WaitForExit(30000); }
         }
         catch { }
-        try { Microsoft.Win32.Registry.CurrentUser.DeleteSubKeyTree(@"Software\Microsoft\Windows\CurrentVersion\Uninstall\YUMRAM", false); } catch { }
-        // The folder (including this exe) is removed by a short-lived cmd after this process exits.
-        try { Process.Start(new ProcessStartInfo("cmd.exe", "/c ping -n 3 127.0.0.1 >nul & rmdir /s /q \"" + root + "\"") { CreateNoWindow = true, UseShellExecute = false, WorkingDirectory = Path.GetTempPath() }); } catch { }
+        try
+        {
+            bool ours = false;
+            using (var k = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Uninstall\YUMRAM"))
+            { if (k != null) ours = string.Equals(((k.GetValue("InstallLocation") as string) ?? "").TrimEnd('\\'), rootFull, StringComparison.OrdinalIgnoreCase); }
+            if (ours) Microsoft.Win32.Registry.CurrentUser.DeleteSubKeyTree(@"Software\Microsoft\Windows\CurrentVersion\Uninstall\YUMRAM", false);
+        }
+        catch { }
+        foreach (var d in OwnDirs) { try { string p = Path.Combine(rootFull, d); if (Directory.Exists(p)) Directory.Delete(p, true); } catch { } }
+        foreach (var f in OwnFiles) { try { string p = Path.Combine(rootFull, f); if (File.Exists(p)) File.Delete(p); } catch { } }
+        // This exe cannot delete itself while running: a short-lived cmd removes it, then the folder only if empty.
+        try { Process.Start(new ProcessStartInfo("cmd.exe", "/c ping -n 3 127.0.0.1 >nul & del /f /q \"" + exePath + "\" & rmdir \"" + rootFull + "\"") { CreateNoWindow = true, UseShellExecute = false, WorkingDirectory = Path.GetTempPath() }); } catch { }
         if (!silent) MessageBox.Show("YUMRAM has been removed.", "Uninstall YUMRAM", MessageBoxButtons.OK, MessageBoxIcon.Information);
         return 0;
+    }
+
+    // Everything a YUMRAM install contains or creates (release package + runtime data). Nothing else is deleted.
+    static readonly string[] OwnDirs = { "App", "Config", "Core", "UI", "Launcher", "Runtime", ".previous" };
+    static readonly string[] OwnFiles = { "VERSION", "README.md", "CHANGELOG.md", "YUMRAM.exe.old",
+        "config.json", "state.json", "stats.json", "history.json", "cpu-balance.json", "reclaim-learning.json", "intelligence-db.json",
+        "manual-organizations.json", "research-cache.json", "research-history.json", "research-status.json",
+        "research-live-results.json", "research-live-results.tmp", "YUMRAM.log", "Research-Diagnostics.log",
+        "YUMRAM-app-startup.log", "YUMRAM-app-startup-error.log", "YUMRAM-startup.log", "YUMRAM-launcher.log" };
+
+    static string ShortcutTarget(string lnk)
+    {
+        object sh = Activator.CreateInstance(Type.GetTypeFromProgID("WScript.Shell"));
+        object sc = sh.GetType().InvokeMember("CreateShortcut", System.Reflection.BindingFlags.InvokeMethod, null, sh, new object[] { lnk });
+        return (string)sc.GetType().InvokeMember("TargetPath", System.Reflection.BindingFlags.GetProperty, null, sc, null);
+    }
+
+    static bool PointsInto(string path, string dir)
+    {
+        if (string.IsNullOrEmpty(path)) return false;
+        try { return Path.GetFullPath(path).StartsWith(dir + "\\", StringComparison.OrdinalIgnoreCase); } catch { return false; }
     }
 
     static void Log(string root, string line)

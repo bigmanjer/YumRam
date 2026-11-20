@@ -37,7 +37,22 @@ try{
     $zip=Join-Path $OutDir ('YUMRAM-{0}.zip' -f $Version)
     if(Test-Path -LiteralPath $zip){Remove-Item -LiteralPath $zip -Force}
     Add-Type -AssemblyName System.IO.Compression.FileSystem
-    [IO.Compression.ZipFile]::CreateFromDirectory($stage,$zip,[IO.Compression.CompressionLevel]::Optimal,$false)
+    # 5.12.1: entry names with "/" (the ZIP standard). ZipFile.CreateFromDirectory in Windows PowerShell
+    # writes "App\YUMRAM.ps1", which 7-Zip warns about and macOS/Linux unpack as flat file names.
+    Add-Type -AssemblyName System.IO.Compression
+    $fs=[IO.File]::Open($zip,[IO.FileMode]::CreateNew)
+    try{
+        $za=New-Object IO.Compression.ZipArchive($fs,[IO.Compression.ZipArchiveMode]::Create)
+        try{
+            foreach($file in (Get-ChildItem -LiteralPath $stage -Recurse -File | Sort-Object FullName)){
+                $name=$file.FullName.Substring($stage.Length).TrimStart('\').Replace('\','/')
+                $entry=$za.CreateEntry($name,[IO.Compression.CompressionLevel]::Optimal)
+                $entry.LastWriteTime=$file.LastWriteTime
+                $es=$entry.Open();$in=[IO.File]::OpenRead($file.FullName)
+                try{$in.CopyTo($es)}finally{$in.Dispose();$es.Dispose()}
+            }
+        }finally{$za.Dispose()}
+    }finally{$fs.Dispose()}
     # 5.12: YUMRAM-Setup-<version>.exe - per-user installer with the zip embedded (Launcher\YumramSetup.cs).
     $setupExe=Join-Path $OutDir ('YUMRAM-Setup-{0}.exe' -f $Version)
     $csc=Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'

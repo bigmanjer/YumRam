@@ -1,5 +1,19 @@
 # Changelog
 
+# YUMRAM 5.12.1 — Safer uninstall, standard zip
+
+- **Uninstall removes only YUMRAM.** Before, `YUMRAM.exe --uninstall` deleted the whole folder YUMRAM was
+  in — if the portable zip had been extracted straight into Downloads or the Desktop, that folder went with
+  it. It also removed *every* YUMRAM shortcut, sign-in entry, no-prompt task and Settings › Apps entry, even
+  ones belonging to another copy. Now it deletes only YUMRAM's own files and folders, removes the folder only
+  if it is then empty, removes only shortcuts/entries/task that point at this copy, and refuses to run in a
+  development (git) folder. **Tested:** a fake Downloads folder kept the user's own files and folders; a second
+  install kept its sign-in and Apps entries; a normal install was fully removed.
+- **Release zip uses `/` in paths** (the ZIP standard). Windows PowerShell wrote `App\YUMRAM.ps1`, which
+  7-Zip warns about and macOS/Linux extract as flat file names. The installer and in-app updater read both.
+- **Checked against the live 5.12.0 release:** a 5.11 copy finds 5.12.0, downloads it, verifies the SHA-256
+  and stages it.
+
 # YUMRAM 5.12.0 — Leak alerts, memory combining, 12 h history, no UAC prompt (branch `visual-overhaul`)
 
 - **No administrator prompt every time** (Settings › General › Administrator rights):

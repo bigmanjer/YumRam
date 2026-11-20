@@ -7,7 +7,7 @@ body:
       value: Thanks for helping make YUMRAM better. Please fill in what you can.
   - type: input
     id: version
-    attributes: { label: YUMRAM version, description: "About page, e.g. 5.12.0" }
+    attributes: { label: YUMRAM version, description: "About page, e.g. 5.12.1" }
     validations: { required: true }
   - type: dropdown
     id: admin
