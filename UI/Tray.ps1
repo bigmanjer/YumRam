@@ -66,6 +66,8 @@ function Initialize-YumTray {
     $free=$menu.Items.Add('Free RAM now')
     $mon=$menu.Items.Add('Start monitoring')
     [void]$menu.Items.Add((New-Object System.Windows.Forms.ToolStripSeparator))
+    $report=$menu.Items.Add('Report a problem…');$report.ToolTipText='Opens the GitHub bug form in your browser, filled in (no user or PC names). Nothing is posted until you press Create.'
+    $report.Add_Click({ [void](Open-YumReportProblem) })
     $exit=$menu.Items.Add('Exit YUMRAM')
     $open.Add_Click({ Show-YumMainWindow })
     $free.Add_Click({ try{ if(Request-YumMemoryReclaim -Mode Quick){ $script:Yum.TrayReclaimPending=$true; Set-YumFooter 'Freeing RAM from the tray…' } }catch{ Write-YumLogException -Context 'Tray Free RAM failed' -Exception $_.Exception } })

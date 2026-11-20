@@ -1,11 +1,16 @@
 ﻿name: Feature request
 description: Suggest an idea for YUMRAM
-labels: [enhancement]
+labels: ["enhancement"]
 body:
   - type: textarea
     id: idea
-    attributes: { label: Your idea, description: What would you like YUMRAM to do, and why? }
-    validations: { required: true }
+    attributes:
+      label: "Your idea"
+      description: "What would you like YUMRAM to do, and why?"
+    validations:
+      required: true
   - type: textarea
     id: other
-    attributes: { label: Other tools, description: Does another program do this? Which one, and how? }
+    attributes:
+      label: "Other tools"
+      description: "Does another program do this? Which one, and how?"

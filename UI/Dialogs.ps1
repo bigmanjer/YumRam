@@ -722,6 +722,7 @@ function Show-YumAbout {
         $window.FindName('OpenFolder').Add_Click({try{Start-Process -FilePath 'explorer.exe' -ArgumentList ('"{0}"' -f [string]$script:Yum.ConfigDirectory)}catch{Write-YumLogException -Context 'Open YUMRAM folder failed' -Exception $_.Exception}})
         $window.FindName('OpenLog').Add_Click({try{$log=[string](Get-YumLogPath);if(Test-Path -LiteralPath $log){Start-Process -FilePath 'notepad.exe' -ArgumentList ('"{0}"' -f $log)}else{Start-Process -FilePath 'explorer.exe' -ArgumentList ('"{0}"' -f [string]$script:Yum.ConfigDirectory)}}catch{Write-YumLogException -Context 'Open log failed' -Exception $_.Exception}})
         $window.FindName('OpenProject').Add_Click({try{Start-Process 'https://github.com/bigmanjer/YumRam'}catch{}})
+        $rp=$window.FindName('ReportProblem');if($null -ne $rp){$rp.Add_Click({[void](Open-YumReportProblem)})}
         try{
             $us=$window.FindName('UpdateStatus');$cu=$window.FindName('CheckUpdates')
             $known=$script:Yum['UpdateInfo']

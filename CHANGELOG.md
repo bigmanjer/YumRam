@@ -1,6 +1,14 @@
 # Changelog
 
-# YUMRAM 5.12.1 — Safer uninstall, standard zip
+# YUMRAM 5.13.0 — Report a problem, safer uninstall, working issue forms
+
+- **Report a problem** (About page and tray menu): opens GitHub's bug form in the browser, filled in with
+  the YUMRAM version, administrator mode, Windows version, CPU, RAM, laptop/desktop and the last 30 log lines.
+  Your user name, PC name, user-folder paths and e-mail addresses are replaced before anything leaves YUMRAM.
+  Nothing is posted until you press Create on GitHub (a GitHub account is needed). Titles start with
+  `[From app]` so these reports are easy to find.
+- **Issue forms fixed.** The bug-report and feature-request forms had a YAML error, so GitHub hid them and
+  (with blank issues off) nobody but the owner could open an issue. Rewritten and checked.
 
 - **Uninstall removes only YUMRAM.** Before, `YUMRAM.exe --uninstall` deleted the whole folder YUMRAM was
   in — if the portable zip had been extracted straight into Downloads or the Desktop, that folder went with

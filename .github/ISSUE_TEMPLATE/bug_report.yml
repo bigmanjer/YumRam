@@ -1,26 +1,41 @@
 ﻿name: Bug report
 description: Something in YUMRAM does not work as expected
-labels: [bug]
+labels: ["bug"]
 body:
   - type: markdown
     attributes:
-      value: Thanks for helping make YUMRAM better. Please fill in what you can.
+      value: "Thanks for helping make YUMRAM better. Please fill in what you can. Tip: **About › Report a problem** in YUMRAM fills in the version, PC details and log for you."
   - type: input
     id: version
-    attributes: { label: YUMRAM version, description: "About page, e.g. 5.12.1" }
-    validations: { required: true }
+    attributes:
+      label: "YUMRAM version"
+      description: "About page, e.g. 5.13.0"
+    validations:
+      required: true
   - type: dropdown
     id: admin
     attributes:
-      label: Administrator rights
-      options: [Ask each time, Start without asking, Never, Not sure]
+      label: "Administrator rights"
+      options:
+        - "Ask each time"
+        - "Start without asking"
+        - "Never"
+        - "Not sure"
   - type: textarea
     id: what
-    attributes: { label: What happened, description: What did you do, what did you expect, and what happened instead? }
-    validations: { required: true }
+    attributes:
+      label: "What happened"
+      description: "What did you do, what did you expect, and what happened instead?"
+    validations:
+      required: true
   - type: textarea
     id: pc
-    attributes: { label: Your PC, description: "Windows version, CPU, RAM (Settings > CPU > This PC shows the CPU line)" }
+    attributes:
+      label: "Your PC"
+      description: "Windows version, CPU and RAM."
   - type: textarea
     id: log
-    attributes: { label: Log, description: "About > Log - paste the last 30 lines (they contain no personal data except program names)", render: text }
+    attributes:
+      label: "Log"
+      description: "About › Log: paste the last 30 lines. Report a problem fills this in with your user name, PC name and user folder removed."
+      render: text

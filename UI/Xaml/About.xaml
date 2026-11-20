@@ -69,6 +69,7 @@
         <Button x:Name="OpenFolder" Content="📂  YUMRAM folder" Style="{StaticResource GhostButton}" ToolTip="Open the folder with YUMRAM's settings, logs and learned data in File Explorer."/>
         <Button x:Name="OpenLog" Content="📄  Log" Style="{StaticResource GhostButton}" ToolTip="Open YUMRAM.log."/>
         <Button x:Name="OpenProject" Content="🌐  Project page" Style="{StaticResource GhostButton}" ToolTip="github.com/bigmanjer/YumRam"/>
+        <Button x:Name="ReportProblem" Content="🐞  Report a problem" Style="{StaticResource GhostButton}" ToolTip="Opens GitHub's bug-report form in your browser, filled in with YUMRAM's version, your Windows version, CPU, RAM and the last lines of the log (your user name, PC name and user folder are removed). You can read and edit everything there; nothing is posted until you press Create."/>
       </StackPanel>
     </DockPanel>
   </Grid>
