@@ -12,6 +12,15 @@
   closed.
 - The confirm box names open programs that hold caches ("Open now: Chrome, Discord, Steam - close them first for the
   biggest result").
+- **Safer Temp cleaning** (user: "how do you know you're not deleting important things?"): files a person may have
+  opened straight from an e-mail or a zip land in Temp, so documents, pictures, videos, music, archives and key files
+  there are never touched, nor the folders Windows unpacks when you open a zip ("Temp1_..."). New test.
+- **Spotify left out of app caches:** its folder can hold the songs you downloaded for offline listening.
+- **Driver installer folders (C:\AMD, C:\NVIDIA) are "your call"**, not ticked by default - someone could have saved
+  their own files there.
+- **Look first, see after:** "Open folder - look before cleaning" opens each category's folder (or the Recycle Bin)
+  in File Explorer; "See what was deleted" opens the exact list of files the last clean removed (category, file,
+  size), written after every clean, automatic ones included.
 
 # YUMRAM 5.15.4 — updates install themselves
 

@@ -102,7 +102,7 @@ function Show-YumDiskCleanup {
         [xml]$xaml=Read-YumXamlText -Path (Join-Path $script:Yum.Root 'UI\Xaml\DiskCleanup.xaml')
         $window=[Windows.Markup.XamlReader]::Load((New-Object System.Xml.XmlNodeReader $xaml))
         $ui=@{}
-        foreach($n in 'Junk','Reload','AdminPill','AdminText','RestartAdmin','SumJunk','SumDrive','SumDriveBar','SumFreed','AutoClean','AutoLast','CleanSelected','UsagePath','UsageScan','UsageUp','UsageOpen','UsageTabs','UsageFolders','UsageFiles','ExplainTitle','ExplainSub','ExplainWhy','ExplainBody','ExplainEffect','ExplainUndo','LastResult','Close','Details'){$ui[$n]=$window.FindName($n);if($null -eq $ui[$n]){throw "Disk cleanup page control missing: $n"}}
+        foreach($n in 'Junk','Reload','AdminPill','AdminText','RestartAdmin','SumJunk','SumDrive','SumDriveBar','SumFreed','AutoClean','AutoLast','CleanSelected','UsagePath','UsageScan','UsageUp','UsageOpen','UsageTabs','UsageFolders','UsageFiles','ExplainTitle','ExplainSub','ExplainWhy','ExplainBody','ExplainEffect','ExplainUndo','LastResult','OpenFolder','SeeDeleted','Close','Details'){$ui[$n]=$window.FindName($n);if($null -eq $ui[$n]){throw "Disk cleanup page control missing: $n"}}
         $state=@{Window=$window;Ui=$ui;Rows=@();Picked=@{};Busy=$false}
         $window.Tag=$state
         foreach($c in 'Junk','Reload','AutoClean','CleanSelected','UsageScan','UsageUp','UsageOpen','UsageFolders','UsageFiles','Close'){$ui[$c].Tag=$state}
@@ -146,6 +146,15 @@ function Show-YumDiskCleanup {
                  if($null -eq $it){ $st.Ui.Details.Text='Select a folder or file first.'; return }
                  $p=[string]$it.Path
                  if(Test-Path -LiteralPath $p -PathType Leaf){ Start-Process explorer.exe -ArgumentList ('/select,"{0}"' -f $p) } elseif(Test-Path -LiteralPath $p){ Start-Process explorer.exe -ArgumentList ('"{0}"' -f $p) } }catch{} })
+        $ui.OpenFolder.Tag=$state; $ui.SeeDeleted.Tag=$state
+        $ui.OpenFolder.Add_Click({param($s,$e)
+            try{ $it=$s.Tag.Ui.Junk.SelectedItem; if($null -eq $it){return}
+                 if($it.Key -eq 'Recycle'){ Start-Process explorer.exe -ArgumentList 'shell:RecycleBinFolder'; return }
+                 $roots=@($it.Roots); if($roots.Count -eq 0){ $s.Tag.Ui.Details.Text='Nothing to show: this category has nothing on this PC right now, or Windows'' own tool handles it.'; return }
+                 foreach($r in @($roots | Select-Object -First 3)){ Start-Process explorer.exe -ArgumentList ('"{0}"' -f $r) }
+                 if($roots.Count -gt 3){ $s.Tag.Ui.Details.Text=('Opened 3 of {0} folders: {1}' -f $roots.Count,($roots -join '; ')) } }catch{} })
+        $ui.SeeDeleted.Add_Click({param($s,$e)
+            try{ $p=Get-YumDiskCleanupLogPath; if(Test-Path -LiteralPath $p){ Start-Process notepad.exe -ArgumentList ('"{0}"' -f $p) } else { $s.Tag.Ui.Details.Text='Nothing has been cleaned yet.' } }catch{} })
         $ui.Close.Add_Click({param($s,$e)$s.Tag.Window.Close()})
         Update-YumDiskSummary -State $state
         Start-YumDiskMeasure -State $state

@@ -12,7 +12,7 @@ function Initialize-YumDiskWalkType {
     Add-Type -TypeDefinition @'
 using System; using System.IO; using System.Collections.Generic;
 public static class YumDiskWalk {
-    public sealed class Result { public long Bytes; public long Files; public long Skipped; public long Deleted; public long Freed; }
+    public sealed class Result { public long Bytes; public long Files; public long Skipped; public long Deleted; public long Freed; public List<string> DeletedPaths = new List<string>(); }
     static bool Match(string name, string[] patterns) {
         if (patterns == null || patterns.Length == 0) return true;
         foreach (var p in patterns) { if (string.IsNullOrEmpty(p) || p == "*") return true;
@@ -24,7 +24,10 @@ public static class YumDiskWalk {
     }
     // Measure or clean one root. minAge: files written more recently are left alone. Directories that are
     // reparse points (junctions, symlinks) are never entered, so cleaning can never leave the folder.
-    public static Result Walk(string root, string[] patterns, double minAgeHours, bool delete) {
+    public static Result Walk(string root, string[] patterns, double minAgeHours, bool delete) { return WalkEx(root, patterns, minAgeHours, delete, null, null); }
+    // 5.15.3: skipExt = file types never touched here (documents a person may have opened from an e-mail or a zip);
+    // skipDirPrefix = folder names never entered (e.g. "Temp1_" = files Windows unpacked when you opened a zip).
+    public static Result WalkEx(string root, string[] patterns, double minAgeHours, bool delete, string[] skipExt, string[] skipDirPrefix) {
         var r = new Result();
         if (string.IsNullOrEmpty(root) || !Directory.Exists(root)) return r;
         DateTime cutoff = DateTime.UtcNow.AddHours(-minAgeHours);
@@ -38,9 +41,15 @@ public static class YumDiskWalk {
                 try {
                     if ((it.Attributes & FileAttributes.ReparsePoint) != 0) continue;
                     var sub = it as DirectoryInfo;
-                    if (sub != null) { stack.Push(sub); dirs.Add(sub); continue; }
+                    if (sub != null) {
+                        bool skipDir = false;
+                        if (skipDirPrefix != null) foreach (var sp in skipDirPrefix) if (!string.IsNullOrEmpty(sp) && sub.Name.StartsWith(sp, StringComparison.OrdinalIgnoreCase)) { skipDir = true; break; }
+                        if (!skipDir) { stack.Push(sub); dirs.Add(sub); }
+                        continue;
+                    }
                     var f = (FileInfo)it;
                     if (!Match(f.Name, patterns)) continue;
+                    if (skipExt != null) { bool keep = false; foreach (var x in skipExt) if (!string.IsNullOrEmpty(x) && f.Name.EndsWith(x, StringComparison.OrdinalIgnoreCase)) { keep = true; break; } if (keep) continue; }
                     if (f.LastWriteTimeUtc > cutoff) continue;
                     r.Bytes += f.Length; r.Files++;
                     if (delete) {
@@ -53,7 +62,7 @@ public static class YumDiskWalk {
                             if ((f.Attributes & FileAttributes.ReadOnly) != 0) f.Attributes = FileAttributes.Normal;
                             long len = f.Length;
                             using (var probe = new FileStream(f.FullName, FileMode.Open, FileAccess.ReadWrite, FileShare.None)) { }
-                            f.Delete(); r.Deleted++; r.Freed += len;
+                            f.Delete(); r.Deleted++; r.Freed += len; if (r.DeletedPaths.Count < 50000) r.DeletedPaths.Add(f.FullName + "\t" + len);
                         }
                         catch { r.Skipped++; }
                     }
@@ -113,6 +122,11 @@ public static class YumDiskWalk {
 '@
 }
 
+# 5.15.3 (user: "how do you know you're not deleting important things?"): files a person may have opened straight
+# from an e-mail or a zip land in Temp. These types and Windows' "opened from a zip" folders are never touched there.
+$script:YumTempKeepExt=@('.doc','.docx','.docm','.xls','.xlsx','.xlsm','.ppt','.pptx','.pdf','.odt','.ods','.odp','.rtf','.csv','.txt','.md','.psd','.ai','.indd','.blend','.dwg','.jpg','.jpeg','.png','.heic','.gif','.bmp','.tif','.tiff','.raw','.cr2','.nef','.mp4','.mov','.mkv','.avi','.mp3','.wav','.flac','.m4a','.zip','.rar','.7z','.eml','.msg','.vcf','.ics','.kdbx','.key','.pem','.pfx')
+$script:YumTempKeepDirs=@('Temp1_','Temp2_','Temp3_','Rar$','7z')
+
 function Get-YumDiskJunkCategories {
     # Every location is a cache or leftover that Windows or the program recreates. Advice: Clean = safe for
     # everyone; YourCall = safe, but with a small side effect explained in Effect.
@@ -128,9 +142,9 @@ function Get-YumDiskJunkCategories {
     }
     $firefox=@(); try{ $ff=Join-Path $la 'Mozilla\Firefox\Profiles'; if([IO.Directory]::Exists($ff)){ $firefox=@([IO.Directory]::GetDirectories($ff) | ForEach-Object { Join-Path $_ 'cache2' }) } }catch{}
     @(
-        [pscustomobject]@{Key='UserTemp';Name='Temporary files (your account)';Advice='Clean';Admin=$false;Auto=$true;MinAgeHours=24;Patterns=@();Roots=@($env:TEMP)
-            Why='Leftover files programs and installers put in your Temp folder and forgot to delete.';Effect='Nothing you will notice. Files from the last 24 hours and files still in use are skipped.'}
-        [pscustomobject]@{Key='WindowsTemp';Name='Windows temporary files';Advice='Clean';Admin=$true;Auto=$true;MinAgeHours=24;Patterns=@();Roots=@((Join-Path $win 'Temp'))
+        [pscustomobject]@{Key='UserTemp';Name='Temporary files (your account)';Advice='Clean';Admin=$false;Auto=$true;MinAgeHours=24;Patterns=@();SkipExt=$script:YumTempKeepExt;SkipDirs=$script:YumTempKeepDirs;Roots=@($env:TEMP)
+            Why='Leftover files programs and installers put in your Temp folder and forgot to delete.';Effect='Nothing you will notice. Never touched here: files from the last 24 hours, files still in use, documents, pictures, videos, music and archives (you may have opened them from an e-mail), and files Windows unpacked when you opened a zip.'}
+        [pscustomobject]@{Key='WindowsTemp';Name='Windows temporary files';Advice='Clean';Admin=$true;Auto=$true;MinAgeHours=24;Patterns=@();SkipExt=$script:YumTempKeepExt;SkipDirs=$script:YumTempKeepDirs;Roots=@((Join-Path $win 'Temp'))
             Why='Windows'' own temporary folder (updates, installers, services).';Effect='Nothing you will notice. Recent and in-use files are skipped.'}
         [pscustomobject]@{Key='Browser';Name='Web browser caches';Advice='Clean';Admin=$false;Auto=$false;MinAgeHours=0;Patterns=@();Roots=@($chromium+$firefox)
             Why='Copies of pictures and scripts from websites (Chrome, Edge, Brave, Opera, Vivaldi, Firefox). Only the cache: never cookies, saved passwords, history or open tabs - you stay signed in.';Effect='Websites load a little slower the first time you visit them again. Close the browser first for the biggest result (files in use are skipped).'}
@@ -147,12 +161,12 @@ function Get-YumDiskJunkCategories {
         # 5.15.2 (user: "disk cleanup needs to be better, do research"): app caches, driver installer leftovers, old
         # Windows logs, and Windows' own deep clean-up (component store, old drivers, previous Windows) - the same tools
         # Microsoft documents for Disk Cleanup / DISM, never hand-deleting system folders.
-        [pscustomobject]@{Key='AppCache';Name='App caches (Discord, Spotify, Steam, Epic, Teams, VS Code)';Advice='Clean';Admin=$false;Auto=$false;MinAgeHours=0;Patterns=@()
-            Roots=@((Join-Path $env:APPDATA 'discord\Cache'),(Join-Path $env:APPDATA 'discord\Code Cache'),(Join-Path $env:APPDATA 'discord\GPUCache'),(Join-Path $la 'Spotify\Storage'),(Join-Path $la 'Steam\htmlcache\Cache'),(Join-Path $la 'Steam\htmlcache\Code Cache'),(Join-Path $la 'Steam\htmlcache\GPUCache'),(Join-Path $la 'EpicGamesLauncher\Saved\webcache'),(Join-Path $la 'EpicGamesLauncher\Saved\webcache_4430'),(Join-Path $la 'EpicGamesLauncher\Saved\webcache_4147'),(Join-Path $la 'Packages\MSTeams_8wekyb3d8bbwe\LocalCache\Microsoft\MSTeams\EBWebView\Default\Cache'),(Join-Path $env:APPDATA 'Code\Cache'),(Join-Path $env:APPDATA 'Code\CachedData'),(Join-Path $env:APPDATA 'Code\Code Cache'))
-            Why='Web pictures, songs and scripts these apps saved to open faster. Only caches: never your messages, logins, playlists, games or settings.';Effect='The apps load things again the first time (Spotify re-downloads songs you play). Close the apps first for the biggest result; files in use are skipped.'}
-        [pscustomobject]@{Key='DriverSetup';Name='Graphics driver installer leftovers';Advice='Clean';Admin=$false;Auto=$false;MinAgeHours=24;Patterns=@()
+        [pscustomobject]@{Key='AppCache';Name='App caches (Discord, Steam, Epic, Teams, VS Code)';Advice='Clean';Admin=$false;Auto=$false;MinAgeHours=0;Patterns=@()
+            Roots=@((Join-Path $env:APPDATA 'discord\Cache'),(Join-Path $env:APPDATA 'discord\Code Cache'),(Join-Path $env:APPDATA 'discord\GPUCache'),(Join-Path $la 'Steam\htmlcache\Cache'),(Join-Path $la 'Steam\htmlcache\Code Cache'),(Join-Path $la 'Steam\htmlcache\GPUCache'),(Join-Path $la 'EpicGamesLauncher\Saved\webcache'),(Join-Path $la 'EpicGamesLauncher\Saved\webcache_4430'),(Join-Path $la 'EpicGamesLauncher\Saved\webcache_4147'),(Join-Path $la 'Packages\MSTeams_8wekyb3d8bbwe\LocalCache\Microsoft\MSTeams\EBWebView\Default\Cache'),(Join-Path $env:APPDATA 'Code\Cache'),(Join-Path $env:APPDATA 'Code\CachedData'),(Join-Path $env:APPDATA 'Code\Code Cache'))
+            Why='Web pictures and scripts these apps saved to open faster. Only caches: never your messages, logins, downloads, games or settings. (Spotify is left out on purpose: its folder can hold the songs you downloaded for offline listening.)';Effect='The apps load things again the first time. Close the apps first for the biggest result; files in use are skipped.'}
+        [pscustomobject]@{Key='DriverSetup';Name='Graphics driver installer leftovers';Advice='YourCall';Admin=$false;Auto=$false;MinAgeHours=24;Patterns=@()
             Roots=@((Join-Path $env:SystemDrive 'NVIDIA'),(Join-Path $env:SystemDrive 'AMD'),(Join-Path $pd 'NVIDIA Corporation\Downloader'))
-            Why='Copies of NVIDIA / AMD driver installers that were unpacked or downloaded during driver updates.';Effect='Nothing - the installed driver is not touched. A future driver update downloads what it needs.'}
+            Why='Copies of NVIDIA / AMD driver installers that were unpacked or downloaded during driver updates (C:\NVIDIA, C:\AMD).';Effect='Your call: the installed driver is not touched. Use Open folder first - if you ever saved your own files in C:\AMD or C:\NVIDIA, do not clean this.'}
         [pscustomobject]@{Key='Logs';Name='Old Windows log files';Advice='Clean';Admin=$true;Auto=$true;MinAgeHours=720;Patterns=@('*.log','*.cab','*.etl')
             Roots=@((Join-Path $win 'Logs\CBS'),(Join-Path $win 'Logs\DISM'),(Join-Path $win 'Logs\MoSetup'),(Join-Path $win 'Panther\UnattendGC'))
             Why='Logs Windows writes while installing updates and features.';Effect='Nothing you will notice. Only logs older than 30 days.'}
@@ -206,14 +220,24 @@ function Measure-YumDiskJunk {
     foreach($c in Get-YumDiskJunkCategories){
         $bytes=0L;$files=0L
         if($c.Key -eq 'Recycle'){ $rb=Get-YumRecycleBinSize; $bytes=[long]$rb.Bytes; $files=[long]$rb.Files }
-        else { foreach($r in @($c.Roots)){ if(-not $r){continue}; $w=[YumDiskWalk]::Walk([string]$r,[string[]]@($c.Patterns),[double]$c.MinAgeHours,$false); $bytes+=$w.Bytes; $files+=$w.Files } }
+        else { foreach($r in @($c.Roots)){ if(-not $r){continue}; $w=[YumDiskWalk]::WalkEx([string]$r,[string[]]@($c.Patterns),[double]$c.MinAgeHours,$false,(Get-YumCatList $c 'SkipExt'),(Get-YumCatList $c 'SkipDirs')); $bytes+=$w.Bytes; $files+=$w.Files } }
         $locked=([bool]$c.Admin -and -not $admin)
         $special=if($c.PSObject.Properties['Special']){[string]$c.Special}else{''}
         $windowsSizes=($special -and @($c.Roots).Count -eq 0)   # Windows works the size out itself while cleaning
-        [pscustomobject]@{Key=$c.Key;Name=$c.Name;Advice=$c.Advice;Why=$c.Why;Effect=$c.Effect;Auto=[bool]$c.Auto;NeedsAdmin=[bool]$c.Admin;Locked=$locked;Bytes=$bytes;Files=$files;Special=$special
+        [pscustomobject]@{Key=$c.Key;Name=$c.Name;Advice=$c.Advice;Why=$c.Why;Effect=$c.Effect;Auto=[bool]$c.Auto;NeedsAdmin=[bool]$c.Admin;Locked=$locked;Bytes=$bytes;Files=$files;Special=$special;Roots=@($c.Roots | Where-Object { $_ -and [IO.Directory]::Exists([string]$_) })
             SizeText=$(if($windowsSizes){'Windows checks'}else{Format-YumBytes $bytes});Selected=($c.Advice -eq 'Clean' -and -not $locked -and $bytes -gt 0 -and -not $special)
             SubTitle=$(if($locked){'needs YUMRAM to run as administrator'}elseif($windowsSizes){'Windows'' own tool works out the size while cleaning (a few minutes)'}elseif($files -gt 0){('{0:N0} files' -f $files)}else{'nothing to clean'})}
     }
+}
+
+function Get-YumCatList {
+    param($Category,[string]$Name)
+    if($null -ne $Category.PSObject.Properties[$Name]){ return [string[]]@($Category.$Name) }
+    return $null
+}
+function Get-YumDiskCleanupLogPath {
+    $dir=if($script:Yum -and $script:Yum.ConfigDirectory){[string]$script:Yum.ConfigDirectory}else{[string]$script:Yum.Root}
+    return (Join-Path $dir 'disk-cleanup-last.txt')
 }
 
 function Get-YumSum {
@@ -235,6 +259,7 @@ function Invoke-YumDiskCleanup {
     Initialize-YumDiskWalkType
     $admin=$false; try{ $admin=Test-YumIsElevated }catch{}
     $free0=0L; try{ $free0=[long](New-Object IO.DriveInfo ($env:SystemDrive)).AvailableFreeSpace }catch{}
+    $deletedList=New-Object System.Collections.Generic.List[string]
     $out=foreach($c in @(Get-YumDiskJunkCategories | Where-Object { $Keys -contains $_.Key })){
         if([bool]$c.Admin -and -not $admin){ [pscustomobject]@{Key=$c.Key;Name=$c.Name;Freed=0L;Deleted=0L;Skipped=0L;Note='needs administrator'}; continue }
         $freed=0L;$del=0L;$skip=0L;$note=''
@@ -255,12 +280,19 @@ function Invoke-YumDiskCleanup {
                 Delete-DeliveryOptimizationCache -Force -ErrorAction Stop
                 $after=0L; foreach($r in @($c.Roots)){ $after+=([YumDiskWalk]::Walk([string]$r,[string[]]@(),0,$false)).Bytes }
                 $freed=[math]::Max(0L,$before-$after) }
-            else { foreach($r in @($c.Roots)){ if(-not $r){continue}; $w=[YumDiskWalk]::Walk([string]$r,[string[]]@($c.Patterns),[double]$c.MinAgeHours,$true); $freed+=$w.Freed; $del+=$w.Deleted; $skip+=$w.Skipped } }
+            else { foreach($r in @($c.Roots)){ if(-not $r){continue}; $w=[YumDiskWalk]::WalkEx([string]$r,[string[]]@($c.Patterns),[double]$c.MinAgeHours,$true,(Get-YumCatList $c 'SkipExt'),(Get-YumCatList $c 'SkipDirs')); $freed+=$w.Freed; $del+=$w.Deleted; $skip+=$w.Skipped; foreach($dp in $w.DeletedPaths){ [void]$deletedList.Add(('{0}	{1}' -f $c.Name,$dp)) } } }
         }catch{ $note=$_.Exception.Message }
         [pscustomobject]@{Key=$c.Key;Name=$c.Name;Freed=$freed;Deleted=$del;Skipped=$skip;Note=$note}
     }
     $out=@($out)
     $total=[long](Get-YumSum $out 'Freed')
+    # 5.15.3: an exact list of what was deleted (category, file, size) - Disk cleanup > "See what was deleted".
+    try{
+        $tab=[string][char]9
+        $head=@(('YUMRAM disk cleanup {0}  -  freed {1}{2}' -f (Get-Date).ToString('yyyy-MM-dd HH:mm'),(Format-YumBytes $total),$(if($Automatic){' (automatic weekly clean)'}else{''})),('Category'+$tab+'File'+$tab+'Bytes'),'')
+        $tools=@($out | Where-Object { $_.Freed -gt 0 -and $_.Deleted -eq 0 } | ForEach-Object { [string]$_.Name+$tab+'done by Windows'' own tool'+$tab+[string]$_.Freed })
+        [IO.File]::WriteAllLines((Get-YumDiskCleanupLogPath),[string[]]($head+$tools+@($deletedList)),(New-Object Text.UTF8Encoding($true)))
+    }catch{}
     $free1=0L; try{ $free1=[long](New-Object IO.DriveInfo ($env:SystemDrive)).AvailableFreeSpace }catch{}
     try{
         $script:Yum.Config['DiskCleanupLast']=(Get-Date).ToString('o')

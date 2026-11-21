@@ -44,6 +44,16 @@ try{
     Assert-That (-not (Test-Path -LiteralPath $shared) -or (Get-Item -LiteralPath $shared).Length -gt 0) 'The open file must be left alone.'
     $c4=[YumDiskWalk]::Walk($box,[string[]]@('chrome-style.tmp'),24,$true); Assert-That ($c4.Deleted -eq 1) 'Once the program closes the file, it is cleaned.'
 
+    # 5.15.3 ("how do you know you're not deleting important things?"): in Temp, documents / pictures / archives a
+    # person may have opened from an e-mail, and files Windows unpacked from a zip ("Temp1_..."), are never touched.
+    $tbox=Join-Path $box 'tempcheck'; New-Item -ItemType Directory -Path (Join-Path $tbox 'Temp1_holiday.zip') -Force | Out-Null
+    foreach($f in 'report.docx','photo.jpg','invoice.pdf','Temp1_holiday.zip\note.txt','setup-leftover.tmp','cache.bin'){ $p=Join-Path $tbox $f; Set-Content -LiteralPath $p -Value 'x'; (Get-Item -LiteralPath $p).LastWriteTime=$old }
+    $userTemp=@(Get-YumDiskJunkCategories | Where-Object Key -eq 'UserTemp')[0]
+    $wx=[YumDiskWalk]::WalkEx($tbox,[string[]]@(),24,$true,[string[]]$userTemp.SkipExt,[string[]]$userTemp.SkipDirs)
+    Assert-That ($wx.Deleted -eq 2) ('Only the 2 real leftovers may go, deleted {0}' -f $wx.Deleted)
+    foreach($f in 'report.docx','photo.jpg','invoice.pdf','Temp1_holiday.zip\note.txt'){ Assert-That (Test-Path -LiteralPath (Join-Path $tbox $f)) ("A file a person may want was deleted from Temp: $f") }
+    Assert-That (@($wx.DeletedPaths).Count -eq 2) 'The clean must record exactly what it deleted.'
+
     # Folder analysis.
     $u=Get-YumDiskUsage -Path $root -TopFiles 5
     Assert-That (@($u.Folders).Count -ge 3 -and [double]$u.Bytes -gt 0 -and @($u.TopFiles).Count -ge 1) 'Folder analysis returns folders, a total and biggest files.'
@@ -62,6 +72,13 @@ Assert-That ($bad.Count -eq 0) ('A category points at personal data: {0}' -f ($b
 foreach($c in $cats){ Assert-That ([string]$c.Why -and [string]$c.Effect -and $c.Advice -in @('Clean','YourCall')) ('Category {0} needs a plain explanation and advice.' -f $c.Key) }
 Assert-That (@($cats | Where-Object { $_.Auto -and $_.Key -in @('Recycle','Browser','Shaders') }).Count -eq 0) 'The weekly automatic clean never empties the Recycle Bin, browser or game caches.'
 Assert-That (-not [bool]$script:Yum.Config['DiskAutoClean']) 'Automatic clean is off by default.'
+Assert-That (@($cats | Where-Object { @($_.Roots) -match '(?i)spotify' }).Count -eq 0) 'Spotify is left out: its folder can hold downloaded songs.'
+Assert-That ((@($cats | Where-Object Key -eq 'DriverSetup')[0]).Advice -eq 'YourCall') 'Driver installer folders are your call, not ticked by default.'
+Assert-That ((@($cats | Where-Object Key -eq 'UserTemp')[0]).SkipExt -contains '.docx') 'Temp cleaning skips documents.'
+$logTmp=Join-Path $env:TEMP ('yum-dlog-'+[guid]::NewGuid().ToString('N')); New-Item -ItemType Directory $logTmp | Out-Null
+$oldDir=$script:Yum.ConfigDirectory; $script:Yum.ConfigDirectory=$logTmp
+try{ [void](Invoke-YumDiskCleanup -Keys @()); Assert-That (Test-Path -LiteralPath (Get-YumDiskCleanupLogPath)) 'Each clean writes the "what was deleted" list.' }finally{ $script:Yum.ConfigDirectory=$oldDir; Remove-Item -LiteralPath $logTmp -Recurse -Force -ErrorAction SilentlyContinue }
+$dx=[IO.File]::ReadAllText((Join-Path $root 'UI\Xaml\DiskCleanup.xaml')); Assert-That ($dx -match 'x:Name="OpenFolder"' -and $dx -match 'x:Name="SeeDeleted"') 'Disk cleanup lets you look first and see what was deleted.'
 $sw=[Diagnostics.Stopwatch]::StartNew(); $rows=@(Measure-YumDiskJunk); $ms=$sw.ElapsedMilliseconds
 Assert-That ($rows.Count -eq $cats.Count) 'Every category is measured.'
 $x=[IO.File]::ReadAllText((Join-Path $root 'UI\Xaml\MainWindow.xaml')); Assert-That ($x -match 'x:Name="DiskCleanup"') 'Sidebar has Disk cleanup.'

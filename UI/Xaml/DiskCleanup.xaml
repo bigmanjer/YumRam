@@ -141,9 +141,11 @@
               <TextBlock x:Name="ExplainEffect" Style="{StaticResource Answer}"/>
               <TextBlock Text="CAN I UNDO IT?" Style="{StaticResource Question}"/>
               <TextBlock x:Name="ExplainUndo" Style="{StaticResource Answer}"/>
+              <Button x:Name="OpenFolder" Content="Open folder - look before cleaning" Style="{StaticResource GhostButton}" Padding="10,3" Margin="0,12,0,0" HorizontalAlignment="Left" ToolTip="Opens this category's folder in File Explorer so you can see exactly what is there. Nothing is deleted until you press Clean selected."/>
             </StackPanel>
             <TextBlock Text="LAST CLEAN" Style="{StaticResource Question}" Margin="0,22,0,2"/>
             <TextBlock x:Name="LastResult" Text="Nothing cleaned yet." Style="{StaticResource Answer}"/>
+            <Button x:Name="SeeDeleted" Content="See what was deleted" Style="{StaticResource GhostButton}" Padding="10,3" Margin="0,8,0,0" HorizontalAlignment="Left" ToolTip="Opens the exact list of files the last clean removed (category, file, size)."/>
           </StackPanel>
         </ScrollViewer>
       </Border>
