@@ -334,10 +334,12 @@ function Get-YumCpuKnowledgeSummary {
     $k=Get-YumCpuKnowledge
     if($null -eq $k -or @($k.Knowledge).Count -eq 0){ return 'Not measured on this PC yet. "Measure games" runs YUMRAM''s own test game next to test background loads with each CPU care level and remembers which works best here. Until then, your chosen level is always used.' }
     $learned=@($k.Knowledge | Where-Object { $null -ne $_ -and $null -ne $_.PSObject.Properties['Low1ByLevel'] } | ForEach-Object {
-        $e=$_;$best='';$bv=0.0;foreach($lv in 'Gentle','Balanced','Strong'){ $v=[double]$e.Low1ByLevel.$lv; if($v -gt $bv){$bv=$v;$best=$lv} }
-        '{0} game + {1} load: {2}' -f ([string]$e.GameKey).ToLower(),([string]$e.Hog).ToLower(),$best })
+        # Review fix: say what CPU care will really do (same rule as Get-YumGamingAdvice), not just the top number.
+        $e=$_;$cur='Balanced';try{$cur=Get-YumCpuCareLevel}catch{}
+        $a=Get-YumGamingAdvice -Knowledge ([pscustomobject]@{Knowledge=@($e)}) -CurrentLevel $cur -GameAloneShare 0 -OtherShare $(if([string]$e.Hog -eq 'Saturating'){70}else{30})
+        '{0} game + {1} load: {2}' -f ([string]$e.GameKey).ToLower(),([string]$e.Hog).ToLower(),$(if($null -ne $a){'uses '+$a.Level}else{'keeps '+$cur+' (no clear winner)'}) })
     $when='';try{$when=([datetime]$k.Created).ToString('d MMM yyyy')}catch{}
-    return ('Measured {0} ({1} situations). Best 1 % lows here - {2}.' -f $when,$learned.Count,($learned -join '; '))
+    return ('Measured {0} ({1} situations). While you play - {2}.' -f $when,$learned.Count,($learned -join '; '))
 }
 
 function Start-YumCpuBenchmark {
@@ -345,7 +347,7 @@ function Start-YumCpuBenchmark {
     # (it would otherwise hold back the benchmark's own test load and spoil the measurement).
     $bench=Join-Path ([string]$script:Yum.Root) 'Tools\Bench-CpuCare.ps1'
     if(-not (Test-Path -LiteralPath $bench)){ return [pscustomobject]@{Success=$false;Reason='The game benchmark is not part of this copy of YUMRAM.'} }
-    try{ $old=[int]$script:Yum['CpuBenchPid']; if($old -gt 0 -and $null -ne (Get-Process -Id $old -ErrorAction SilentlyContinue)){ return [pscustomobject]@{Success=$false;Reason='The game benchmark is already running in its own window.'} } }catch{}
+    try{ $old=[int]$script:Yum['CpuBenchPid']; $oldOk=$false; if($old -gt 0){ try{ $oldOk=([int64](Get-Process -Id $old -ErrorAction Stop).StartTime.ToUniversalTime().Ticks -eq [int64]$script:Yum['CpuBenchStart']) }catch{} }; if($oldOk){ return [pscustomobject]@{Success=$false;Reason='The game benchmark is already running in its own window.'} } }catch{}
     $msg=('Measure games on this PC?{0}{0}For about 15 minutes YUMRAM runs its own test game next to test background loads, with CPU care off, Gentle, Balanced and Strong, and records frame rates. Your programs are not touched, but the PC will be fully busy: close games and heavy apps, and keep a laptop plugged in.{0}{0}CPU care pauses until it is done. The result is used only while you play, and only when one level was clearly better.' -f [Environment]::NewLine)
     $r=[System.Windows.MessageBox]::Show($script:Yum.Window,$msg,'YUMRAM - Measure games',[System.Windows.MessageBoxButton]::YesNo,[System.Windows.MessageBoxImage]::Question)
     if($r -ne [System.Windows.MessageBoxResult]::Yes){ return $null }
@@ -353,7 +355,7 @@ function Start-YumCpuBenchmark {
     $ps=Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
     $args2=@('-NoProfile','-ExecutionPolicy','Bypass','-STA','-File',('"{0}"' -f $bench),'-OutDir',('"{0}"' -f (Join-Path $dir 'cpu-bench')),'-KnowledgeDir',('"{0}"' -f $dir),'-Profile','User','-Repeat','2')
     $p=Start-Process -FilePath $ps -ArgumentList $args2 -PassThru
-    $script:Yum['CpuBenchPid']=$p.Id
+    $script:Yum['CpuBenchPid']=$p.Id; try{ $script:Yum['CpuBenchStart']=[int64]$p.StartTime.ToUniversalTime().Ticks }catch{ $script:Yum['CpuBenchStart']=[int64]0 }
     try{ Restore-YumCpuBalanceAll -Why 'game benchmark started' }catch{}
     try{Write-YumLog ('CPU care: game benchmark started (PID {0}); CPU care paused until it finishes.' -f $p.Id)}catch{}
     return [pscustomobject]@{Success=$true;Reason='Measuring games in its own window (about 15 minutes). CPU care is paused until it finishes.'}
@@ -391,9 +393,18 @@ function Get-YumGamingAdvice {
 function Invoke-YumCpuBalanceTick {
     $st=Get-YumCpuBalanceState
     $cfg=Get-YumCpuBalanceSettings
-    if(-not $cfg.Enabled){ if($st.Restrained.Count -gt 0){Restore-YumCpuBalanceAll -Why 'CPU balance turned off'}; $st.Active=$false; return }
     # 5.15: paused while the game benchmark (Settings > CPU) runs, so it can measure every level cleanly.
-    try{ $bp=[int]$script:Yum['CpuBenchPid']; if($bp -gt 0){ if($null -ne (Get-Process -Id $bp -ErrorAction SilentlyContinue)){ if($st.Restrained.Count -gt 0){Restore-YumCpuBalanceAll -Why 'game benchmark running'}; $st.Active=$false; $st.LastAction='paused while the game benchmark runs'; return } else { $script:Yum['CpuBenchPid']=0; $script:Yum['CpuKnowledge']=$null; try{Write-YumLog 'CPU care: game benchmark finished; CPU care resumed with what it learned.'}catch{}; $script:Yum['CommunityPromptPending']=$true } } }catch{}
+    # Checked before the "CPU care off" return so the end is always noticed; the start time guards against
+    # Windows reusing the benchmark's PID for another program afterwards (review finding).
+    try{
+        $bp=[int]$script:Yum['CpuBenchPid']
+        if($bp -gt 0){
+            $alive=$false; try{ $bpr=Get-Process -Id $bp -ErrorAction Stop; $alive=([int64]$bpr.StartTime.ToUniversalTime().Ticks -eq [int64]$script:Yum['CpuBenchStart']) }catch{}
+            if($alive){ if($st.Restrained.Count -gt 0){Restore-YumCpuBalanceAll -Why 'game benchmark running'}; $st.Active=$false; $st.LastAction='paused while the game benchmark runs'; return }
+            $script:Yum['CpuBenchPid']=0; $script:Yum['CpuKnowledge']=$null; try{Write-YumLog 'CPU care: game benchmark finished; CPU care resumed with what it learned.'}catch{}; $script:Yum['CommunityPromptPending']=$true
+        }
+    }catch{}
+    if(-not $cfg.Enabled){ if($st.Restrained.Count -gt 0){Restore-YumCpuBalanceAll -Why 'CPU balance turned off'}; $st.Active=$false; return }
     $sw=[Diagnostics.Stopwatch]::StartNew()
     # Level is re-read every few seconds (power source can change: laptop unplugged = Strong).
     if($null -eq $st['LevelAt'] -or ([datetime]::UtcNow-[datetime]$st['LevelAt']).TotalSeconds -ge 5){$st['Level']=Get-YumCpuCareLevel;$st['LevelAt']=[datetime]::UtcNow}
@@ -432,6 +443,7 @@ function Invoke-YumCpuBalanceTick {
     $st.Last=$newLast
     if($elapsedMs -le 0){ try{ Update-YumLeakWatch -ById $byId -State $st }catch{}; return }
     $total=[math]::Min(100.0,$total);$st.SystemPercent=$total
+    $st['Usage']=$usage;$st['UsageAt']=[datetime]::UtcNow   # shared with RAM care's candidate scoring (Get-YumProcessCpuMap)
     $fgName='';if($fgPid -gt 0 -and $byId.ContainsKey($fgPid)){$fgName=[string]$byId[$fgPid].ProcessName}
 
     # 5.15: adaptive level while gaming, from this PC's own game benchmark (Tools\Bench-CpuCare.ps1 ->

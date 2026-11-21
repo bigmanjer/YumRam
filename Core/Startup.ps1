@@ -65,7 +65,9 @@ function Get-YumStartupSuggestion {
 
 function Get-YumStartupApps {
     # Same places Task Manager lists (Run keys incl. 32-bit, Startup folders). RunOnce entries are one-shot
-    # installers and are not shown by Windows either.
+    # installers and are not shown by Windows either. -SkipExtras: leave out Store apps and sign-in tasks (the
+    # Startup page loads those in the background - reading Task Scheduler and the Store can take seconds).
+    param([switch]$SkipExtras)
     $hkcu=[Microsoft.Win32.Registry]::CurrentUser;$hklm=[Microsoft.Win32.Registry]::LocalMachine
     $sources=@(
         @{Hive=$hkcu;HiveName='HKCU';Key='Software\Microsoft\Windows\CurrentVersion\Run';Approved='Run';Scope='You'},
@@ -125,14 +127,115 @@ function Get-YumStartupApps {
             }
         }catch{}
     }
+    # 5.15 review: Store apps that start with Windows (Task Manager lists them too) and third-party scheduled
+    # tasks that run when you sign in (measured on the test PC: 7 Store entries and 13 tasks the page missed,
+    # including vendor "sale" pop-up tasks).
+    if(-not $SkipExtras){
+        try{ foreach($r in @(Get-YumStoreStartupTasks -ByPath $byPath)){ [void]$rows.Add($r) } }catch{}
+        try{ foreach($r in @(Get-YumSignInTasks -ByPath $byPath)){ [void]$rows.Add($r) } }catch{}
+    }
     return @($rows.ToArray() | Sort-Object @{Expression={[int](-not $_.Enabled)}},@{Expression={-[double]$_.MemoryMB}},Friendly)
+}
+
+function New-YumStartupRow {
+    param([string]$Name,[string]$Friendly,[string]$Publisher,[string]$Command,[string]$ExePath,[string]$HiveName,[string]$ApprovedKey,[string]$Scope,[string]$Location,[bool]$Enabled,[bool]$NeedsAdmin,$ByPath,[string]$MemoryPrefix='',[bool]$Locked=$false,[string]$LockedWhy='')
+    $exists=$false;try{ $exists=($ExePath -and (Test-Path -LiteralPath $ExePath -PathType Leaf)) }catch{}
+    if(-not $Publisher -and $exists){ try{ $Publisher=[string]([Diagnostics.FileVersionInfo]::GetVersionInfo($ExePath)).CompanyName }catch{} }
+    $bytes=[int64]0;$count=0
+    if($MemoryPrefix){ $pre=$MemoryPrefix.TrimEnd('\').ToLowerInvariant()+'\'; foreach($k in @($ByPath.Keys)){ if(([string]$k).StartsWith($pre)){ $bytes+=[int64]$ByPath[$k].Bytes;$count+=[int]$ByPath[$k].Count } } }
+    elseif($ExePath){ $m=$ByPath[$ExePath.ToLowerInvariant()]; if($null -ne $m){$bytes=[int64]$m.Bytes;$count=[int]$m.Count} }
+    $sugg=Get-YumStartupSuggestion -Name $Name -ExePath $ExePath -Publisher $Publisher -Kind 'App'
+    if($Locked){ $sugg=[pscustomobject]@{Level='Keep';Text=$LockedWhy;Locked=$true} }
+    return [pscustomobject]@{
+        Name=$Name;Friendly=$(if($Friendly){$Friendly}else{$Name});Publisher=$(if($Publisher){$Publisher}else{'Unknown publisher'});Command=$Command;ExePath=$ExePath;FileExists=$exists
+        HiveName=$HiveName;ApprovedKey=$ApprovedKey;Scope=$Scope;Location=$Location;Enabled=$Enabled;DisabledAt=$null
+        Running=($count -gt 0);MemoryMB=[math]::Round($bytes/1MB,0);ProcessCount=$count
+        Kind='App';Suggestion=$sugg.Level;Advice=$sugg.Text;Locked=[bool]$sugg.Locked;NeedsAdmin=$NeedsAdmin}
+}
+
+$script:YumStoreStartupRoot='Software\Classes\Local Settings\Software\Microsoft\Windows\CurrentVersion\AppModel\SystemAppData'
+
+function Get-YumStoreStartupTasks {
+    # Store/MSIX apps declare a "startup task"; its per-user state is the value Task Manager flips:
+    # 0 off (default), 1 off by you, 2 on, 3 off by policy, 4 on by policy.
+    param($ByPath=@{})
+    $rows=New-Object System.Collections.Generic.List[object]
+    $root=[Microsoft.Win32.Registry]::CurrentUser.OpenSubKey($script:YumStoreStartupRoot,$false)
+    if($null -eq $root){return @()}
+    try{
+        $pk=@{};try{ foreach($p in @(Get-AppxPackage -ErrorAction Stop)){ $pk[[string]$p.PackageFamilyName]=$p } }catch{}
+        foreach($pfn in $root.GetSubKeyNames()){
+            $pkey=$root.OpenSubKey($pfn,$false); if($null -eq $pkey){continue}
+            try{
+                foreach($task in $pkey.GetSubKeyNames()){
+                    $tk=$pkey.OpenSubKey($task,$false); if($null -eq $tk){continue}
+                    try{
+                        $state=$tk.GetValue('State',$null); if($null -eq $state){continue}
+                        $state=[int]$state; if($state -eq 0){continue}   # never set to start: Task Manager does not list it either
+                        $pkg=$pk[$pfn];$loc='';$friendly='';$pub=''
+                        if($null -ne $pkg){ $loc=[string]$pkg.InstallLocation; $pub=$(if([string]$pkg.Publisher -match 'CN=([^,]+)'){$Matches[1]}else{''}); try{ $dn=[string](Get-AppxPackageManifest -Package $pkg.PackageFullName).Package.Properties.DisplayName; if($dn -and $dn -notmatch '^ms-resource:'){$friendly=$dn} }catch{} }
+                        if(-not $friendly){ $friendly=(($pfn -split '_')[0] -split '\.')[-1] }
+                        $policy=($state -in 3,4)
+                        [void]$rows.Add((New-YumStartupRow -Name ('{0}|{1}' -f $pfn,$task) -Friendly $friendly -Publisher $pub -Command ('Store app startup task "{0}"' -f $task) -ExePath '' -HiveName 'HKCU' -ApprovedKey 'StoreTask' -Scope 'You' -Location 'Store app' -Enabled ($state -in 2,4) -NeedsAdmin $false -ByPath $ByPath -MemoryPrefix $loc -Locked $policy -LockedWhy 'Your organisation (a Windows policy) decides whether this starts.'))
+                    }finally{$tk.Close()}
+                }
+            }finally{$pkey.Close()}
+        }
+    }finally{$root.Close()}
+    return @($rows.ToArray())
+}
+
+function Get-YumSignInTasks {
+    # Third-party scheduled tasks that run when you sign in (not under \Microsoft\). Disabled, never deleted.
+    param($ByPath=@{})
+    $rows=New-Object System.Collections.Generic.List[object]
+    $me=[Security.Principal.WindowsIdentity]::GetCurrent().Name
+    foreach($t in @(Get-ScheduledTask -ErrorAction SilentlyContinue)){
+        try{
+            if([string]$t.TaskPath -like '\Microsoft\*'){continue}
+            if([string]$t.TaskName -eq 'YUMRAM' -and [string]$t.TaskPath -eq '\'){continue}   # YUMRAM's own no-prompt task: Settings > General
+            $logon=@($t.Triggers | Where-Object { $null -ne $_ -and [string]$_.CimClass.CimClassName -eq 'MSFT_TaskLogonTrigger' })
+            if($logon.Count -eq 0){continue}
+            $act=@($t.Actions | Where-Object { $null -ne $_ -and $_.PSObject.Properties['Execute'] })[0]
+            $exe='';$cmd=''
+            if($null -ne $act){ $exe=[Environment]::ExpandEnvironmentVariables(([string]$act.Execute).Trim('"')); $cmd=('{0} {1}' -f $act.Execute,$act.Arguments).Trim() }
+            $uid=[string]$t.Principal.UserId
+            $mine=($uid -and ($uid -ieq $me -or $uid -ieq ($me -split '\\')[-1]))
+            $needsAdmin=(-not $mine) -or ([string]$t.Principal.RunLevel -eq 'Highest')
+            $friendly=[string]$t.TaskName; try{ if($exe -and (Test-Path -LiteralPath $exe -PathType Leaf)){ $d=[string]([Diagnostics.FileVersionInfo]::GetVersionInfo($exe)).FileDescription; if($d){ $friendly=('{0} ({1})' -f $d,$t.TaskName) } } }catch{}
+            [void]$rows.Add((New-YumStartupRow -Name ('{0}{1}' -f $t.TaskPath,$t.TaskName) -Friendly $friendly -Publisher '' -Command $cmd -ExePath $exe -HiveName 'Task' -ApprovedKey 'ScheduledTask' -Scope $(if($mine){'You'}else{'All users'}) -Location ('Task Scheduler {0}' -f $t.TaskPath) -Enabled ([string]$t.State -ne 'Disabled') -NeedsAdmin $needsAdmin -ByPath $ByPath))
+        }catch{}
+    }
+    return @($rows.ToArray())
 }
 
 function Set-YumStartupAppEnabled {
     # Writes the same StartupApproved flag as Task Manager. Never deletes the Run entry or shortcut.
     param([Parameter(Mandatory=$true)]$App,[Parameter(Mandatory=$true)][bool]$Enabled)
     if([bool]$App.Locked -and -not $Enabled){return [pscustomobject]@{Success=$false;Reason=('{0} is security or anti-cheat software; YUMRAM will not stop it from starting.' -f $App.Friendly)}}
-    if([bool]$App.NeedsAdmin -and -not (Test-YumIsElevated)){return [pscustomobject]@{Success=$false;Reason=('{0} starts for all users, so changing it needs YUMRAM to run as administrator.' -f $App.Friendly)}}
+    if([bool]$App.NeedsAdmin -and -not (Test-YumIsElevated)){return [pscustomobject]@{Success=$false;Reason=$(if([string]$App.ApprovedKey -eq 'ScheduledTask'){'{0} is a task for all users or one that runs with administrator rights, so changing it needs YUMRAM to run as administrator.' -f $App.Friendly}else{'{0} starts for all users, so changing it needs YUMRAM to run as administrator.' -f $App.Friendly})}}
+    if([string]$App.ApprovedKey -eq 'StoreTask'){
+        # Same per-user value Task Manager writes: 2 = on, 1 = off by you.
+        $parts=([string]$App.Name) -split '\|',2
+        $k=$null
+        try{
+            $k=[Microsoft.Win32.Registry]::CurrentUser.OpenSubKey(('{0}\{1}\{2}' -f $script:YumStoreStartupRoot,$parts[0],$parts[1]),$true)
+            if($null -eq $k){ return [pscustomobject]@{Success=$false;Reason='This Store app no longer has a startup entry.'} }
+            $k.SetValue('State',$(if($Enabled){2}else{1}),[Microsoft.Win32.RegistryValueKind]::DWord)
+            try{ Write-YumLog ('Startup app {0}: Store app {1} (same switch as Task Manager).' -f $(if($Enabled){'turned ON'}else{'turned OFF'}),$App.Name) }catch{}
+            return [pscustomobject]@{Success=$true;Reason=$(if($Enabled){'{0} will start with Windows again.' -f $App.Friendly}else{'{0} will no longer start with Windows. It is still installed.' -f $App.Friendly})}
+        }catch{ return [pscustomobject]@{Success=$false;Reason=('Windows refused the change: {0}' -f $_.Exception.Message)} }
+        finally{ if($null -ne $k){$k.Close()} }
+    }
+    if([string]$App.ApprovedKey -eq 'ScheduledTask'){
+        # Disable / enable only - the task is never deleted, so its program can still run it on demand later.
+        try{
+            $full=[string]$App.Name; $i=$full.LastIndexOf('\'); $tp=$full.Substring(0,$i+1); $tn=$full.Substring($i+1)
+            if($Enabled){ Enable-ScheduledTask -TaskPath $tp -TaskName $tn -ErrorAction Stop | Out-Null } else { Disable-ScheduledTask -TaskPath $tp -TaskName $tn -ErrorAction Stop | Out-Null }
+            try{ Write-YumLog ('Startup app {0}: scheduled task {1} (disabled/enabled, never deleted).' -f $(if($Enabled){'turned ON'}else{'turned OFF'}),$full) }catch{}
+            return [pscustomobject]@{Success=$true;Reason=$(if($Enabled){'{0} runs at sign-in again.' -f $App.Friendly}else{'{0} will no longer run when you sign in. The task is kept (turned off), so you can turn it back on here.' -f $App.Friendly})}
+        }catch{ return [pscustomobject]@{Success=$false;Reason=$(if($_.Exception.Message -match 'denied'){'This task belongs to all users or runs with administrator rights; run YUMRAM as administrator to change it.'}else{('Windows refused the change: {0}' -f $_.Exception.Message)})} }
+    }
     $hive=if($App.HiveName -eq 'HKLM'){[Microsoft.Win32.Registry]::LocalMachine}else{[Microsoft.Win32.Registry]::CurrentUser}
     $k=$null
     try{

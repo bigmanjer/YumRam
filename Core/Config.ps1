@@ -136,6 +136,25 @@
         TelemetryAuxPowerShell = $null
         TelemetryAuxAsync = $null
         TelemetryStopEvent = $null
+        # 5.15 review: every key a background thread writes exists from the start. $script:Yum is an ordered
+        # dictionary shared by the UI thread and 4 runspaces; adding a NEW key changes its internal structure,
+        # which is not safe while another thread reads it. Updating an existing key's value is a simple swap.
+        CpuBalance = $null
+        CpuBalanceAsync = $null
+        CpuBalancePowerShell = $null
+        CpuBalanceRunspace = $null
+        CpuBalanceStop = $null
+        CpuProfile = $null
+        CpuKnowledge = $null
+        CpuBenchPid = 0
+        CpuBenchStart = [int64]0
+        CpuCareForegroundOverride = 0
+        CpuCareGameOverride = 0
+        CommunityKnowledge = $null
+        CommunityPromptPending = $false
+        CommunityFetchPs = $null
+        CommunityFetchAsync = $null
+        LastMemoryCombine = $null
     }
 }
 

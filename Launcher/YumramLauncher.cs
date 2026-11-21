@@ -176,7 +176,11 @@ static class YumramLauncher
             if (!silent) MessageBox.Show(Directory.Exists(Path.Combine(root, ".git")) ? "This is a development copy of YUMRAM (a git folder). Nothing was removed." : "This folder does not look like a YUMRAM install. Nothing was removed.", "Uninstall YUMRAM", MessageBoxButtons.OK, MessageBoxIcon.Information);
             return 3;
         }
-        if (!silent && MessageBox.Show("Remove YUMRAM and its settings from this PC?", "Uninstall YUMRAM", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return 2;
+        // 5.15: Windows settings turned off on the Windows bloat page stay off after uninstalling (that is usually
+        // wanted), but their undo record goes with YUMRAM - so say so while the user can still undo them.
+        string bloatNote = "";
+        try { string u = Path.Combine(root, "windows-bloat-undo.json"); if (File.Exists(u) && new FileInfo(u).Length > 10) bloatNote = "\n\nWindows settings you turned off on the Windows bloat page stay off. To turn them back on, choose No, open YUMRAM > Windows bloat and press Undo first."; } catch { }
+        if (!silent && MessageBox.Show("Remove YUMRAM and its settings from this PC?" + bloatNote, "Uninstall YUMRAM", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return 2;
         try
         {
             using (var s = new System.Management.ManagementObjectSearcher("SELECT ProcessId, CommandLine FROM Win32_Process WHERE Name='powershell.exe'"))
@@ -224,7 +228,7 @@ static class YumramLauncher
     static readonly string[] OwnFiles = { "VERSION", "README.md", "CHANGELOG.md", "YUMRAM.exe.old",
         "config.json", "state.json", "stats.json", "history.json", "cpu-balance.json", "reclaim-learning.json", "intelligence-db.json",
         "manual-organizations.json", "research-cache.json", "research-history.json", "research-status.json",
-        "research-live-results.json", "research-live-results.tmp", "YUMRAM.log", "Research-Diagnostics.log",
+        "research-live-results.json", "research-live-results.tmp", "YUMRAM.log", "YUMRAM.old.log", "Research-Diagnostics.log",
         "YUMRAM-app-startup.log", "YUMRAM-app-startup-error.log", "YUMRAM-startup.log", "YUMRAM-launcher.log",
         "cpu-knowledge.json", "cpu-community.json", "windows-bloat-undo.json", "windows-bloat-history.json" };
 

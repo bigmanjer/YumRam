@@ -1,6 +1,6 @@
 # Changelog
 
-# YUMRAM 5.15.0 (in progress, branch `audit-5.15`) — Windows bloat, audit fixes
+# YUMRAM 5.15.0 — Windows bloat, audit fixes
 
 - **Windows bloat page** (sidebar, Ctrl+8). *Preinstalled apps*: only apps on a curated list are ever offered
   (Microsoft News, Clipchamp, Solitaire, Office hub, Tips, Feedback Hub, retired apps like Cortana and Skype,
@@ -27,6 +27,15 @@
 - **Make room could fail with an error** in strict mode: records lacked `RoomFailed`/`RoomChecked`/`RoomTicks`/
   `FgBefore`, so the benchmark recorded zero make-room actions. Records are complete now; measured: medium
   test game vs a saturating hog, Off 3.9 FPS → Balanced 150 FPS → Strong 176 FPS (1 % low 102, as with no hog).
+- **Startup apps: Store apps and sign-in tasks.** The page listed only Run keys and Startup folders. It now also
+  lists Store/MSIX app startup tasks (same per-user switch as Task Manager) and third-party scheduled tasks
+  that run when you sign in (turned off, never deleted). Test PC: 16 entries the page had missed, including
+  vendor "sale" pop-up tasks. They load in the background so the page opens at once.
+- **Review fixes:** every shared-state key a background thread writes now exists from the start (the shared
+  dictionary was changing shape while other threads read it); the log rotates at 5 MB; RAM care's candidate
+  scoring reuses CPU care's per-second CPU figures instead of a WMI query that took 0.46–0.78 s per call; the
+  online-research privacy text now says that up to 4 trustworthy result pages are opened to check an answer
+  (it said "nothing else"); uninstall says Windows-bloat settings stay off and how to undo them first.
 - **Audit fixes** (see `Docs/AUDIT-AND-RESEARCH-2026-11.md`): automatic care no longer flushes the modified
   page list (file-cache assist at most every 10 min); automatic care closes listed apps only if you opt in;
   stale-PID guard before trimming; Free RAM busy-state race fixed.

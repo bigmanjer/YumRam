@@ -188,7 +188,7 @@ function Show-YumWindowsBloat {
             if($sel.Count -eq 0){ $st.Ui.Details.Text='Nothing marked Remove is installed - this PC is already clean of those.'; try{Show-YumToast -Text 'No apps marked Remove are installed.'}catch{}; return }
             $names=($sel | ForEach-Object { '  •  '+$_.Name }) -join [Environment]::NewLine
             if(-not (Confirm-YumBloat -Message ('Remove these {0} apps?{1}{1}{2}{1}{1}They are uninstalled for your account and can be installed again from the Microsoft Store. Apps marked "Your call" are not included.' -f $sel.Count,[Environment]::NewLine,$names))){return}
-            Invoke-YumBloatRemoveApps -State $st -Apps $sel -ForNewUsers ([bool](Test-YumIsElevated))
+            Invoke-YumBloatRemoveApps -State $st -Apps $sel -ForNewUsers $false   # review fix: bulk removal is for your account only (new-user removal is per app, by checkbox)
         })
         $ui.ApplyRecommended.Add_Click({param($s,$e)
             $st=$s.Tag

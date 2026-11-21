@@ -1,5 +1,13 @@
 ﻿
 function Get-YumProcessCpuMap {
+    # 5.15 review: CPU care already measures every program's CPU share once a second (one snapshot call).
+    # Use that when it is fresh; the WMI performance class below took 0.46-0.78 s per call even when idle.
+    try{
+        $cb=$script:Yum['CpuBalance']
+        if($null -ne $cb -and $null -ne $cb['Usage'] -and $null -ne $cb['UsageAt'] -and ([datetime]::UtcNow-[datetime]$cb['UsageAt']).TotalSeconds -le 3){
+            $out=@{}; foreach($k in @($cb['Usage'].Keys)){ $out[[int]$k]=[math]::Min(100.0,[double]$cb['Usage'][$k]) }; return $out
+        }
+    }catch{}
     $map=@()
     try{
         $out=@{}

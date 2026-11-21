@@ -49,9 +49,10 @@ try{
     $k=[Microsoft.Win32.Registry]::CurrentUser.CreateSubKey($testKey)
     $k.SetValue('ExistingDword',7,[Microsoft.Win32.RegistryValueKind]::DWord)
     $k.SetValue('ExistingString','abc',[Microsoft.Win32.RegistryValueKind]::String)
+    $k.SetValue('ExistingBinary',[byte[]](1,2,3),[Microsoft.Win32.RegistryValueKind]::Binary)
     $k.Close()
     $tw=@{Id='TestTweak';Name='Test tweak';Scope='User';Suggest='Recommended';When='now';Why='test';Values=@(
-        @{Path=$testKey;Name='ExistingDword';Value=0},@{Path=$testKey;Name='ExistingString';Value=0},@{Path=$testKey;Name='Missing';Value=1})}
+        @{Path=$testKey;Name='ExistingDword';Value=0},@{Path=$testKey;Name='ExistingString';Value=0},@{Path=$testKey;Name='ExistingBinary';Value=0},@{Path=$testKey;Name='Missing';Value=1})}
     Assert-That ((Get-YumBloatTweakState -Tweak $tw) -eq 'Windows default') 'Starts at Windows default.'
     $a=Set-YumBloatTweak -Tweak $tw
     Assert-That $a.Success ('Apply failed: {0}' -f $a.Reason)
@@ -66,6 +67,7 @@ try{
         Assert-That ([int]$k.GetValue('ExistingDword') -eq 7 -and $k.GetValueKind('ExistingDword') -eq 'DWord') 'Existing DWORD restored exactly (value and type).'
         Assert-That ([string]$k.GetValue('ExistingString') -eq 'abc' -and $k.GetValueKind('ExistingString') -eq 'String') 'Existing string restored exactly (value and type).'
         Assert-That ($null -eq $k.GetValue('Missing',$null)) 'A value that did not exist before is deleted again.'
+        Assert-That ($k.GetValueKind('ExistingBinary') -eq 'Binary' -and (($k.GetValue('ExistingBinary')) -join ',') -eq '1,2,3') 'A binary original is restored exactly (review fix).'
     }finally{$k.Close()}
     Assert-That (-not (Test-YumBloatTweakUndoable -Tweak $tw)) 'Undo record cleared after undo.'
     Assert-That (-not (Set-YumBloatTweak -Tweak $tw -Undo).Success) 'Undo with nothing saved is refused.'

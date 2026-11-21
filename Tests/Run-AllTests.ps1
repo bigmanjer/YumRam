@@ -24,11 +24,11 @@ try {
         $null=$p.Handle  # cache the handle now, or ExitCode is null after a timed WaitForExit
         if(-not $p.WaitForExit($TimeoutSeconds*1000)){try{$p.Kill()}catch{};$code='TIMEOUT'}else{$code=$p.ExitCode}
         # Windows PowerShell writes progress records to stderr as CLIXML even on success; keep only real error text.
-        $stderr=[IO.File]::ReadAllText($err).Trim()
+        $stderr=''; for($try=0;$try -lt 10;$try++){ try{ $fs=New-Object IO.FileStream($err,[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::ReadWrite); try{ $stderr=(New-Object IO.StreamReader($fs)).ReadToEnd().Trim() }finally{$fs.Dispose()}; break }catch{ Start-Sleep -Milliseconds 300 } }
         if($stderr.StartsWith('#< CLIXML')){
             $stderr=(([regex]::Matches($stderr,'<S S="Error">(.*?)</S>') | ForEach-Object { $_.Groups[1].Value -replace '_x000D__x000A_',' ' }) -join ' ').Trim()
         }
-        $stdout=[IO.File]::ReadAllText($out).Trim()
+        $stdout=''; for($try=0;$try -lt 10;$try++){ try{ $fs=New-Object IO.FileStream($out,[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::ReadWrite); try{ $stdout=(New-Object IO.StreamReader($fs)).ReadToEnd().Trim() }finally{$fs.Dispose()}; break }catch{ Start-Sleep -Milliseconds 300 } }
         Remove-Item -LiteralPath $out,$err -Force -ErrorAction SilentlyContinue
         $passed=($code -eq 0 -and [string]::IsNullOrWhiteSpace($stderr))
         $detail=if($passed){($stdout -split "`r?`n")[-1]}else{(($stderr,$stdout) -join ' ') -replace '\s+',' '}

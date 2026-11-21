@@ -169,7 +169,7 @@
             <GroupBox Header="Privacy">
               <StackPanel>
                 <CheckBox x:Name="EnableOnlineResearch" Content="Online research for unidentified programs"/>
-                <TextBlock Text="Sends the program, publisher and product name to Bing search. Nothing else leaves your PC. When off, Intelligence still identifies programs locally (signatures, installed-software records, services, Store packages)." Style="{StaticResource Caption}" Margin="27,2,0,0"/>
+                <TextBlock Text="Sends the program, publisher and product name to Bing search, then opens up to 4 of the most trustworthy result pages (for example the publisher's own site) to check the answer - those sites see an ordinary page visit. Nothing else leaves your PC. When off, Intelligence still identifies programs locally (signatures, installed-software records, services, Store packages)." Style="{StaticResource Caption}" Margin="27,2,0,0"/>
                 <CheckBox x:Name="CommunityShareEnabled" Content="Help everyone: share my game benchmark results (opt-in)" Margin="0,14,0,0"/>
                 <TextBlock Text="Off unless you turn it on. After &quot;Measure games&quot; YUMRAM shares your CPU model and layout, laptop or desktop, Windows build, YUMRAM version and the frame rates its own test game reached - nothing else (no program names, files, user or PC names, no ID). You can see the exact text first." Style="{StaticResource Caption}" Margin="27,2,0,0" TextWrapping="Wrap"/>
                 <Button x:Name="CommunityShareNow" Content="See and share my results now…" Style="{StaticResource GhostButton}" HorizontalAlignment="Left" Margin="27,6,0,0"/>

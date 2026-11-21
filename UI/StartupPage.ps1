@@ -5,6 +5,7 @@ function ConvertTo-YumStartupRow {
     param($App)
     $sub=@($App.Publisher)
     if($App.Scope -eq 'All users'){$sub+='all users'}
+    if($App.ApprovedKey -eq 'StoreTask'){$sub+='Store app'}elseif($App.ApprovedKey -eq 'ScheduledTask'){$sub+='runs when you sign in (task)'}
     if(-not $App.Enabled -and $null -ne $App.DisabledAt){$sub+=('off since {0:d MMM yyyy}' -f $App.DisabledAt)}
     $mem=if($App.Running){if([double]$App.MemoryMB -ge 1024){'{0:N1} GB' -f ([double]$App.MemoryMB/1024)}else{'{0:N0} MB' -f [double]$App.MemoryMB}}else{'—'}
     $App | Add-Member -NotePropertyName StateText -NotePropertyValue $(if($App.Enabled){'On'}else{'Off'}) -Force
@@ -16,7 +17,9 @@ function ConvertTo-YumStartupRow {
 function Update-YumStartupList {
     param([hashtable]$State,[string]$KeepName='')
     $ui=$State.Ui
-    $apps=@(Get-YumStartupApps | ForEach-Object { ConvertTo-YumStartupRow -App $_ })
+    # 5.15: Run keys + Startup folders at once; Store apps and sign-in tasks come from a background read.
+    $all=@(Get-YumStartupApps -SkipExtras)+@($State['Extras'] | Where-Object { $null -ne $_ })
+    $apps=@($all | Sort-Object @{Expression={[int](-not $_.Enabled)}},@{Expression={-[double]$_.MemoryMB}},Friendly | ForEach-Object { ConvertTo-YumStartupRow -App $_ })
     $State.Apps=$apps
     $ui.Items.ItemsSource=$null
     $ui.Items.ItemsSource=$apps
@@ -29,6 +32,32 @@ function Update-YumStartupList {
     $ui.Details.Text=('{0} startup apps found • same list and on/off switch as Task Manager • checked {1:T}' -f $apps.Count,(Get-Date))
     if($KeepName){ foreach($a in $apps){ if(('{0}|{1}|{2}' -f $a.HiveName,$a.ApprovedKey,$a.Name) -eq $KeepName){ $ui.Items.SelectedItem=$a; break } } }
     Update-YumStartupExplanation -State $State
+}
+
+function Start-YumStartupExtras {
+    # Reads Store app startup tasks and sign-in scheduled tasks off the UI thread, then merges them in.
+    param([hashtable]$State,[string]$KeepName='')
+    if($null -ne $State['ExtrasPs']){return}
+    $ps=[powershell]::Create()
+    [void]$ps.AddScript({
+        param($Shared,[string]$Root)
+        foreach($m in 'Core\Logging.ps1','Core\Native.ps1','Core\Startup.ps1'){ . (Join-Path $Root $m) }
+        $script:Yum=$Shared
+        $byPath=@{}
+        foreach($p in @(Get-Process -ErrorAction SilentlyContinue)){ $path=$null;try{$path=$p.Path}catch{}; if([string]::IsNullOrWhiteSpace($path)){continue}; $k=$path.ToLowerInvariant(); if(-not $byPath.ContainsKey($k)){$byPath[$k]=[pscustomobject]@{Bytes=[int64]0;Count=0}}; $byPath[$k].Bytes+=[int64]$p.WorkingSet64;$byPath[$k].Count++ }
+        @(Get-YumStoreStartupTasks -ByPath $byPath)+@(Get-YumSignInTasks -ByPath $byPath)
+    }.ToString()).AddArgument($script:Yum).AddArgument([string]$script:Yum.Root)
+    $State['ExtrasPs']=$ps;$State['ExtrasHandle']=$ps.BeginInvoke();$State['ExtrasKeep']=$KeepName
+    $State.Ui.Details.Text='Also checking Store apps and tasks that run when you sign in…'
+    $t=New-Object System.Windows.Threading.DispatcherTimer;$t.Interval=[TimeSpan]::FromMilliseconds(300);$t.Tag=$State
+    $t.Add_Tick({param($s,$e)
+        $st=$s.Tag; if(-not $st['ExtrasHandle'].IsCompleted){return}
+        $s.Stop()
+        try{ $st['Extras']=@($st['ExtrasPs'].EndInvoke($st['ExtrasHandle'])) }catch{ $st['Extras']=@(); try{Write-YumLogException -Context 'Startup extras failed' -Exception $_.Exception}catch{} }
+        try{$st['ExtrasPs'].Dispose()}catch{}; $st['ExtrasPs']=$null
+        try{ Update-YumStartupList -State $st -KeepName ([string]$st['ExtrasKeep']) }catch{}
+    })
+    $t.Start()
 }
 
 function Update-YumStartupExplanation {
@@ -66,16 +95,18 @@ function Show-YumStartupApps {
         foreach($c in 'Items','Reload','Toggle','OpenLocation','Close'){$ui[$c].Tag=$state}
         if(Test-YumIsElevated){$ui.AdminPill.Visibility='Collapsed'}else{$ui.AdminText.Text='Not administrator: "all users" apps are read-only'}
         $ui.Items.Add_SelectionChanged({param($s,$e)try{Update-YumStartupExplanation -State $s.Tag}catch{}})
-        $ui.Reload.Add_Click({param($s,$e)try{$sel=$s.Tag.Ui.Items.SelectedItem;$k=if($sel){'{0}|{1}|{2}' -f $sel.HiveName,$sel.ApprovedKey,$sel.Name}else{''};Update-YumStartupList -State $s.Tag -KeepName $k}catch{Write-YumLogException -Context 'Startup list reload failed' -Exception $_.Exception}})
+        $ui.Reload.Add_Click({param($s,$e)try{$sel=$s.Tag.Ui.Items.SelectedItem;$k=if($sel){'{0}|{1}|{2}' -f $sel.HiveName,$sel.ApprovedKey,$sel.Name}else{''};Update-YumStartupList -State $s.Tag -KeepName $k;Start-YumStartupExtras -State $s.Tag -KeepName $k}catch{Write-YumLogException -Context 'Startup list reload failed' -Exception $_.Exception}})
         $ui.Toggle.Add_Click({param($s,$e)
             $st=$s.Tag;$a=$st.Ui.Items.SelectedItem;if($null -eq $a){return}
             $r=Set-YumStartupAppEnabled -App $a -Enabled (-not [bool]$a.Enabled)
             $st.Ui.Details.Text=[string]$r.Reason
+            if($r.Success -and [string]$a.ApprovedKey -in @('StoreTask','ScheduledTask')){ $a.Enabled=(-not [bool]$a.Enabled) }   # cached background row: reflect the change now
             if($r.Success){try{Update-YumStartupList -State $st -KeepName ('{0}|{1}|{2}' -f $a.HiveName,$a.ApprovedKey,$a.Name);$st.Ui.Details.Text=[string]$r.Reason}catch{}}
         })
         $ui.OpenLocation.Add_Click({param($s,$e)try{$a=$s.Tag.Ui.Items.SelectedItem;if($null -ne $a -and $a.FileExists){Start-Process -FilePath 'explorer.exe' -ArgumentList ('/select,"{0}"' -f $a.ExePath)}}catch{Write-YumLogException -Context 'Open startup app location failed' -Exception $_.Exception}})
         $ui.Close.Add_Click({param($s,$e)$s.Tag.Window.Close()})
         Update-YumStartupList -State $state
+        Start-YumStartupExtras -State $state
         if(-not (Enter-YumPage -Key 'Startup' -Window $window)){
             $window.Owner=$script:Yum.Window
             [void]$window.ShowDialog()

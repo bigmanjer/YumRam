@@ -248,7 +248,16 @@ function Set-YumBloatTweak {
                 try{
                     if([bool]$o.Existed){
                         $kind=[Microsoft.Win32.RegistryValueKind]::DWord;try{if([string]$o.Kind){$kind=[Microsoft.Win32.RegistryValueKind][string]$o.Kind}}catch{}
-                        $val=$o.Value;if($kind -eq [Microsoft.Win32.RegistryValueKind]::DWord){$val=[int]$val}elseif($kind -eq [Microsoft.Win32.RegistryValueKind]::QWord){$val=[int64]$val}
+                        # JSON brings back numbers/arrays; give SetValue the exact .NET type for the kind (review fix:
+                        # binary and multi-string originals used to throw and leave the undo half-done).
+                        $val=$o.Value
+                        switch($kind){
+                            ([Microsoft.Win32.RegistryValueKind]::DWord){ $val=[int]$val }
+                            ([Microsoft.Win32.RegistryValueKind]::QWord){ $val=[int64]$val }
+                            ([Microsoft.Win32.RegistryValueKind]::Binary){ $val=[byte[]]@($val | ForEach-Object { [byte]$_ }) }
+                            ([Microsoft.Win32.RegistryValueKind]::MultiString){ $val=[string[]]@($val | ForEach-Object { [string]$_ }) }
+                            default{ $val=[string]$val }
+                        }
                         $k.SetValue([string]$o.Name,$val,$kind)
                     } else { $k.DeleteValue([string]$o.Name,$false) }
                 }finally{$k.Close()}

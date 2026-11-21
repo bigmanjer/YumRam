@@ -57,7 +57,7 @@
             <TextBlock Style="{StaticResource Caption}" TextWrapping="Wrap" Margin="0,0,0,6" Text="• Trimming moves memory a program is not using out of RAM; the program keeps running and pages it back in if it needs it."/>
             <TextBlock Style="{StaticResource Caption}" TextWrapping="Wrap" Margin="0,0,0,6" Text="• Game priority changes CPU scheduling only. It does not add RAM or GPU power."/>
             <TextBlock Style="{StaticResource Caption}" TextWrapping="Wrap" Margin="0,0,0,6" Text="• Run YUMRAM as administrator for the full reclaim (file cache, memory lists) and to change startup apps that start for all users."/>
-            <TextBlock Style="{StaticResource Caption}" TextWrapping="Wrap" Text="• Settings, logs, statistics and learned data stay in the YUMRAM folder and are never uploaded. Online research (optional, in Settings) sends the name, publisher and product of programs YUMRAM cannot identify to Bing search - nothing else."/>
+            <TextBlock Style="{StaticResource Caption}" TextWrapping="Wrap" Text="• Settings, logs, statistics and learned data stay in the YUMRAM folder and are never uploaded. Online research (optional, in Settings) sends the name, publisher and product of programs YUMRAM cannot identify to Bing search and opens up to 4 trustworthy result pages to check the answer - nothing else."/>
           </StackPanel>
         </Expander>
       </StackPanel>
