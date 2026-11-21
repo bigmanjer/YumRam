@@ -1,6 +1,6 @@
 # Changelog
 
-# YUMRAM 5.15.6 (not released yet) — updates as soon as they come out
+# YUMRAM 5.15.6 — updates as soon as they come out
 
 - **Checks every 15 minutes** (was every 6 hours; GitHub allows ~60 unauthenticated checks an hour from one address,
   so 4 an hour is well inside it) and **installs right away** - only a running game (and YUMRAM's own work: Free RAM,
