@@ -1,5 +1,19 @@
 # Changelog
 
+# YUMRAM 5.15.4 (not released yet) — updates install themselves
+
+- **Automatic updates** (user: "whenever an update becomes available it gets updated"). YUMRAM now checks GitHub
+  every 6 hours while it runs (was once a day and only at start-up, so a copy living in the tray for days never
+  looked again), downloads a new version in the background (the window no longer freezes while downloading),
+  checks its SHA-256, and installs it at the first quiet moment: never while a game runs, Free RAM, an Intelligence
+  scan, a disk clean or Measure games is working, and not while you are clicking in YUMRAM. YUMRAM restarts the way
+  it was (hidden in the tray or the mini bar if it was hidden); settings and data are kept and the previous version
+  stays in `.previous` for rollback. On by default; Settings > General > "Install new versions automatically" turns
+  it off (then the banner asks, as before). A download that fails is retried later (at most 3 times per session).
+- Tests: the end-to-end update test now runs the automatic path (background download + verify + apply + rollback)
+  and checks the 6-hour timing, the "never while gaming" rule and the Settings switch.
+- Note: copies on 5.15.3 or older still show the banner once; from 5.15.4 on, updates install themselves.
+
 # YUMRAM 5.15.3 — Disk cleanup button fix, deeper disk cleanup, graphics memory (VRAM) help
 
 Compared with 5.15.2 (test PC: Ryzen 7 4800H, RTX 3050 Laptop + Radeon iGPU):

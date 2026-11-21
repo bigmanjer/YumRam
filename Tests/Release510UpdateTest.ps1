@@ -42,6 +42,20 @@ $script:Yum.Config['UpdateFeedUrl']=([uri]$Feed).AbsoluteUri
 $i=Get-YumUpdateInfo
 "STATUS=$($i.Status);LATEST=$($i.Latest);SHA=$($i.Sha256)"
 if($Mode -eq 'tamper'){ $i.Sha256=('0'*64); $r=Install-YumUpdate -Info $i -NoRestart; "TAMPER=$($r.Success);$($r.Message)"; exit }
+if($Mode -eq 'auto'){
+    # 5.15.3 automatic update path: on by default, every 6 h, never while a game runs, background download + verify.
+    "AUTOON=$(Test-YumAutoUpdateEnabled)"
+    $script:Yum.Config['UpdateLastCheck']=(Get-Date).AddHours(-7).ToString('o'); "DUE7=$(Test-YumUpdateCheckDue)"
+    $script:Yum.Config['UpdateLastCheck']=(Get-Date).AddHours(-5).ToString('o'); "DUE5=$(Test-YumUpdateCheckDue)"
+    "BLOCKIDLE=[$(Get-YumUpdateBlocker)]"
+    $script:Yum.Snapshot=[pscustomobject]@{Game=[pscustomobject]@{Detected=$true;ProcessName='testgame';ProcessId=1}}; "BLOCKGAME=[$(Get-YumUpdateBlocker)]"; $script:Yum.Snapshot=$null
+    $script:Yum.Config['UpdateAutoInstall']=$false; "AUTOOFF=$(Test-YumAutoUpdateEnabled)"; $script:Yum.Config['UpdateAutoInstall']=$true
+    $sw=[Diagnostics.Stopwatch]::StartNew(); Start-YumUpdateDownload -Info $i; "STARTMS=$($sw.ElapsedMilliseconds)"
+    $d=$null; $t=(Get-Date).AddSeconds(90); while($null -eq $d -and (Get-Date) -lt $t){ Start-Sleep -Milliseconds 300; $d=Receive-YumUpdateDownload }
+    "STAGED=$($d.Success)"
+    Invoke-YumApplyStagedUpdate -Staging ([string]$d.Staging) -NoRestart
+    "INSTALL=True"; exit
+}
 $r=Install-YumUpdate -Info $i -NoRestart
 "INSTALL=$($r.Success);$($r.Message)"
 '@ | Set-Content -LiteralPath $driver -Encoding UTF8
@@ -54,8 +68,16 @@ $r=Install-YumUpdate -Info $i -NoRestart
     $cfgObj=$userConfig | ConvertFrom-Json
     Assert-That ([double]$cfgObj.MinimumAvailableGB -eq 9.0) 'The user goal must survive YUMRAM start-up.'
 
-    $out=& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $driver -Installed $installed -Feed $feed -Mode install
-    Assert-That (($out -join "`n") -match 'INSTALL=True') "Install did not start: $out"
+    $out=& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $driver -Installed $installed -Feed $feed -Mode auto
+    $o=($out -join "`n")
+    Assert-That ($o -match 'AUTOON=True') "Automatic install must be on by default: $o"
+    Assert-That ($o -match 'DUE7=True' -and $o -match 'DUE5=False') "Checks must be due every 6 hours: $o"
+    Assert-That ($o -match 'BLOCKIDLE=\[\]') "Nothing should block an update on an idle PC: $o"
+    Assert-That ($o -match 'BLOCKGAME=\[a game is running') "An update must never install while a game runs: $o"
+    Assert-That ($o -match 'AUTOOFF=False') "The Settings switch must turn automatic install off: $o"
+    Assert-That ($o -match 'STARTMS=(\d+)' -and [int]$Matches[1] -lt 2000) "The download must run in the background: $o"
+    Assert-That ($o -match 'STAGED=True') "Background download + SHA-256 check failed: $o"
+    Assert-That ($o -match 'INSTALL=True') "Install did not start: $out"
     $deadline=(Get-Date).AddSeconds(60)
     while((Get-Date) -lt $deadline -and (([IO.File]::ReadAllText((Join-Path $installed 'VERSION'))).Trim()) -ne '9.9.9'){Start-Sleep -Milliseconds 500}
     Start-Sleep -Seconds 2

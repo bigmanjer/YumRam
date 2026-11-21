@@ -63,6 +63,14 @@
         VramSampler = $null
         LastVramWatch = [datetime]::MinValue
         VramWarnedPid = 0
+        LastAutoUpdateTick = [datetime]::MinValue
+        LastUpdateCheckAsk = [datetime]::MinValue
+        LastUserInput = [datetime]::MinValue
+        UpdateDownloadPs = $null
+        UpdateDownloadAsync = $null
+        UpdateStaged = ''
+        UpdateStagedVersion = ''
+        UpdateFailures = 0
         DiskAutoRunning = $false
         LastUiReclaimResultVersion = 0
         ReclaimVerificationTimer = $null

@@ -408,13 +408,57 @@ function Update-YumUpdateUi {
         if([string]$r.Status -eq 'Available'){
             $ui.UpdateTitle.Text=('YUMRAM {0} is available' -f $r.Latest)
             $ui.UpdateText.Text=('You have {0}. The download is checked against its published SHA-256 before anything is installed; your settings and statistics are kept, and the current version is kept so you can go back.' -f $r.Current)
+            if(Test-YumAutoUpdateEnabled){ $ui.UpdateText.Text=('You have {0}. YUMRAM downloads it in the background, checks its SHA-256 and installs it automatically at a quiet moment (never while you play). Your settings are kept. Or press Install and restart now.' -f $r.Current) }
             $ui.UpdateBanner.Visibility='Visible'
-            if(-not $script:Yum.Window.IsVisible){Show-YumTrayNotice -Title ('YUMRAM {0} is available' -f $r.Latest) -Text 'Open YUMRAM to install it.'}
+            if(-not $script:Yum.Window.IsVisible -and -not (Test-YumAutoUpdateEnabled)){Show-YumTrayNotice -Title ('YUMRAM {0} is available' -f $r.Latest) -Text 'Open YUMRAM to install it.'}
         } else { $ui.UpdateBanner.Visibility='Collapsed' }
         # About shows the latest status if it is open.
         try{ $a=$script:Yum.Pages['About']; if($null -ne $a){ $a.Window.FindName('UpdateStatus').Text=[string]$r.Message } }catch{}
     }catch{ Write-YumLogException -Context 'Update UI failed' -Exception $_.Exception }
 }
+function Get-YumUpdateBlocker {
+    # 5.15.3: an automatic update only restarts YUMRAM when nothing important is going on. Returns why not, or ''.
+    try{ $s=$script:Yum.Snapshot; if($null -ne $s -and $null -ne $s.Game -and [bool]$s.Game.Detected){ return ('a game is running ({0})' -f [string]$s.Game.ProcessName) } }catch{}
+    try{ if(Test-YumReclaimBusy){ return 'Free RAM is working' } }catch{}
+    try{ $iw=$script:Yum.IntelligenceWindow; if((Test-YumPageAlive -Window $iw) -and $null -ne $iw.Tag -and ([bool]$iw.Tag.Busy -or [bool]$iw.Tag.ResearchBusy)){ return 'an Intelligence scan is running' } }catch{}
+    try{ if([bool]$script:Yum['DiskAutoRunning']){ return 'a disk clean is running' }; $dp=$script:Yum.Pages['DiskCleanup']; if($null -ne $dp -and $null -ne $dp.Window.Tag -and [bool]$dp.Window.Tag.Busy){ return 'Disk cleanup is working' } }catch{}
+    try{ $b=[int]$script:Yum['CpuBenchPid']; if($b -gt 0 -and (Get-Process -Id $b -ErrorAction SilentlyContinue)){ return 'Measure games is running' } }catch{}
+    try{ if($script:Yum.Window.IsVisible -and $script:Yum.Window.IsActive -and ((Get-Date)-[datetime]$script:Yum['LastUserInput']).TotalSeconds -lt 60){ return 'you are using YUMRAM' } }catch{}
+    return ''
+}
+
+function Update-YumAutoUpdate {
+    # 5.15.3 (user: "whenever an update becomes available it gets updated"). Called by the UI timer:
+    #  - asks GitHub every 30 min whether a check is due (every 6 h),
+    #  - downloads and verifies a new version in the background,
+    #  - installs it at the first moment nothing important is going on, then YUMRAM restarts (hidden again if it was).
+    try{
+        if(((Get-Date)-[datetime]$script:Yum['LastAutoUpdateTick']).TotalSeconds -lt 30){return}
+        $script:Yum['LastAutoUpdateTick']=Get-Date
+        if(((Get-Date)-[datetime]$script:Yum['LastUpdateCheckAsk']).TotalMinutes -ge 30){ $script:Yum['LastUpdateCheckAsk']=Get-Date; try{ Start-YumUpdateCheck }catch{} }
+        if(-not (Test-YumAutoUpdateEnabled)){return}
+        $info=$script:Yum['UpdateInfo']; if($null -eq $info -or [string]$info.Status -ne 'Available'){return}
+        $done=Receive-YumUpdateDownload
+        if($null -ne $done){
+            if([bool]$done.Success){ $script:Yum['UpdateStaged']=[string]$done.Staging; $script:Yum['UpdateStagedVersion']=[string]$info.Latest; Write-YumLog ('Automatic update: {0} downloaded and verified; installing at the next quiet moment.' -f $info.Latest) }
+            else { $script:Yum['UpdateFailures']=[int]$script:Yum['UpdateFailures']+1; Write-YumLog ('Automatic update download failed: {0}' -f [string]$done.Message); try{ $script:Yum.Ui.UpdateText.Text=('Automatic update could not be downloaded: {0}. It is tried again later; Install and restart works too.' -f $done.Message) }catch{} }
+        }
+        $staged=[string]$script:Yum['UpdateStaged']
+        if(-not $staged -or [string]$script:Yum['UpdateStagedVersion'] -ne [string]$info.Latest -or -not (Test-Path -LiteralPath $staged)){
+            if($null -eq $script:Yum['UpdateDownloadPs'] -and [int]$script:Yum['UpdateFailures'] -lt 3){ Start-YumUpdateDownload -Info $info }
+            return
+        }
+        $why=Get-YumUpdateBlocker
+        if($why){ try{ $script:Yum.Ui.UpdateText.Text=('YUMRAM {0} is downloaded and checked. It installs automatically as soon as {1} has finished - or press Install and restart.' -f $info.Latest,$why) }catch{}; return }
+        $hidden=-not $script:Yum.Window.IsVisible
+        Update-YumConfigValue -Name StartHiddenOnce -Value $hidden
+        Write-YumLog ('Automatic update: installing {0} now (YUMRAM restarts{1}).' -f $info.Latest,$(if($hidden){' hidden in the tray'}else{''}))
+        try{ Show-YumTrayNotice -Title ('Updating YUMRAM to {0}' -f $info.Latest) -Text 'Back in a few seconds with your settings kept. What''s new: About > Check for updates, or the GitHub release page.' }catch{}
+        Invoke-YumApplyStagedUpdate -Staging $staged
+        Exit-YumApp
+    }catch{ Write-YumLogException -Context 'Automatic update failed' -Exception $_.Exception }
+}
+
 function Invoke-YumInstallUpdate {
     $info=$script:Yum['UpdateInfo']
     if($null -eq $info -or [string]$info.Status -ne 'Available'){return}
@@ -626,7 +670,7 @@ function Start-YumApplicationUi {
         }catch{}
     })
     if([bool]$script:Yum.Config['ShowTrayIcon']){ try{ Initialize-YumTray }catch{ Write-YumLogException -Context 'Tray icon failed; continuing without it' -Exception $_.Exception } }
-    $timer=New-Object System.Windows.Threading.DispatcherTimer;$timer.Interval=[TimeSpan]::FromSeconds([double]$script:Yum.Config.UIRefreshIntervalSeconds);$timer.Add_Tick({param($tm,$te)try{$want=if($script:Yum.Window.IsVisible){[TimeSpan]::FromSeconds([double]$script:Yum.Config.UIRefreshIntervalSeconds)}else{[TimeSpan]::FromSeconds(1)};if($tm.Interval -ne $want){$tm.Interval=$want}}catch{};try{ $sig=$script:Yum['ShowSignal']; if($null -ne $sig -and $sig.WaitOne(0)){ Show-YumMainWindow } }catch{};Update-YumUiFromSnapshot;Update-YumCpuBalanceUi;Update-YumUpdateUi;Update-YumNoticesUi;Update-YumSideScanUi;Invoke-YumDiskAutoCleanIfDue;Invoke-YumVramWatch;Update-YumCleanupResultUI;try{[void](Update-YumReclaimVerification)}catch{};Update-YumReclaimResultUI});$script:Yum.UiTimer=$timer;$timer.Start()
+    $timer=New-Object System.Windows.Threading.DispatcherTimer;$timer.Interval=[TimeSpan]::FromSeconds([double]$script:Yum.Config.UIRefreshIntervalSeconds);$timer.Add_Tick({param($tm,$te)try{$want=if($script:Yum.Window.IsVisible){[TimeSpan]::FromSeconds([double]$script:Yum.Config.UIRefreshIntervalSeconds)}else{[TimeSpan]::FromSeconds(1)};if($tm.Interval -ne $want){$tm.Interval=$want}}catch{};try{ $sig=$script:Yum['ShowSignal']; if($null -ne $sig -and $sig.WaitOne(0)){ Show-YumMainWindow } }catch{};Update-YumUiFromSnapshot;Update-YumCpuBalanceUi;Update-YumUpdateUi;Update-YumNoticesUi;Update-YumSideScanUi;Invoke-YumDiskAutoCleanIfDue;Invoke-YumVramWatch;Update-YumAutoUpdate;Update-YumCleanupResultUI;try{[void](Update-YumReclaimVerification)}catch{};Update-YumReclaimResultUI});$script:Yum.UiTimer=$timer;$timer.Start()
     try{$initialMemory=Get-YumMemoryTelemetry;if($null -ne $initialMemory){Update-YumSnapshot -Changes @{Memory=$initialMemory;CPU=0.0;GPU3D=0.0;ForegroundProcessId=0;Game=[pscustomobject]@{ProcessId=0;ProcessName=$null;Detected=$false}} -CoreTelemetry}}catch{Write-YumLogException -Context 'Initial memory telemetry failed' -Exception $_.Exception}
     # 5.10: the first snapshot does not bump the version counter; ask for one full draw (paused start showed '--').
     $script:Yum.UiNeedsFullRefresh=$true
@@ -639,6 +683,9 @@ function Start-YumApplicationUi {
     try{ if(-not [YumForegroundHook]::Start()){Write-YumLog 'Foreground hook unavailable; CPU care checks app switches every second.'} }catch{}
     if([bool]$script:Yum.Config.StartMonitoringAutomatically){Start-YumMonitoring}
     $script:Yum.Window.Show()
+    # 5.15.3: after an automatic update YUMRAM comes back the way it was - hidden in the tray (or the mini bar) if it was hidden.
+    try{ if([bool]$script:Yum.Config['StartHiddenOnce']){ Update-YumConfigValue -Name StartHiddenOnce -Value $false; if(Test-YumMiniBarPreferred){ Show-YumMiniBar } elseif($null -ne $script:Yum.TrayIcon){ $script:Yum.TrayHintShown=$true; Hide-YumToTray } } }catch{}
+    try{ $script:Yum.Window.Add_PreviewMouseDown({ $script:Yum['LastUserInput']=Get-Date }); $script:Yum.Window.Add_PreviewKeyDown({ $script:Yum['LastUserInput']=Get-Date }) }catch{}
     try{ Register-YumGlobalHotkey }catch{}
     try{ Update-YumFreedStatsUi }catch{}
     # 5.10: once-a-day GitHub release check in the background (Settings > General to turn off).

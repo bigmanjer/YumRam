@@ -348,6 +348,8 @@
   "GlobalHotkeyEnabled": true,
   "GlobalHotkey": "Ctrl+Alt+R",
   "UpdateCheckEnabled": true,
+  "UpdateAutoInstall": true,
+  "StartHiddenOnce": false,
   "UpdateRepository": "bigmanjer/YumRam",
   "UpdateFeedUrl": "",
   "UpdateLastCheck": "",

@@ -78,7 +78,49 @@ function Get-YumUpdateInfo {
 function Test-YumUpdateCheckDue {
     try{ if(-not [bool]$script:Yum.Config['UpdateCheckEnabled']){return $false} }catch{return $false}
     $last=[datetime]::MinValue;try{$last=[datetime]::Parse([string]$script:Yum.Config['UpdateLastCheck'],[Globalization.CultureInfo]::InvariantCulture)}catch{}
-    return (((Get-Date)-$last).TotalHours -ge 24)
+    # 5.15.3: every 6 hours (was once a day, and only when YUMRAM started - a copy running in the tray for days
+    # never looked again). The UI timer asks every 30 minutes; this decides.
+    return (((Get-Date)-$last).TotalHours -ge 6)
+}
+
+function Invoke-YumApplyStagedUpdate {
+    # Hands a downloaded, verified update to the new YUMRAM.exe, which waits for this process to exit, swaps the
+    # files (keeping settings and data) and starts YUMRAM again.
+    param([Parameter(Mandatory=$true)][string]$Staging,[switch]$NoRestart)
+    $exe=Join-Path $Staging 'YUMRAM.exe'
+    if(-not (Test-Path -LiteralPath $exe)){throw 'The staged update has no YUMRAM.exe.'}
+    $argList=@('--apply-update',('"{0}"' -f $Staging),'--target',('"{0}"' -f [string]$script:Yum.Root),'--wait-pid',[string]$PID)
+    if($NoRestart){$argList+='--no-restart'}
+    Start-Process -FilePath $exe -ArgumentList $argList -WorkingDirectory $Staging | Out-Null
+}
+
+function Test-YumAutoUpdateEnabled {
+    # 5.15.3 (user: "whenever an update is available it should get updated"). On unless turned off in Settings.
+    try{ $v=$script:Yum.Config['UpdateAutoInstall']; return (($null -eq $v) -or [bool]$v) -and [bool]$script:Yum.Config['UpdateCheckEnabled'] }catch{ return $false }
+}
+
+function Start-YumUpdateDownload {
+    # Download + SHA-256 check + unpack in the background (never freezes the window); applying waits for a safe moment.
+    param([Parameter(Mandatory=$true)]$Info)
+    if($null -ne $script:Yum['UpdateDownloadPs']){return}
+    $ps=[powershell]::Create()
+    [void]$ps.AddScript({
+        param($Shared,[string]$Root,$Info)
+        foreach($m in 'Core\Logging.ps1','Core\Updates.ps1'){ . (Join-Path $Root $m) }
+        $script:Yum=$Shared
+        Install-YumUpdate -Info $Info -NoLaunch
+    }.ToString()).AddArgument($script:Yum).AddArgument([string]$script:Yum.Root).AddArgument($Info)
+    $script:Yum['UpdateDownloadPs']=$ps
+    $script:Yum['UpdateDownloadAsync']=$ps.BeginInvoke()
+}
+
+function Receive-YumUpdateDownload {
+    $ps=$script:Yum['UpdateDownloadPs'];$a=$script:Yum['UpdateDownloadAsync']
+    if($null -eq $ps -or $null -eq $a -or -not $a.IsCompleted){return $null}
+    $r=$null;try{$r=@($ps.EndInvoke($a))|Select-Object -Last 1}catch{}
+    try{$ps.Dispose()}catch{}
+    $script:Yum['UpdateDownloadPs']=$null;$script:Yum['UpdateDownloadAsync']=$null
+    return $r
 }
 
 function Install-YumUpdate {
@@ -108,9 +150,7 @@ function Install-YumUpdate {
         if(-not (Test-Path -LiteralPath $exe)){throw 'The update package does not contain YUMRAM.exe.'}
         try{Write-YumLog ('Update {0} downloaded and verified (SHA-256 {1}); staged in {2}.' -f $Info.Latest,$hash,$staging)}catch{}
         if($NoLaunch){return [pscustomobject]@{Success=$true;Message='Staged.';Staging=$staging}}
-        $argList=@('--apply-update',('"{0}"' -f $staging),'--target',('"{0}"' -f [string]$script:Yum.Root),'--wait-pid',[string]$PID)
-        if($NoRestart){$argList+='--no-restart'}
-        Start-Process -FilePath $exe -ArgumentList $argList -WorkingDirectory $staging | Out-Null
+        Invoke-YumApplyStagedUpdate -Staging $staging -NoRestart:$NoRestart
         return [pscustomobject]@{Success=$true;Message=('Installing {0}: YUMRAM closes now and opens again in a few seconds.' -f $Info.Latest);Staging=$staging}
     }catch{
         try{Write-YumLog ('Update failed: {0}' -f $_.Exception.Message)}catch{}
