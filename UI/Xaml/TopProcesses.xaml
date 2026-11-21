@@ -107,6 +107,13 @@
               <TextBlock x:Name="ExplainMemory" Style="{StaticResource Answer}"/>
               <TextBlock Text="HOW BUSY IS IT?" Style="{StaticResource Question}"/>
               <TextBlock x:Name="ExplainCpu" Style="{StaticResource Answer}"/>
+              <!-- 5.15.2: graphics memory (VRAM) this program holds, and moving it to the power-saving chip on 2-chip laptops -->
+              <TextBlock Text="GRAPHICS MEMORY (VRAM)?" Style="{StaticResource Question}"/>
+              <TextBlock x:Name="ExplainVram" Style="{StaticResource Answer}" Text="Checking…"/>
+              <WrapPanel Margin="0,6,0,0">
+                <Button x:Name="GpuSaver" Content="Use the power-saving graphics chip" Style="{StaticResource GhostButton}" Padding="10,3" Margin="0,0,8,0" Visibility="Collapsed" ToolTip="Windows' own per-app graphics setting (Settings > System > Display > Graphics). The program uses the built-in chip after it restarts, so its VRAM stays off your gaming chip. Undo is here too."/>
+                <Button x:Name="GpuSaverUndo" Content="Undo" Style="{StaticResource GhostButton}" Padding="10,3" Visibility="Collapsed"/>
+              </WrapPanel>
               <TextBlock Text="OUR ADVICE" Style="{StaticResource Question}"/>
               <Border x:Name="ExplainAdviceBadge" CornerRadius="9" Padding="10,3" HorizontalAlignment="Left" Background="{StaticResource Surface2}" BorderThickness="1"><TextBlock x:Name="ExplainAdviceLabel" Text="—" FontWeight="Bold" FontSize="13"/></Border>
               <TextBlock Text="CAN I CLOSE IT?" Style="{StaticResource Question}"/>

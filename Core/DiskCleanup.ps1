@@ -134,9 +134,43 @@ function Get-YumDiskJunkCategories {
             Why='Update files Windows already installed. Windows downloads again whatever it still needs.';Effect='Nothing you will notice. Only files older than 10 days, so an update in progress is never touched.'}
         [pscustomobject]@{Key='Delivery';Name='Delivery Optimization cache';Advice='Clean';Admin=$true;Auto=$false;MinAgeHours=0;Patterns=@();Roots=@((Join-Path $win 'ServiceProfiles\NetworkService\AppData\Local\Microsoft\Windows\DeliveryOptimization\Cache'))
             Why='Pieces of Windows and Store updates kept to share with other PCs.';Effect='Nothing you will notice. Windows'' own clean-up command is used (same as Disk Cleanup).'}
+        # 5.15.2 (user: "disk cleanup needs to be better, do research"): app caches, driver installer leftovers, old
+        # Windows logs, and Windows' own deep clean-up (component store, old drivers, previous Windows) - the same tools
+        # Microsoft documents for Disk Cleanup / DISM, never hand-deleting system folders.
+        [pscustomobject]@{Key='AppCache';Name='App caches (Discord, Spotify, Steam, Epic, Teams, VS Code)';Advice='Clean';Admin=$false;Auto=$false;MinAgeHours=0;Patterns=@()
+            Roots=@((Join-Path $env:APPDATA 'discord\Cache'),(Join-Path $env:APPDATA 'discord\Code Cache'),(Join-Path $env:APPDATA 'discord\GPUCache'),(Join-Path $la 'Spotify\Storage'),(Join-Path $la 'Steam\htmlcache\Cache'),(Join-Path $la 'Steam\htmlcache\Code Cache'),(Join-Path $la 'Steam\htmlcache\GPUCache'),(Join-Path $la 'EpicGamesLauncher\Saved\webcache'),(Join-Path $la 'EpicGamesLauncher\Saved\webcache_4430'),(Join-Path $la 'EpicGamesLauncher\Saved\webcache_4147'),(Join-Path $la 'Packages\MSTeams_8wekyb3d8bbwe\LocalCache\Microsoft\MSTeams\EBWebView\Default\Cache'),(Join-Path $env:APPDATA 'Code\Cache'),(Join-Path $env:APPDATA 'Code\CachedData'),(Join-Path $env:APPDATA 'Code\Code Cache'))
+            Why='Web pictures, songs and scripts these apps saved to open faster. Only caches: never your messages, logins, playlists, games or settings.';Effect='The apps load things again the first time (Spotify re-downloads songs you play). Close the apps first for the biggest result; files in use are skipped.'}
+        [pscustomobject]@{Key='DriverSetup';Name='Graphics driver installer leftovers';Advice='Clean';Admin=$false;Auto=$false;MinAgeHours=24;Patterns=@()
+            Roots=@((Join-Path $env:SystemDrive 'NVIDIA'),(Join-Path $env:SystemDrive 'AMD'),(Join-Path $pd 'NVIDIA Corporation\Downloader'))
+            Why='Copies of NVIDIA / AMD driver installers that were unpacked or downloaded during driver updates.';Effect='Nothing - the installed driver is not touched. A future driver update downloads what it needs.'}
+        [pscustomobject]@{Key='Logs';Name='Old Windows log files';Advice='Clean';Admin=$true;Auto=$true;MinAgeHours=720;Patterns=@('*.log','*.cab','*.etl')
+            Roots=@((Join-Path $win 'Logs\CBS'),(Join-Path $win 'Logs\DISM'),(Join-Path $win 'Logs\MoSetup'),(Join-Path $win 'Panther\UnattendGC'))
+            Why='Logs Windows writes while installing updates and features.';Effect='Nothing you will notice. Only logs older than 30 days.'}
+        [pscustomobject]@{Key='WinComponents';Name='Windows Update clean-up (Windows'' own tool)';Advice='Clean';Admin=$true;Auto=$false;MinAgeHours=0;Patterns=@();Roots=@();Special='Dism'
+            Why='Old versions of Windows components that newer updates replaced (the WinSxS store). Uses Microsoft''s own command (DISM StartComponentCleanup) - never deleting system files by hand.';Effect='Nothing you will notice; installed updates can still be uninstalled (YUMRAM does not use /ResetBase). Takes a few minutes; Windows works out the size while cleaning.'}
+        [pscustomobject]@{Key='OldDrivers';Name='Old driver packages (Windows'' own Disk Cleanup)';Advice='YourCall';Admin=$true;Auto=$false;MinAgeHours=0;Patterns=@();Roots=@();Special='Cleanmgr';Handlers=@('Device Driver Packages')
+            Why='Older driver versions Windows keeps after installing newer ones.';Effect='Your call: you can no longer roll a device back to its previous driver in Device Manager. Windows'' own Disk Cleanup does the work.'}
+        [pscustomobject]@{Key='PreviousWindows';Name='Previous Windows installation (Windows.old)';Advice='YourCall';Admin=$true;Auto=$false;MinAgeHours=0;Patterns=@();Special='Cleanmgr';Handlers=@('Previous Installations','Upgrade Discarded Files','Windows Upgrade Log Files')
+            Roots=@((Join-Path $env:SystemDrive 'Windows.old'),(Join-Path $env:SystemDrive '$Windows.~BT'),(Join-Path $env:SystemDrive '$Windows.~WS'))
+            Why='The copy of your old Windows kept after a big Windows upgrade, so you can go back.';Effect='Your call: you can no longer go back to the previous Windows version (Windows removes it by itself after about 10 days). Windows'' own Disk Cleanup does the work.'}
         [pscustomobject]@{Key='Recycle';Name='Recycle Bin';Advice='YourCall';Admin=$false;Auto=$false;MinAgeHours=0;Patterns=@();Roots=@()
             Why='Files you deleted. They stay in the Recycle Bin until it is emptied.';Effect='Your call: emptying it is permanent - check there is nothing you still want first.'}
     )
+}
+
+function Invoke-YumWindowsDiskCleanup {
+    # Runs Windows' own Disk Cleanup (cleanmgr) for exactly these handlers, the documented automation way:
+    # StateFlags on the chosen handlers + cleanmgr /sagerun, then the flags are removed again. Needs administrator.
+    param([string[]]$Handlers)
+    $base='HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches'
+    $slot='StateFlags0777'; $set=@()
+    try{
+        foreach($h in $Handlers){ $k=Join-Path $base $h; if(Test-Path -LiteralPath $k){ Set-ItemProperty -LiteralPath $k -Name $slot -Value 2 -Type DWord; $set+=$k } }
+        if($set.Count -eq 0){ return 'Windows has nothing of this kind on this PC.' }
+        $p=Start-Process -FilePath (Join-Path $env:windir 'System32\cleanmgr.exe') -ArgumentList '/sagerun:777' -WindowStyle Hidden -PassThru
+        if(-not $p.WaitForExit(1800000)){ return 'Windows'' Disk Cleanup is still running in the background.' }
+        return ''
+    } finally { foreach($k in $set){ try{ Remove-ItemProperty -LiteralPath $k -Name $slot -ErrorAction SilentlyContinue }catch{} } }
 }
 
 function Get-YumRecycleBinSize {
@@ -152,9 +186,11 @@ function Measure-YumDiskJunk {
         if($c.Key -eq 'Recycle'){ $rb=Get-YumRecycleBinSize; $bytes=[long]$rb.Bytes; $files=[long]$rb.Files }
         else { foreach($r in @($c.Roots)){ if(-not $r){continue}; $w=[YumDiskWalk]::Walk([string]$r,[string[]]@($c.Patterns),[double]$c.MinAgeHours,$false); $bytes+=$w.Bytes; $files+=$w.Files } }
         $locked=([bool]$c.Admin -and -not $admin)
-        [pscustomobject]@{Key=$c.Key;Name=$c.Name;Advice=$c.Advice;Why=$c.Why;Effect=$c.Effect;Auto=[bool]$c.Auto;NeedsAdmin=[bool]$c.Admin;Locked=$locked;Bytes=$bytes;Files=$files
-            SizeText=(Format-YumBytes $bytes);Selected=($c.Advice -eq 'Clean' -and -not $locked -and $bytes -gt 0)
-            SubTitle=$(if($locked){'needs YUMRAM to run as administrator'}elseif($files -gt 0){('{0:N0} files' -f $files)}else{'nothing to clean'})}
+        $special=if($c.PSObject.Properties['Special']){[string]$c.Special}else{''}
+        $windowsSizes=($special -and @($c.Roots).Count -eq 0)   # Windows works the size out itself while cleaning
+        [pscustomobject]@{Key=$c.Key;Name=$c.Name;Advice=$c.Advice;Why=$c.Why;Effect=$c.Effect;Auto=[bool]$c.Auto;NeedsAdmin=[bool]$c.Admin;Locked=$locked;Bytes=$bytes;Files=$files;Special=$special
+            SizeText=$(if($windowsSizes){'Windows checks'}else{Format-YumBytes $bytes});Selected=($c.Advice -eq 'Clean' -and -not $locked -and $bytes -gt 0 -and -not $special)
+            SubTitle=$(if($locked){'needs YUMRAM to run as administrator'}elseif($windowsSizes){'Windows'' own tool works out the size while cleaning (a few minutes)'}elseif($files -gt 0){('{0:N0} files' -f $files)}else{'nothing to clean'})}
     }
 }
 
@@ -181,7 +217,17 @@ function Invoke-YumDiskCleanup {
         if([bool]$c.Admin -and -not $admin){ [pscustomobject]@{Key=$c.Key;Name=$c.Name;Freed=0L;Deleted=0L;Skipped=0L;Note='needs administrator'}; continue }
         $freed=0L;$del=0L;$skip=0L;$note=''
         try{
-            if($c.Key -eq 'Recycle'){ $rb=Get-YumRecycleBinSize; Clear-RecycleBin -Force -ErrorAction Stop; $freed=[long]$rb.Bytes; $del=[long]$rb.Files }
+            $special=if($c.PSObject.Properties['Special']){[string]$c.Special}else{''}
+            if($special -in @('Dism','Cleanmgr')){
+                # Windows' own tools; what they freed = the Windows drive's free space before vs after.
+                $d0=[long](New-Object IO.DriveInfo ($env:SystemDrive)).AvailableFreeSpace
+                if($special -eq 'Dism'){
+                    $p=Start-Process -FilePath (Join-Path $env:windir 'System32\Dism.exe') -ArgumentList '/Online','/Cleanup-Image','/StartComponentCleanup','/Quiet' -WindowStyle Hidden -PassThru -Wait
+                    if($p.ExitCode -ne 0){ $note=('Windows'' tool ended with code {0}' -f $p.ExitCode) }
+                } else { $note=Invoke-YumWindowsDiskCleanup -Handlers @($c.Handlers) }
+                $freed=[math]::Max(0L,[long](New-Object IO.DriveInfo ($env:SystemDrive)).AvailableFreeSpace-$d0)
+            }
+            elseif($c.Key -eq 'Recycle'){ $rb=Get-YumRecycleBinSize; Clear-RecycleBin -Force -ErrorAction Stop; $freed=[long]$rb.Bytes; $del=[long]$rb.Files }
             elseif($c.Key -eq 'Delivery' -and (Get-Command Delete-DeliveryOptimizationCache -ErrorAction SilentlyContinue)){
                 $before=0L; foreach($r in @($c.Roots)){ $before+=([YumDiskWalk]::Walk([string]$r,[string[]]@(),0,$false)).Bytes }
                 Delete-DeliveryOptimizationCache -Force -ErrorAction Stop

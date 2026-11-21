@@ -102,11 +102,12 @@ function Show-YumDiskCleanup {
         [xml]$xaml=Read-YumXamlText -Path (Join-Path $script:Yum.Root 'UI\Xaml\DiskCleanup.xaml')
         $window=[Windows.Markup.XamlReader]::Load((New-Object System.Xml.XmlNodeReader $xaml))
         $ui=@{}
-        foreach($n in 'Junk','Reload','AdminPill','AdminText','SumJunk','SumDrive','SumDriveBar','SumFreed','AutoClean','AutoLast','CleanSelected','UsagePath','UsageScan','UsageUp','UsageOpen','UsageTabs','UsageFolders','UsageFiles','ExplainTitle','ExplainSub','ExplainWhy','ExplainBody','ExplainEffect','ExplainUndo','LastResult','Close','Details'){$ui[$n]=$window.FindName($n);if($null -eq $ui[$n]){throw "Disk cleanup page control missing: $n"}}
+        foreach($n in 'Junk','Reload','AdminPill','AdminText','RestartAdmin','SumJunk','SumDrive','SumDriveBar','SumFreed','AutoClean','AutoLast','CleanSelected','UsagePath','UsageScan','UsageUp','UsageOpen','UsageTabs','UsageFolders','UsageFiles','ExplainTitle','ExplainSub','ExplainWhy','ExplainBody','ExplainEffect','ExplainUndo','LastResult','Close','Details'){$ui[$n]=$window.FindName($n);if($null -eq $ui[$n]){throw "Disk cleanup page control missing: $n"}}
         $state=@{Window=$window;Ui=$ui;Rows=@();Picked=@{};Busy=$false}
         $window.Tag=$state
         foreach($c in 'Junk','Reload','AutoClean','CleanSelected','UsageScan','UsageUp','UsageOpen','UsageFolders','UsageFiles','Close'){$ui[$c].Tag=$state}
-        if(Test-YumIsElevated){$ui.AdminPill.Visibility='Collapsed'}else{$ui.AdminText.Text='Not administrator: Windows Update and system temp files are read-only'}
+        if(Test-YumIsElevated){$ui.AdminPill.Visibility='Collapsed';$ui.RestartAdmin.Visibility='Collapsed'}else{$ui.AdminText.Text='Not administrator: Windows'' own files are locked'}
+        $ui.RestartAdmin.Add_Click({ try{ [void](Restart-YumAsAdministrator) }catch{} })
         $ui.UsagePath.Text=($env:SystemDrive+'\')
         # Tick boxes live in the list rows; one handler for all of them.
         $ui.Junk.AddHandler([System.Windows.Controls.Primitives.ButtonBase]::ClickEvent,[System.Windows.RoutedEventHandler]{param($s,$e)
@@ -116,11 +117,12 @@ function Show-YumDiskCleanup {
         $ui.AutoClean.Add_Click({param($s,$e) try{ Update-YumConfigValue -Name DiskAutoClean -Value ([bool]$s.IsChecked); Show-YumToast -Text $(if([bool]$s.IsChecked){'Automatic weekly clean on: only the safest leftovers.'}else{'Automatic weekly clean off.'}) }catch{} })
         $ui.CleanSelected.Add_Click({param($s,$e)
             $st=$s.Tag; if($st.Busy){return}
-            $keys=@($st.Picked.Keys); $rows=@($st.Rows | Where-Object { $keys -contains $_.Key -and -not $_.Locked -and $_.Bytes -gt 0 })
+            $keys=@($st.Picked.Keys); $rows=@($st.Rows | Where-Object { $keys -contains $_.Key -and -not $_.Locked -and ($_.Bytes -gt 0 -or [string]$_.Special) })
             if($rows.Count -eq 0){ $st.Ui.Details.Text='Tick at least one category that has something to clean.'; return }
             $total=Format-YumBytes (Get-YumSum $rows 'Bytes')
             $names=($rows | ForEach-Object { '  •  {0}  ({1})' -f $_.Name,$_.SizeText }) -join [Environment]::NewLine
             $warn=if(@($rows | Where-Object { $_.Key -eq 'Recycle' }).Count){"`n`nThe Recycle Bin is emptied permanently."}else{''}
+            if(@($rows | Where-Object { [string]$_.Special }).Count){ $total+=' plus what Windows'' own tools find (a few minutes)' }
             $r=[System.Windows.MessageBox]::Show($script:Yum.Window,("Clean about {0}?`n`n{1}{2}`n`nFiles in use are skipped. Your own files, cookies and passwords are never touched." -f $total,$names,$warn),'YUMRAM - Disk cleanup',[System.Windows.MessageBoxButton]::YesNo,[System.Windows.MessageBoxImage]::Question)
             if($r -ne [System.Windows.MessageBoxResult]::Yes){return}
             Start-YumDiskWork -State $st -Busy ('Cleaning {0} categories…' -f $rows.Count) -Argument ([string[]]@($rows | ForEach-Object { $_.Key })) -Work { param($a) Invoke-YumDiskCleanup -Keys $a } -Done {

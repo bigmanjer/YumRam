@@ -67,7 +67,7 @@ $script:Steps=@(
 { $st=(PW 'WindowsBloat').Tag; Check ($null -ne $st) 'Windows bloat page opens'; if($st){ Check (-not $st.Busy) "Windows bloat scan finished ($($st.Ui.Details.Text))"; Check (@($st.Settings).Count -ge 10) "Windows bloat settings listed: $(@($st.Settings).Count)"; $bad=0; foreach($r in @($st.Settings)+@($st.Apps)){ if($r.Kind -eq 'App'){$st.Ui.Apps.SelectedItem=$r}else{$st.Ui.Settings.SelectedItem=$r}; if($st.Ui.ExplainTitle.Text -ne $r.Name){$bad++} }; Check ($bad -eq 0) "Windows bloat: every row explains ($(@($st.Apps).Count) apps)"; Shot 'p-bloat' } },
  # Intelligence
  # 5.15.2: Disk cleanup - measures only (never cleans the real PC in the probe), explains, analyses a folder.
- { Go 'DiskCleanup' },
+ { Click $script:Yum.Ui.DiskCleanup },   # the real sidebar button (5.15.2: it was not registered, clicks did nothing)
  { if((PW 'DiskCleanup') -and (PW 'DiskCleanup').Tag.Busy -and $script:WaitD++ -lt 25){ $script:I-- } },
  { $st=(PW 'DiskCleanup').Tag; Check ($null -ne $st -and -not $st.Busy -and @($st.Rows).Count -ge 8) ("Disk cleanup measured {0} categories ({1}; can free {2})" -f @($st.Rows).Count,$st.Ui.Details.Text,$st.Ui.SumJunk.Text); $st.Ui.Junk.SelectedIndex=0; Check ($st.Ui.ExplainBody.Visibility -eq 'Visible' -and $st.Ui.ExplainEffect.Text.Length -gt 10) "Disk cleanup explains: $($st.Ui.ExplainTitle.Text)"; Start-YumDiskUsage -State $st -Path (Join-Path $script:Yum.Root 'Tests') },
  { if((PW 'DiskCleanup').Tag.Busy -and $script:WaitE++ -lt 40){ $script:I-- } },

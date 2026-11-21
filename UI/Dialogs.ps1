@@ -541,6 +541,34 @@ function Update-YumProcessRows {
     Update-YumProcessExplanation -State $State
 }
 
+function Update-YumProcessVramText {
+    # 5.15.2: how much graphics memory (VRAM) the selected program holds, on which chip, and what can be done.
+    param([hashtable]$State,$Row)
+    $u=$State.Ui; if($null -eq $u['ExplainVram']){return}
+    $u.GpuSaver.Visibility='Collapsed'; $u.GpuSaverUndo.Visibility='Collapsed'
+    $nm=([string]$Row.Name) -replace '\.exe$',''
+    $mine=@(Get-YumVramUsers | Where-Object { $_.Name -ieq $nm -or ($Row.Path -and $_.Path -and $_.Path -ieq [string]$Row.Path) })
+    $path=[string]$Row.Path
+    $hybrid=Test-YumHybridGraphics
+    $changed=($path -and (Test-YumGpuPreferenceChangedByYumram -ExePath $path))
+    if($mine.Count -eq 0){
+        $u.ExplainVram.Text='None worth mentioning right now (under 20 MB). Graphics memory is managed by Windows itself; no program can free another program''s VRAM.'
+    } else {
+        $parts=@($mine | Group-Object Adapter | ForEach-Object { '{0:N2} GB on {1}' -f ((($_.Group | Measure-Object MB -Sum).Sum)/1024),$_.Name })
+        $onMain=@($mine | Where-Object { $_.OnMainGpu }).Count -gt 0
+        $txt='Holding '+($parts -join ' and ')+'.'
+        $where=Get-YumVramAdvice -Name $nm
+        if($onMain -and $Row.Kind -notin @('Game','Windows','Security')){
+            $txt+=' That is memory your games cannot use.'
+            if($where){ $txt+=(' To free it: turn off hardware acceleration - {0} (then restart the program).' -f $where) }
+            if($hybrid){ $txt+=' Or move it to the power-saving graphics chip below.' }
+        } elseif($Row.Kind -eq 'Game'){ $txt+=' A game needs this - it is the point of the gaming chip.' }
+        $u.ExplainVram.Text=$txt
+        if($hybrid -and $onMain -and $path -and $Row.Kind -notin @('Game','Windows','Security') -and -not $changed){ $u.GpuSaver.Visibility='Visible' }
+    }
+    if($changed){ $u.GpuSaverUndo.Visibility='Visible'; $u.ExplainVram.Text+=' YUMRAM set this program to the power-saving chip (takes effect when it restarts).' }
+}
+
 function Update-YumProcessExplanation {
     param($State)
     $u=$State.Ui
@@ -575,6 +603,7 @@ function Update-YumProcessExplanation {
     }
     try{ $adv=Get-YumKindAdvice -Kind ([string]$row.Kind) -Name ([string]$row.Name) -Path ([string]$row.Path) -Company ([string]$row.Company); $u.ExplainAdviceLabel.Text=$adv.Label; $u.ExplainAdviceLabel.Foreground=Get-YumBrush $adv.Color; $u.ExplainAdviceBadge.BorderBrush=Get-YumBrush $adv.Color }catch{}   # 5.15.2
     $u.ExplainSafe.Text=$x.Safe
+    try{ Update-YumProcessVramText -State $State -Row $row }catch{}   # 5.15.2: graphics memory + power-saving chip
     $u.ExplainYum.Text=$x.Yumram
     $u.ExplainPath.Text=if([string]::IsNullOrWhiteSpace($row.Path)){'Windows keeps this location private (protected process).'}else{$row.Path}
     $u.OpenLocation.IsEnabled=-not [string]::IsNullOrWhiteSpace($row.Path)
@@ -590,7 +619,7 @@ function Show-YumTopProcesses {
         $reader=New-Object System.Xml.XmlNodeReader $xaml
         $window=[Windows.Markup.XamlReader]::Load($reader)
         $ui=@{}
-        foreach($n in 'Items','Details','Refresh','Pause','LiveText','EndTask','Close','SumUsed','SumAvailable','SumPrograms','SumBiggest','ExplainTitle','ExplainSub','ExplainWhat','ExplainBody','ExplainMemory','ExplainSafe','ExplainYum','ExplainPath','OpenLocation','SumCpu','SumCpuTop','SumCpuBar','SortRam','SortCpu','ExplainCpu','RuleNeverTrim','RuleNeverHold','ExplainAdviceBadge','ExplainAdviceLabel'){$ui[$n]=$window.FindName($n);if($null -eq $ui[$n]){throw "Top processes control missing: $n"}}
+        foreach($n in 'Items','Details','Refresh','Pause','LiveText','EndTask','Close','SumUsed','SumAvailable','SumPrograms','SumBiggest','ExplainTitle','ExplainSub','ExplainWhat','ExplainBody','ExplainMemory','ExplainSafe','ExplainYum','ExplainPath','OpenLocation','SumCpu','SumCpuTop','SumCpuBar','SortRam','SortCpu','ExplainCpu','RuleNeverTrim','RuleNeverHold','ExplainAdviceBadge','ExplainAdviceLabel','ExplainVram','GpuSaver','GpuSaverUndo'){$ui[$n]=$window.FindName($n);if($null -eq $ui[$n]){throw "Top processes control missing: $n"}}
         $rows=New-Object 'System.Collections.ObjectModel.ObservableCollection[object]'
         $ui.Items.ItemsSource=$rows
         # Intelligence knowledge by program name (used for kinds and explanations).
@@ -606,7 +635,14 @@ function Show-YumTopProcesses {
         $timer.Tag=$state
         $timer.Add_Tick({param($s,$e)try{if(-not $s.Tag.Paused){Update-YumProcessRows -State $s.Tag}}catch{Write-YumLogException -Context 'Top processes live update failed' -Exception $_.Exception}})
         $state.Timer=$timer
-        foreach($c in 'Pause','EndTask','Close','OpenLocation','Items','SortRam','SortCpu','RuleNeverTrim','RuleNeverHold'){$ui[$c].Tag=$state}
+        foreach($c in 'Pause','EndTask','Close','OpenLocation','Items','SortRam','SortCpu','RuleNeverTrim','RuleNeverHold','GpuSaver','GpuSaverUndo'){$ui[$c].Tag=$state}
+        foreach($b in 'GpuSaver','GpuSaverUndo'){
+            $ui[$b].Add_Click({param($s,$e)
+                try{ $st=$s.Tag; $row=$st.Ui.Items.SelectedItem; if($null -eq $row){return}
+                     $r=Set-YumGpuPreference -ExePath ([string]$row.Path) -Undo:($s.Name -eq 'GpuSaverUndo')
+                     try{ Show-YumToast -Kind $(if($r.Success){'Ok'}else{'Warn'}) -Text ([string]$r.Reason) }catch{}
+                     Update-YumProcessVramText -State $st -Row $row }catch{ Write-YumLogException -Context 'Graphics preference change failed' -Exception $_.Exception } })
+        }
         # 5.12: per-program rules (Never trim -> ProtectedProcesses; Never hold back -> CpuBalanceExclusions).
         $ruleClick={param($s,$e)$st=$s.Tag;$row=$st.Ui.Items.SelectedItem;if($null -eq $row){return};$key=if($s.Name -eq 'RuleNeverTrim'){'ProtectedProcesses'}else{'CpuBalanceExclusions'};$name=[string]$row.Name;$list=New-Object System.Collections.Generic.List[string];foreach($x in @($script:Yum.Config[$key])){if($x -and ([string]$x -replace '\.exe$','') -ine $name){$list.Add([string]$x)}};if([bool]$s.IsChecked){$list.Add($name)};Update-YumConfigValue -Name $key -Value ([string[]]$list.ToArray());$st.ProtectedCache=@{};$st.Ui.Details.Text=if([bool]$s.IsChecked){'Saved: '+$name+$(if($key -eq 'ProtectedProcesses'){' will never be trimmed.'}else{' will never be held back.'})}else{'Saved: rule removed for '+$name+'.'};try{Write-YumLog ('Rule: {0} {1} {2}.' -f $name,$(if([bool]$s.IsChecked){'added to'}else{'removed from'}),$key)}catch{}}
         $ui.RuleNeverTrim.Add_Click($ruleClick);$ui.RuleNeverHold.Add_Click($ruleClick)

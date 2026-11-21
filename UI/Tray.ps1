@@ -164,6 +164,28 @@ function Exit-YumApp {
     try{ $script:Yum.Window.Close() }catch{}
 }
 
+function Restart-YumAsAdministrator {
+    # 5.15.2: one click from a page that needs administrator (Disk cleanup's Windows files, hidden system programs).
+    # Uses the no-prompt task when it is set up, otherwise one Windows prompt. If the prompt is declined, nothing changes.
+    if(Test-YumIsElevated){return $true}
+    try{
+        if((Test-YumElevatedTaskCurrent)){
+            Stop-YumSingleInstance
+            if(Start-YumViaElevatedTask){ Write-YumLog 'Restarting as administrator (no-prompt task).'; Exit-YumApp; return $true }
+        }
+        $scriptPath=Join-Path $script:Yum.Root 'App\YUMRAM.ps1'
+        $powershell=Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+        Stop-YumSingleInstance   # the new instance must not find this one still holding the "already running" lock
+        $p=Start-Process -FilePath $powershell -Verb RunAs -WindowStyle Hidden -ArgumentList ('-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "{0}"' -f $scriptPath) -WorkingDirectory $script:Yum.Root -PassThru -ErrorAction Stop
+        if($null -ne $p){ Write-YumLog 'Restarting as administrator.'; Exit-YumApp; return $true }
+    }catch{
+        # Prompt declined or failed: take the single-instance lock back and keep running as before.
+        try{ $m=New-Object System.Threading.Mutex($false,'Local\YUMRAM-V5-SingleInstance'); if($m.WaitOne(0)){ $script:Yum.SingleInstanceMutex=$m; $script:Yum.SingleInstanceOwned=$true } else { $m.Dispose() } }catch{}
+        try{ Show-YumToast -Kind 'Warn' -Text 'YUMRAM keeps running without administrator.' }catch{}
+    }
+    return $false
+}
+
 function Test-YumCloseToBackground {
     # 5.15.2 (user request: "close should put it to task bar to run in background").
     if([bool]$script:Yum['ExitRequested']){return $false}

@@ -60,6 +60,9 @@
         LiveGpuBusy = 0.0
         LastSideScanRead = [datetime]::MinValue
         LastDiskAutoCheck = [datetime]::MinValue
+        VramSampler = $null
+        LastVramWatch = [datetime]::MinValue
+        VramWarnedPid = 0
         DiskAutoRunning = $false
         LastUiReclaimResultVersion = 0
         ReclaimVerificationTimer = $null

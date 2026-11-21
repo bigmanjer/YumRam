@@ -89,4 +89,10 @@ Assert-That (-not (Test-YumSignerMatchesPublisher -Signer 'CN=Evil Corp, O=Evil 
 Assert-That (-not (Test-YumSignerMatchesPublisher -Signer 'CN=Acme Inc., O=Acme Inc.' -Publisher 'Inc.')) 'Generic words alone ("Inc.") never match.'
 Assert-That (-not (Test-YumSignerMatchesPublisher -Signer 'CN=Acme, O=Acme' -Publisher 'Unknown')) 'Unknown publisher never matches.'
 
+# 9. Every sidebar button is registered, so clicking it opens its page (5.15.2: Disk cleanup's button did nothing).
+$shell=[IO.File]::ReadAllText((Join-Path $root 'UI\Shell.ps1'))
+$navList=[regex]::Match($shell,"foreach\(\`$k in @\(('[^)]*')\)\)").Groups[1].Value -split ',' | ForEach-Object { $_.Trim().Trim("'") }
+$uiList=[regex]::Match($mwp,"foreach\(\`$n in @\(('Intelligence'[^)]*)\)\)").Groups[1].Value
+foreach($k in $navList){ Assert-That ($uiList -match ("'{0}'" -f [regex]::Escape($k))) ("Sidebar button {0} is not registered in the main window control list - clicking it would do nothing." -f $k) }
+
 Write-Host ('IdentifyAndAdviceTest passed. {0} installed programs read.' -f $progs.Count)

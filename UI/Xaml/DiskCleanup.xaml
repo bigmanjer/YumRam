@@ -20,6 +20,7 @@
         <Border x:Name="AdminPill" Style="{StaticResource Pill}" Margin="0,0,10,0" VerticalAlignment="Center">
           <TextBlock x:Name="AdminText" Text="" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource Warning}"/>
         </Border>
+        <Button x:Name="RestartAdmin" Content="Restart as administrator" Style="{StaticResource GhostButton}" Margin="0,0,8,0" ToolTip="Restarts YUMRAM with administrator rights so Windows' own files (old updates, logs, Windows.old) can be cleaned too. Uses your no-prompt setup if you have one, otherwise Windows asks once."/>
         <Button x:Name="Reload" Content="↻  Check again" Style="{StaticResource GhostButton}" ToolTip="Measure every category again."/>
       </StackPanel>
       <StackPanel>
