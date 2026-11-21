@@ -1,5 +1,5 @@
 ﻿{
-  "Version": "5.15.0",
+  "Version": "5.15.1",
   "TelemetryIntervalSeconds": 0.5,
   "UIRefreshIntervalSeconds": 0.25,
   "GPUIntervalSeconds": 5.0,
@@ -379,7 +379,7 @@
     "GitHub Repository Corroboration",
     "Reddit Community Context"
   ],
-  "ResearchEngineVersion": "5.15.0",
+  "ResearchEngineVersion": "5.15.1",
   "CleanupStepDelayMs": 200,
   "CleanupMaxPassMilliseconds": 750,
   "CleanupMaxTrimMBPerPass": 384,

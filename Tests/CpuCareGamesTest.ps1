@@ -36,6 +36,16 @@ Assert-That ([datetime]::FromFileTime($snap[$PID].CreateTime).ToString('s') -eq 
 $sw=[Diagnostics.Stopwatch]::StartNew(); 1..10 | ForEach-Object { $null=[YumProcTree]::Snapshot() }
 Assert-That (($sw.Elapsed.TotalMilliseconds/10) -lt 60) ('Snapshot should take a few ms, took {0:N0} ms.' -f ($sw.Elapsed.TotalMilliseconds/10))
 
+# 2b. An idle PC must read as idle (regression found from a screenshot: the snapshot includes the System Idle
+#     Process, PID 0, whose CPU time is idle time - counted, the PC always looked ~100 % busy).
+$script:Yum['CpuBalance']=$null;$script:Yum.Config['CpuBalanceEnabled']=$true
+Invoke-YumCpuBalanceTick; Start-Sleep -Milliseconds 1000; Invoke-YumCpuBalanceTick
+$idlePct=[double](Get-YumCpuBalanceState).SystemPercent
+$real=[double](Get-Counter '\Processor(_Total)\% Processor Time' -SampleInterval 1 -MaxSamples 1).CounterSamples[0].CookedValue
+Assert-That ($idlePct -lt [math]::Max(60,$real+40)) ('CPU care thinks the PC is at {0:N0} % while Windows says {1:N0} %.' -f $idlePct,$real)
+Assert-That (-not (Get-YumCpuBalanceState)['Usage'].ContainsKey(0)) 'The System Idle Process is never counted.'
+$script:Yum['CpuBalance']=$null
+
 # 3. Real checks in strict mode against a test hog: it is held back, room is made for the "game", no errors.
 $src=Join-Path $tmp 'hog.cs'
 Set-Content -LiteralPath $src -Encoding ASCII -Value 'using System;using System.Threading;static class H{static void Main(){int n=Environment.ProcessorCount*2;for(int t=0;t<n;t++){new Thread(()=>{long x=0;var sw=System.Diagnostics.Stopwatch.StartNew();while(sw.Elapsed.TotalSeconds<25){x++;}GC.KeepAlive(x);}).Start();}}}'

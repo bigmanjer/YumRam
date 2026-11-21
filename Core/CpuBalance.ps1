@@ -431,6 +431,9 @@ function Invoke-YumCpuBalanceTick {
     $snapAll=$null;try{$snapAll=[YumProcTree]::Snapshot()}catch{}   # 5.15: one call (~4 ms) instead of one per process
     $st['Snapshot']=$snapAll
     foreach($p in @(Get-Process -ErrorAction SilentlyContinue)){
+        # PID 0 is the System Idle Process: its "CPU time" is idle time. The per-process read used before could
+        # not open it, but the snapshot returns it - counting it made an idle PC look ~100 % busy (5.15 fix).
+        if([int]$p.Id -eq 0){continue}
         $ms=$null
         if($null -ne $snapAll -and $snapAll.ContainsKey([int]$p.Id)){ $ms=[double]$snapAll[[int]$p.Id].CpuMs }
         else{ try{$ms=$p.TotalProcessorTime.TotalMilliseconds}catch{continue} }

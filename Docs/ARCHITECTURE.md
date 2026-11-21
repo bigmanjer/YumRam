@@ -1,69 +1,62 @@
-# YUMRAM architecture (5.3.x)
+# YUMRAM architecture (5.15)
 
-## Threads
+YUMRAM is a Windows PowerShell 5.1 + WPF desktop app with a small C# launcher and installer. It runs as one
+process with one UI thread and four background runspaces that share one state object.
+
+## Processes and threads
 
 ```text
-                 shared state: $script:Yum (ordered dictionary, guarded by Monitor locks)
-                                       |
- +------------------+   +--------------+--------------+   +----------------------------+
- | UI thread (WPF)  |   | Telemetry Core runspace     |   | Controller worker runspace |
- | DispatcherTimer  |   | memory + CPU every 0.5 s    |   | wakes every 1 s or on      |
- | 0.25 s: read     |<--| Telemetry Aux runspace      |   | request (AutoResetEvent):  |
- | snapshot, draw   |   | GPU (5 s), game/foreground  |   | - manual reclaim requests  |
- | graph, show      |   | (2 s); publishes only on    |   | - queued cleanup requests  |
- | results          |   | change                      |   | - automatic maintenance    |
- +------------------+   +-----------------------------+   | - game state, estimates    |
-        |  button clicks only queue work                  +----------------------------+
-        +------------------------------------------------>  (Request-YumMemoryReclaim,
-                                                              Request-YumCleanup)
- Research worker runspace (Intelligence): researches unresolved items, writes a live checkpoint.
+YUMRAM.exe (C# launcher)  ->  powershell.exe -STA App\YUMRAM.ps1  (hidden console; or via the "YUMRAM" scheduled
+                               task when "Start without asking" is chosen)
+
+shared state: $script:Yum (ordered dictionary; every key a worker writes exists from start - Core\Config.ps1)
+
+ UI thread (WPF)                 Telemetry Core runspace        Controller runspace         CPU care runspace
+ DispatcherTimer 0.25 s:         memory + CPU every 0.5 s       wakes <= 1 s or on request   wakes 1 s or on app switch
+ reads snapshots, draws pages;   Telemetry Aux runspace:        - Free RAM / Deep requests   (SetWinEventHook foreground)
+ pages hosted in one window      GPU (only while Overview is    - automatic RAM care         - CPU care (priority, make
+ (UI\Shell.ps1)                  visible), game, foreground     - reachable-RAM estimate       room, EcoQoS, learned level)
+                                                                                             - leak watch (1/min)
+ short-lived runspaces: update check, community download, Windows bloat scan/removal, Startup extras
 ```
 
-Rules:
+Only the UI thread touches WPF objects; workers publish data into `$script:Yum` and the UI timer renders it.
 
-- Only the UI thread touches WPF objects. Workers publish results (`CleanupResult`, `LastReclaim`,
-  `ReachableEstimate`) and bump a version counter; the UI timer renders when a version changes.
-- Never use `System.Timers.Timer` with a scriptblock handler: on Windows PowerShell 5.1 it fires
-  on a thread with no runspace and never runs. Use a runspace worker or a `DispatcherTimer`.
-- Anything that can take more than ~50 ms (process enumeration, signature checks, trims, settle
-  delays) runs on a worker, never on the UI thread.
+## Modules (`App\Bootstrap.ps1` load order)
 
-## Memory engine
-
-| Piece | File | Purpose |
+| Area | Files | Notes |
 |---|---|---|
-| Native calls | `Core/Native.ps1` | `K32EmptyWorkingSet`, `GlobalMemoryStatusEx`, `GetPerformanceInfo`, `NtSetSystemInformation` memory lists, privilege adjust |
-| Safety policy | `Core/Safety.ps1` | Protected-process test and per-mode candidate filter/scoring |
-| Automatic cleanup | `Core/Cleanup.ps1` | Pressure decision, trim plan, adaptive passes, fallback, back-off |
-| Manual reclaim | `Core/MemoryReclaim.ps1` | Free RAM / Deep reclaim, settle + verification, learning |
-| Controller | `Core/Controller.ps1` | Background worker loop and request queue |
+| Base | `Core\Logging.ps1`, `Core\Config.ps1`, `Core\Native.ps1` | log with 5 MB rotation; defaults merged with the user's `config.json` (old defaults migrated, user choices kept); Win32 interop (working sets, memory lists, memory combining, priority/EcoQoS) |
+| RAM | `Core\Telemetry*.ps1`, `Core\Controller.ps1`, `Core\Cleanup.ps1`, `Core\MemoryReclaim.ps1`, `Core\Safety.ps1`, `Core\Games.ps1` | goal maintenance with hysteresis/back-off; candidates = identified, non-protected programs, re-checked by start time before acting; smallest-first plan, big programs trimmed in chunks (`SetProcessWorkingSetSizeEx`, soft limits); Free/Deep reclaim verified after 5/15/30 s; learned retention ratio |
+| CPU | `Core\CpuBalance.ps1`, `Core\LeakWatch.ps1` | one `NtQuerySystemInformation` snapshot per second; Gentle / Balanced (make room) / Strong (Efficiency mode); self-check undo; learned level while gaming from `cpu-knowledge.json`; crash-safe restore file |
+| Knowledge | `Core\Intelligence.ps1`, `Core\Research.ps1`, `Core\Scanner.ps1`, `Core\ProcessGuide.ps1` | identity (path, signer, hash), risk lanes, manual organisation, user-triggered scan and optional online research |
+| Windows | `Core\Startup.ps1`, `Core\WindowsBloat.ps1`, `Core\Bloatware.ps1`, `Core\Elevation.ps1` | startup items (Run keys, Startup folders, Store startup tasks, sign-in scheduled tasks); Windows bloat apps/settings with exact undo; opt-in closing of listed background apps; admin modes |
+| Distribution | `Core\Updates.ps1`, `Core\Report.ps1`, `Core\Community.ps1` | GitHub release check + SHA-256 verified install; "Report a problem" pre-filled issue; opt-in game-result sharing and weekly shared file |
+| UI | `UI\Shell.ps1`, `UI\MainWindow.ps1`, `UI\Dialogs.ps1`, `UI\*Page.ps1`, `UI\Tray.ps1`, `UI\Xaml\*` | one window with a sidebar (Ctrl+1..8), tray, global hotkey, toasts |
 
-### Measurement model
+## Data files (next to YUMRAM; never in the release package)
 
-Trimming moves pages out of a working set. Clean/shared pages become Standby (counted as Available)
-immediately; private pages are compressed or written out, so only part of a trim becomes Available,
-and only after ~1-2 s. Therefore:
+`config.json`, `stats.json`, `history.json`, `state.json`, `cpu-balance.json` (crash-safe CPU care restore),
+`reclaim-learning.json`, `intelligence-db.json`, `research-*.json`, `manual-organizations.json`,
+`cpu-knowledge.json` (this PC's game benchmark), `cpu-community.json` (shared results),
+`windows-bloat-undo.json`, `windows-bloat-history.json`, `cpu-bench\`, `YUMRAM.log` (+ `YUMRAM.old.log`).
+The installer keeps them on reinstall/update; `YUMRAM.exe --uninstall` removes exactly these and YUMRAM's
+program folders, and the folder itself only if it is then empty.
 
-1. Every pass waits `CleanupSettleMilliseconds` / `ReclaimSettleMilliseconds` (1.5 s) before measuring.
-2. `Update-YumGlobalRetention` keeps an EWMA of (Available gain / working set trimmed) for passes of
-   at least 200 MB, persisted in `reclaim-learning.json` (bounded 15-90%, default 40%).
-3. `Get-YumTrimPlan` divides the Available gap by that retention to size a pass.
-4. `Get-YumReachableEstimate` = Available + (eligible working sets x retention) drives the
-   `reachable ≈ X GB` display and the **[OUT OF REACH]** state.
-5. Per-process learning records how much of each trim stayed trimmed after settling, so processes
-   that page straight back in are deprioritized; each PID has a 60 s cooldown.
+## Launcher, installer, updates
 
-## Intelligence and research
+- `Launcher\YumramLauncher.cs` -> `YUMRAM.exe`: start, `--apply-update` (backup to `.previous`, copy, restart),
+  `--rollback`, `--uninstall` (only this copy's entries).
+- `Launcher\YumramSetup.cs` -> `YUMRAM-Setup-<v>.exe`: per-user install to `%LOCALAPPDATA%\Programs\YUMRAM`.
+- `Tools\Build-Release.ps1`: zip (forward-slash paths) + setup + `SHA256SUMS.txt` in `dist\`.
 
-`Core/Intelligence.ps1` builds an identity for each executable (version info + Authenticode,
-cached per path) and classifies it (Protected / Safe to Manage / Candidate / Review / Unknown).
-`Core/Research.ps1` resolves Review/Unknown items from local evidence (installed software, services,
-Store packages, parent folder) and, if enabled, online search. Results persist in
-`intelligence-db.json` and `research-*.json`.
+## Measurement tools
 
-## Configuration
+- `Tools\Bench-CpuCare.ps1` - test game vs test loads x CPU care levels, repeated runs, medians.
+- `Tools\Compare-Versions.ps1` - the same benchmark on the previous release and the new code (gains and losses).
+- `Tools\Build-CommunityKnowledge.ps1` - builds `Community\cpu-community.json` from shared results.
 
-`Config/default-config.json` holds shipped defaults. On launch, `Initialize-YumConfig` merges the
-user's `config.json` over it (`Merge-YumHashtable`, which takes `IDictionary` so the ordered config is
-modified in place), migrates values still at old defaults, and saves. `VERSION` is the single
-source of the release number.
+## Tests
+
+`Tests\Run-AllTests.ps1` runs every test in its own process; `Tests\UI\FullUiProbe.ps1` drives the real app
+(every page, setting and button that does not open external windows) and saves screenshots.

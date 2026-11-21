@@ -173,7 +173,7 @@ function Get-YumStoreStartupTasks {
                         $state=$tk.GetValue('State',$null); if($null -eq $state){continue}
                         $state=[int]$state; if($state -eq 0){continue}   # never set to start: Task Manager does not list it either
                         $pkg=$pk[$pfn];$loc='';$friendly='';$pub=''
-                        if($null -ne $pkg){ $loc=[string]$pkg.InstallLocation; $pub=$(if([string]$pkg.Publisher -match 'CN=([^,]+)'){$Matches[1]}else{''}); try{ $dn=[string](Get-AppxPackageManifest -Package $pkg.PackageFullName).Package.Properties.DisplayName; if($dn -and $dn -notmatch '^ms-resource:'){$friendly=$dn} }catch{} }
+                        if($null -ne $pkg){ $loc=[string]$pkg.InstallLocation; $pub=$(if([string]$pkg.Publisher -match 'CN=([^,]+)'){$Matches[1]}else{''}); try{ $props=(Get-AppxPackageManifest -Package $pkg.PackageFullName).Package.Properties; $dn=[string]$props.DisplayName; if($dn -and $dn -notmatch '^ms-resource:'){$friendly=$dn}; $pd=[string]$props.PublisherDisplayName; if($pd -and $pd -notmatch '^ms-resource:'){$pub=$pd} }catch{}; if($pub -match '^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-'){$pub=''} }
                         if(-not $friendly){ $friendly=(($pfn -split '_')[0] -split '\.')[-1] }
                         $policy=($state -in 3,4)
                         [void]$rows.Add((New-YumStartupRow -Name ('{0}|{1}' -f $pfn,$task) -Friendly $friendly -Publisher $pub -Command ('Store app startup task "{0}"' -f $task) -ExePath '' -HiveName 'HKCU' -ApprovedKey 'StoreTask' -Scope 'You' -Location 'Store app' -Enabled ($state -in 2,4) -NeedsAdmin $false -ByPath $ByPath -MemoryPrefix $loc -Locked $policy -LockedWhy 'Your organisation (a Windows policy) decides whether this starts.'))

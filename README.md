@@ -4,13 +4,13 @@
 
 **Keeps your Windows PC fast by keeping RAM free and the CPU fair — automatically.**
 
-[![Version](https://img.shields.io/badge/version-5.15.0-a855f7)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-5.15.1-a855f7)](CHANGELOG.md)
 [![Platform](https://img.shields.io/badge/Windows-10%20%7C%2011-0078d4)](#requirements)
 [![Stage](https://img.shields.io/badge/stage-beta-22c55e)](#status)
 
 [Download](https://github.com/bigmanjer/YumRam/releases/latest) · [What's new](CHANGELOG.md) · [How it works](#how-it-works) · [FAQ](#faq)
 
-<img src="Docs/Screenshots/after/MainWindow.png" alt="YUMRAM Overview: RAM and CPU rings, usage graph, one-click reclaim" width="880">
+<img src="Docs/Screenshots/Overview.png" alt="YUMRAM Overview: RAM and CPU rings, usage graph, one-click reclaim" width="880">
 
 </div>
 
@@ -40,18 +40,20 @@ Most "RAM cleaners" flush everything and show a big number. YUMRAM is different:
 | **Startup apps** | What starts with Windows, what it costs in RAM, and safe on/off using the same switch as Task Manager. |
 | **Intelligence** | Identifies every process, service and app (signatures, installed-software records, services, Store packages, optional web lookup). Only identified, non-protected programs are ever trimmed. |
 | **History** | Usage graph for 30 s, 5 min, 1 h and 12 h, kept across restarts. |
+| **Game measurement** | *Measure games on this PC* tests each CPU care level with a test game; while you play, YUMRAM uses what worked best here. Optional, opt-in sharing helps everyone with the same CPU. |
 | **Tray & updates** | Lives in the tray with live RAM %, low-RAM and leak notices; checks GitHub for updates and installs them verified. |
 
-<details>
-<summary><b>More screenshots</b></summary>
+## Screenshots
 
 | What's running | Reclaim Center |
 |---|---|
-| <img src="Docs/Screenshots/after/TopProcesses.png" width="430"> | <img src="Docs/Screenshots/after/MemoryReclaim.png" width="430"> |
-| **Startup apps** | **CPU settings** |
-| <img src="Docs/Screenshots/after/Startup.png" width="430"> | <img src="Docs/Screenshots/after/Settings-CPU.png" width="430"> |
-
-</details>
+| <img src="Docs/Screenshots/WhatsRunning.png" width="430" alt="What's running: every program's RAM and CPU, explained"> | <img src="Docs/Screenshots/ReclaimCenter.png" width="430" alt="Reclaim Center: what was trimmed and what Windows gave back"> |
+| **Windows bloat** | **Startup apps** |
+| <img src="Docs/Screenshots/WindowsBloat.png" width="430" alt="Windows bloat: preinstalled apps and ad settings, all reversible"> | <img src="Docs/Screenshots/StartupApps.png" width="430" alt="Startup apps including Store apps and sign-in tasks"> |
+| **CPU care settings** | **Intelligence** |
+| <img src="Docs/Screenshots/Settings-CPU.png" width="430" alt="CPU care levels, this PC's layout and game measurement"> | <img src="Docs/Screenshots/Intelligence.png" width="430" alt="Intelligence: identity and safety of every process, service and app"> |
+| **Settings** | **About** |
+| <img src="Docs/Screenshots/Settings.png" width="430" alt="Settings"> | <img src="Docs/Screenshots/About.png" width="430" alt="About YUMRAM"> |
 
 ## Install
 
@@ -132,7 +134,7 @@ Open <b>About › Log</b> (or <code>YUMRAM.log</code> in the YUMRAM folder) and
 ## Development
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File Tests\Run-AllTests.ps1     # 54 tests, each in its own process
+powershell -NoProfile -ExecutionPolicy Bypass -File Tests\Run-AllTests.ps1     # 61 tests, each in its own process
 powershell -NoProfile -ExecutionPolicy Bypass -STA -File Tests\UI\FullUiProbe.ps1 -Root . -Out $env:TEMP\yum-ui
 powershell -NoProfile -ExecutionPolicy Bypass -File Tools\Build-Release.ps1    # dist\: setup, zip, SHA256SUMS
 ```
@@ -144,7 +146,7 @@ Core/       memory engine, CPU care, safety,        UI/         WPF pages (XAML)
 Config/     shipped defaults                        Tests/      test suite + full UI probe
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) and [Docs/ARCHITECTURE.md](Docs/ARCHITECTURE.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md), [Docs/ARCHITECTURE.md](Docs/ARCHITECTURE.md) and [SECURITY.md](SECURITY.md). Every release is measured against the previous one (`Tools\Compare-Versions.ps1`).
 
 ## Status
 

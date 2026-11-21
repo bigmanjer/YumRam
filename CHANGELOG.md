@@ -1,5 +1,14 @@
 # Changelog
 
+# YUMRAM 5.15.1 — CPU load reading fix, readable Store publishers, docs
+
+- **Fix: CPU care thought an idle PC was ~100 % busy.** The one-call process snapshot (5.15.0) includes the System
+  Idle Process, whose CPU time is idle time. It is no longer counted (found from a screenshot: the CPU care card
+  said "PC at 99 %" while the CPU ring showed 11 %). New test: an idle PC must read as idle.
+- Startup apps: Store apps show their real publisher (e.g. "Apple Inc." instead of a package ID).
+- About page: up-to-date privacy and Startup texts. New `SECURITY.md`; `Docs/ARCHITECTURE.md` rewritten for 5.15;
+  README screenshot gallery of every page. UI probe also captures the Startup page.
+
 # YUMRAM 5.15.0 — Windows bloat, audit fixes
 
 - **Windows bloat page** (sidebar, Ctrl+8). *Preinstalled apps*: only apps on a curated list are ever offered
