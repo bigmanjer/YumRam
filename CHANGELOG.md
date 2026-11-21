@@ -1,5 +1,18 @@
 # Changelog
 
+# YUMRAM 5.15.5 (not released yet) — honest disk cleanup numbers
+
+- **Real-PC disk cleanup test** (test PC, without administrator, default ticks only): temp files 759 MB, browser
+  caches 663 MB, picture previews 141 MB, crash dumps 45 MB, app caches 136 MB - 17,000 files in 35 s. YUMRAM said
+  1.7 GB freed, but the Windows drive gained 1.2 GB: Windows lets a program "delete" a file that another program still
+  has open (Chrome's cache, Explorer's previews), and that space only returns when the program closes.
+- **Fix:** a file is now deleted only when no program has it open (an exclusive open must succeed first); otherwise it
+  is skipped as "in use". The reported number now matches the real gain (re-test: reported = real), and open
+  programs are never disturbed. New test: a file open the way Chrome opens its cache is skipped, then cleaned once
+  closed.
+- The confirm box names open programs that hold caches ("Open now: Chrome, Discord, Steam - close them first for the
+  biggest result").
+
 # YUMRAM 5.15.4 — updates install themselves
 
 - **Automatic updates** (user: "whenever an update becomes available it gets updated"). YUMRAM now checks GitHub

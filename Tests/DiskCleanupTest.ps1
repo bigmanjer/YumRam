@@ -36,6 +36,13 @@ try{
     $lockFile=Join-Path $box 'locked.tmp'; Set-Content -LiteralPath $lockFile -Value 'x'; (Get-Item $lockFile).LastWriteTime=$old
     $fs=[IO.File]::Open($lockFile,'Open','Read','None')
     try{ $c2=[YumDiskWalk]::Walk($box,[string[]]@(),24,$true); Assert-That ($c2.Skipped -ge 1 -and (Test-Path -LiteralPath $lockFile)) 'A file in use must be skipped.' }finally{ $fs.Dispose() }
+    # 5.15.3 real-PC test: a file open the way Chrome opens its cache (others may read, write AND delete) used to be
+    # "deleted" while still open - its space only came back when Chrome closed, so YUMRAM over-reported. Must be skipped.
+    $shared=Join-Path $box 'chrome-style.tmp'; Set-Content -LiteralPath $shared -Value ('x'*5000); (Get-Item $shared).LastWriteTime=$old
+    $fs2=New-Object IO.FileStream($shared,[IO.FileMode]::Open,[IO.FileAccess]::Read,([IO.FileShare]::ReadWrite -bor [IO.FileShare]::Delete))
+    try{ $c3=[YumDiskWalk]::Walk($box,[string[]]@('chrome-style.tmp'),24,$true); Assert-That ($c3.Deleted -eq 0 -and $c3.Freed -eq 0 -and $c3.Skipped -ge 1) 'A file another program has open (sharing delete) must be skipped, not counted as freed.' }finally{ $fs2.Dispose() }
+    Assert-That (-not (Test-Path -LiteralPath $shared) -or (Get-Item -LiteralPath $shared).Length -gt 0) 'The open file must be left alone.'
+    $c4=[YumDiskWalk]::Walk($box,[string[]]@('chrome-style.tmp'),24,$true); Assert-That ($c4.Deleted -eq 1) 'Once the program closes the file, it is cleaned.'
 
     # Folder analysis.
     $u=Get-YumDiskUsage -Path $root -TopFiles 5

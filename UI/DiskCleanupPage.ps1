@@ -123,6 +123,8 @@ function Show-YumDiskCleanup {
             $names=($rows | ForEach-Object { '  •  {0}  ({1})' -f $_.Name,$_.SizeText }) -join [Environment]::NewLine
             $warn=if(@($rows | Where-Object { $_.Key -eq 'Recycle' }).Count){"`n`nThe Recycle Bin is emptied permanently."}else{''}
             if(@($rows | Where-Object { [string]$_.Special }).Count){ $total+=' plus what Windows'' own tools find (a few minutes)' }
+            # 5.15.3: say which open programs hold caches - their files in use are skipped, so close them for the full result.
+            try{ $open=@(Get-YumOpenCacheApps -Keys @($rows | ForEach-Object { $_.Key })); if($open.Count){ $warn+=("`n`nOpen now: {0}. Their files in use are skipped - close them first for the biggest result, or clean anyway." -f ($open -join ', ')) } }catch{}
             $r=[System.Windows.MessageBox]::Show($script:Yum.Window,("Clean about {0}?`n`n{1}{2}`n`nFiles in use are skipped. Your own files, cookies and passwords are never touched." -f $total,$names,$warn),'YUMRAM - Disk cleanup',[System.Windows.MessageBoxButton]::YesNo,[System.Windows.MessageBoxImage]::Question)
             if($r -ne [System.Windows.MessageBoxResult]::Yes){return}
             Start-YumDiskWork -State $st -Busy ('Cleaning {0} categories…' -f $rows.Count) -Argument ([string[]]@($rows | ForEach-Object { $_.Key })) -Work { param($a) Invoke-YumDiskCleanup -Keys $a } -Done {

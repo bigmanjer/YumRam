@@ -44,7 +44,17 @@ public static class YumDiskWalk {
                     if (f.LastWriteTimeUtc > cutoff) continue;
                     r.Bytes += f.Length; r.Files++;
                     if (delete) {
-                        try { if ((f.Attributes & FileAttributes.ReadOnly) != 0) f.Attributes = FileAttributes.Normal; long len = f.Length; f.Delete(); r.Deleted++; r.Freed += len; }
+                        // 5.15.3 test on a real PC: Windows lets you delete a file another program still has open (e.g. Chrome's
+                        // cache, Explorer's thumbnails); it only disappears - and frees space - when that program closes.
+                        // YUMRAM reported 1.7 GB while the drive gained 1.2 GB. Now a file is deleted only if nothing has it
+                        // open (exclusive open succeeds); otherwise it is skipped as "in use", so the number is honest and
+                        // running programs are left alone.
+                        try {
+                            if ((f.Attributes & FileAttributes.ReadOnly) != 0) f.Attributes = FileAttributes.Normal;
+                            long len = f.Length;
+                            using (var probe = new FileStream(f.FullName, FileMode.Open, FileAccess.ReadWrite, FileShare.None)) { }
+                            f.Delete(); r.Deleted++; r.Freed += len;
+                        }
                         catch { r.Skipped++; }
                     }
                 } catch { r.Skipped++; }
@@ -156,6 +166,18 @@ function Get-YumDiskJunkCategories {
         [pscustomobject]@{Key='Recycle';Name='Recycle Bin';Advice='YourCall';Admin=$false;Auto=$false;MinAgeHours=0;Patterns=@();Roots=@()
             Why='Files you deleted. They stay in the Recycle Bin until it is emptied.';Effect='Your call: emptying it is permanent - check there is nothing you still want first.'}
     )
+}
+
+function Get-YumOpenCacheApps {
+    # 5.15.3: programs that are open now and hold caches in the chosen categories (their files in use are skipped).
+    param([string[]]$Keys)
+    $map=@{
+        Browser=@(@('chrome','Chrome'),@('msedge','Edge'),@('brave','Brave'),@('opera','Opera'),@('vivaldi','Vivaldi'),@('firefox','Firefox'))
+        AppCache=@(@('discord','Discord'),@('spotify','Spotify'),@('steamwebhelper','Steam'),@('EpicGamesLauncher','Epic Games'),@('ms-teams','Teams'),@('Code','VS Code'))
+    }
+    $running=@{}; foreach($p in @(Get-Process -ErrorAction SilentlyContinue)){ $running[$p.ProcessName.ToLowerInvariant()]=$true }
+    $names=foreach($k in @($Keys)){ foreach($e in @($map[$k])){ if($null -ne $e -and $running.ContainsKey(([string]$e[0]).ToLowerInvariant())){ $e[1] } } }
+    return @($names | Select-Object -Unique)
 }
 
 function Invoke-YumWindowsDiskCleanup {
