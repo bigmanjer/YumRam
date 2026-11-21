@@ -1,6 +1,6 @@
 # Changelog
 
-# YUMRAM 5.15.2 (not released yet) — live readings when paused, clearer advice, better identification
+# YUMRAM 5.15.2 — Intelligence fixes, Disk cleanup, floating mini bar, clearer Overview, plain words everywhere
 
 Compared with 5.15.1 (measured on the test PC: Ryzen 7 4800H, RTX 3050 Laptop + Radeon iGPU):
 
@@ -76,10 +76,12 @@ Compared with 5.15.1 (measured on the test PC: Ryzen 7 4800H, RTX 3050 Laptop + 
 - CPU care while gaming steps in from 50 % whole-PC load (was 70 %): the focused re-test showed games starved
   at 50-55 % total load with nothing held back.
 - Costs / trade-offs: the scan uses up to 6 threads for a few seconds; the Intelligence list is longer (all
-  items, not 240). Older saved Intelligence records keep their saved category until the next scan; the advice
-  badge already uses the new knowledge.
-- Tests: 65 (new LiveReadingsTest, IdentifyAndAdviceTest, PurposeAndMiniBarTest, DiskCleanupTest); UI probe 82 steps (disk cleanup, (paused readings, rings, mini bar, X button, advice badge,
-  scan visibility). GitHub Actions workflow is manual-only while the account's billing lock is on.
+  items, not 240). The research engine version is now 5.15.2, so items an older version left "Unknown" are
+  researched once more (with the fixes above) on the next scan; saved categories update then.
+- Tests: 65 (new LiveReadingsTest, IdentifyAndAdviceTest, PurposeAndMiniBarTest, DiskCleanupTest); UI probe 82
+  steps (paused readings, rings, disk cleanup, mini bar, X button, advice badge, scan visibility), also run as
+  administrator. GitHub Actions workflow is manual-only while the account's billing lock is on.
+
 # YUMRAM 5.15.1 — CPU load reading fix, readable Store publishers, docs
 
 - **Fix: CPU care thought an idle PC was ~100 % busy.** The one-call process snapshot (5.15.0) includes the System
