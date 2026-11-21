@@ -321,6 +321,21 @@ function Get-YumResearchOverlapFast {
     return [int][math]::Round(($hits / [double]$LeftTokens.Count) * 100,0)
 }
 
+function Test-YumSignerMatchesPublisher {
+    # 5.15.2 fix: the old check measured how much of the long certificate subject (CN, O, L, S, C...) appeared in the
+    # short publisher name, so it almost never reached 50 % and "signer matches publisher" never counted - even for
+    # Discord or Anthropic. Now: the publisher's distinctive words must appear in the certificate's CN / O fields.
+    param([string]$Signer,[string]$Publisher)
+    if([string]::IsNullOrWhiteSpace($Signer) -or [string]::IsNullOrWhiteSpace($Publisher) -or $Publisher -match '^(Unknown|Unsigned)$'){return $false}
+    $names=@([regex]::Matches($Signer,'(?i)\b(?:CN|O)=("[^"]+"|[^,]+)') | ForEach-Object { $_.Groups[1].Value.Trim('"') }) -join ' '
+    if(-not $names){$names=$Signer}
+    $generic='^(inc|llc|ltd|limited|corp|corporation|co|company|gmbh|ag|bv|sa|sas|srl|pbc|plc|pty|the|software|technologies|technology|systems|group|international|holdings)$'
+    $pub=@(Convert-YumResearchText $Publisher | Where-Object { ($_ -replace '[\.\-_+]+$','') -notmatch $generic -and ($_ -replace '[\.\-_+]+','').Length -ge 2 })
+    if($pub.Count -eq 0){return $false}
+    $set=Get-YumResearchTokenSet $names
+    return ((Get-YumResearchOverlapFast ([string[]]$pub) $set) -ge 60)
+}
+
 function Get-YumResearchExecutablePath {
     param([string]$Path)
     if([string]::IsNullOrWhiteSpace($Path)){return ''}
@@ -839,7 +854,7 @@ function Get-YumResearchPlacement {
         $signer=[string]$SignatureEvidence.Signer
         if($status -eq 'Valid' -and -not [string]::IsNullOrWhiteSpace($signer)){
             $scores.Application+=20;[void]$evidence.Add('Valid Authenticode signature')
-            if(-not [string]::IsNullOrWhiteSpace($Publisher) -and (Get-YumResearchTokenOverlap -Left $signer -Right $Publisher) -ge 50){
+            if(Test-YumSignerMatchesPublisher -Signer $signer -Publisher $Publisher){
                 $scores.Application+=15;[void]$evidence.Add('Signer matches publisher evidence')
             }
             if($signer -match '(?i)Microsoft Corporation|Microsoft Windows'){$scores.Security+=10}
@@ -884,6 +899,17 @@ function Get-YumResearchPlacement {
     foreach($appxV in @($AppxEvidence|Where-Object{$null -ne $_.PSObject.Properties['ExactPackage'] -and [bool]$_.ExactPackage -and [string]$_.SignatureKind -in @('Store','System')})){
         $scores.Application+=25;[void]$evidence.Add(('Package signature verified by Windows ({0})' -f $appxV.SignatureKind));break
     }
+    # 5.15.2: a developer-signed package (Windows checks that signature before it lets the package install) that is an
+    # exact match, from a publisher that also has a normal installed program (e.g. the Notepad++, WinRAR or AMD shell
+    # extensions), is that program's own part. Was 30 points, just short of the 35 needed, so it showed "Unknown".
+    $devExact=@($AppxEvidence|Where-Object{$null -ne $_.PSObject.Properties['ExactPackage'] -and [bool]$_.ExactPackage -and [string]$_.SignatureKind -eq 'Developer'})
+    if($devExact.Count -gt 0 -and -not [string]::IsNullOrWhiteSpace($Publisher) -and $Publisher -ne 'Unknown'){
+        $pubTok=[string[]]@(Convert-YumResearchText $Publisher | Where-Object { $_.Length -ge 3 -and $_ -notmatch '^(inc|llc|ltd|corp|corporation|gmbh|the|software)$' })
+        $installedSamePublisher=$false
+        try{ if($null -eq $script:YumResearchRegistryInventory){ [void](Get-YumInstalledSoftwareResearch -Name 'x' -Publisher '') }
+             foreach($it in $script:YumResearchRegistryInventory.ToArray()){ if($pubTok.Count -and (Get-YumResearchOverlapFast $pubTok $it.PubSet) -ge 60){ $installedSamePublisher=$true; break } } }catch{}
+        if($installedSamePublisher){ $scores.Application+=15;[void]$evidence.Add('Developer-signed package from a publisher with an installed program') }
+    }
     if($isWindowsSystemService){$scores.System+=45;[void]$evidence.Add('Windows system service identity')}
     if($isWindowsAppxComponent){$scores.System+=45;[void]$evidence.Add('Windows system component identity')}
     if($microsoftPackageId -and $isWindowsAppxComponent){$scores.System+=20;[void]$evidence.Add('Published under Microsoft''s own package ID')}
@@ -921,7 +947,7 @@ function Get-YumResearchPlacement {
     $confidence=[math]::Min(99,[math]::Max(0,50+$top-$second))
     $registryStrong=(@($RegistryEvidence|Where-Object{[int]$_.Score -ge 60})).Count -gt 0
     $signatureStrong=($null -ne $SignatureEvidence -and [string]$SignatureEvidence.Status -eq 'Valid' -and -not [string]::IsNullOrWhiteSpace([string]$SignatureEvidence.Thumbprint))
-    $signerMatches=($signatureStrong -and -not [string]::IsNullOrWhiteSpace($Publisher) -and (Get-YumResearchTokenOverlap -Left ([string]$SignatureEvidence.Signer) -Right $Publisher) -ge 50)
+    $signerMatches=($signatureStrong -and (Test-YumSignerMatchesPublisher -Signer ([string]$SignatureEvidence.Signer) -Publisher $Publisher))
     $wingetStrong=($null -ne $WingetEvidence -and [bool]$WingetEvidence.ExactName -and [int]$WingetEvidence.MatchScore -ge 75)
     $appxStrong=(@($AppxEvidence|Where-Object{[int]$_.Score -ge 75}).Count -gt 0)
     # 5.4: Windows verifies Store/System package signatures itself; an exact package match with that

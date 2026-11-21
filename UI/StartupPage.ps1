@@ -66,7 +66,7 @@ function Start-YumStartupExtras {
 function Update-YumStartupExplanation {
     param([hashtable]$State)
     $ui=$State.Ui;$a=$ui.Items.SelectedItem
-    if($null -eq $a){ $ui.ExplainTitle.Text='Click a program';$ui.ExplainSub.Text='';$ui.ExplainBody.Visibility='Collapsed';return }
+    if($null -eq $a){ $ui.ExplainTitle.Text='Click a program';$ui.ExplainSub.Text='';$ui.ExplainAdvice.Text='Pick a program to see what it is, what it is for, how much RAM it uses right now, and whether it is safe to stop it from starting with Windows.';$ui.ExplainBody.Visibility='Collapsed';return }   # 5.15.2: no leftover text from the last selection
     $ui.ExplainBody.Visibility='Visible'
     $ui.ExplainTitle.Text=[string]$a.Friendly
     $ui.ExplainSub.Text=('{0}  •  {1}' -f $a.Publisher,$(if($a.Enabled){'starts with Windows'}else{'does not start with Windows'}))

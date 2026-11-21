@@ -26,7 +26,7 @@
               <StackPanel><TextBlock Text="Memory goal (GB)" Style="{StaticResource RowLabel}"/><TextBlock Text="Keep at least this much RAM available. YUMRAM shows what is reachable on this PC next to the goal." Style="{StaticResource RowHint}"/></StackPanel>
               <TextBox x:Name="MinimumAvailable" Grid.Column="1" VerticalAlignment="Top"/></Grid>
             <Grid Style="{StaticResource Row}"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="240"/></Grid.ColumnDefinitions>
-              <StackPanel><TextBlock Text="Mode" Style="{StaticResource RowLabel}"/><TextBlock Text="Safe trims only low-risk idle apps; Balanced adds signed apps; Aggressive adds other identified apps." Style="{StaticResource RowHint}"/></StackPanel>
+              <StackPanel><TextBlock Text="Mode" Style="{StaticResource RowLabel}"/><TextBlock Text="How far YUMRAM may go when freeing RAM. Safe: only low-risk idle apps. Balanced (recommended): also signed apps. Aggressive: any identified app. Windows, security, drivers and your game are never touched." Style="{StaticResource RowHint}"/></StackPanel>
               <ComboBox x:Name="Mode" Grid.Column="1" VerticalAlignment="Top"><ComboBoxItem Content="Safe — minimal intervention" Tag="Safe"/><ComboBoxItem Content="Balanced — recommended" Tag="Balanced"/><ComboBoxItem Content="Aggressive — maximum reclaim" Tag="Aggressive"/></ComboBox></Grid>
             <CheckBox x:Name="StartMonitoringAutomatically" Content="Start monitoring automatically when YUMRAM opens"/>
             <CheckBox x:Name="ShowTrayIcon" Content="Show RAM % in the notification area (tray icon)" Margin="0,8,0,0"/>
@@ -36,7 +36,7 @@
             <TextBlock Text="Changes apply as soon as you press Apply." Style="{StaticResource Caption}" Margin="27,2,0,0"/>
             <Grid Style="{StaticResource Row}" Margin="0,10,0,6"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="260"/></Grid.ColumnDefinitions>
               <StackPanel><TextBlock Text="Administrator rights" Style="{StaticResource RowLabel}"/>
-                <TextBlock Text="Needed for the strongest reclaim (file cache, memory lists, memory combining) and for 'all users' startup apps." Style="{StaticResource RowHint}"/></StackPanel>
+                <TextBlock Text="Needed for Deep reclaim (emptying Windows' memory cache), cleaning Windows' own files in Disk cleanup, identifying hidden system programs, and 'all users' startup apps." Style="{StaticResource RowHint}"/></StackPanel>
               <ComboBox x:Name="ElevationMode" Grid.Column="1" VerticalAlignment="Top">
                 <ComboBoxItem Content="Ask each time (Windows prompt)" Tag="Ask"/>
                 <ComboBoxItem Content="Start without asking (set up once)" Tag="NoPrompt"/>
@@ -49,7 +49,8 @@
             <Grid Margin="27,6,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="160"/><ColumnDefinition/></Grid.ColumnDefinitions>
               <TextBox x:Name="GlobalHotkey" ToolTip="For example Ctrl+Alt+R or Ctrl+Shift+F9. Needs at least one of Ctrl, Alt, Shift or Win." AutomationProperties.Name="Global shortcut"/>
               <TextBlock x:Name="HotkeyState" Grid.Column="1" Text="" Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="10,0,0,0" TextWrapping="Wrap"/></Grid>
-            <Grid Style="{StaticResource Row}" Margin="0,14,0,0"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="240"/></Grid.ColumnDefinitions>
+            <!-- 5.15.2: hidden - it only repeated the memory goal and confused people (kept for the code that fills it) -->
+            <Grid Style="{StaticResource Row}" Margin="0,14,0,0" Visibility="Collapsed"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="240"/></Grid.ColumnDefinitions>
               <StackPanel><TextBlock Text="Cleanup target (GB)" Style="{StaticResource RowLabel}" Foreground="{StaticResource TextMuted}"/><TextBlock Text="Read-only: always equal to the memory goal." Style="{StaticResource RowHint}"/></StackPanel>
               <TextBox x:Name="CleanupTarget" Grid.Column="1" IsReadOnly="True" Foreground="{StaticResource TextMuted}" VerticalAlignment="Top" ToolTip="Kept for compatibility. The memory goal is the single source of truth."/></Grid>
           </StackPanel></Border>
@@ -66,19 +67,19 @@
                   <StackPanel><TextBlock Text="Minimum time between cleanups (s)" Style="{StaticResource RowLabel}"/><TextBlock Text="Automatic cleanup waits at least this long before starting again." Style="{StaticResource RowHint}"/></StackPanel>
                   <TextBox x:Name="CleanInterval" Grid.Column="1" VerticalAlignment="Top"/></Grid>
                 <Grid Style="{StaticResource Row}"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="140"/></Grid.ColumnDefinitions>
-                  <StackPanel><TextBlock Text="Per-process cooldown (s)" Style="{StaticResource RowLabel}"/><TextBlock Text="A trimmed program is left alone this long, so busy apps are not trimmed over and over." Style="{StaticResource RowHint}"/></StackPanel>
+                  <StackPanel><TextBlock Text="Rest time for each program (s)" Style="{StaticResource RowLabel}"/><TextBlock Text="A trimmed program is left alone this long, so busy apps are not trimmed over and over." Style="{StaticResource RowHint}"/></StackPanel>
                   <TextBox x:Name="ProcessCooldown" Grid.Column="1" VerticalAlignment="Top"/></Grid>
                 <Grid Style="{StaticResource Row}" Margin="0"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="140"/></Grid.ColumnDefinitions>
-                  <StackPanel><TextBlock Text="Target hysteresis (GB)" Style="{StaticResource RowLabel}"/><TextBlock Text="Once automatic care starts, it aims this much above the goal (0 to 2 GB), so it is not triggered again a moment later." Style="{StaticResource RowHint}"/></StackPanel>
+                  <StackPanel><TextBlock Text="Extra margin above the goal (GB)" Style="{StaticResource RowLabel}"/><TextBlock Text="Once automatic care starts, it aims this much above the goal (0 to 2 GB), so it is not triggered again a moment later." Style="{StaticResource RowHint}"/></StackPanel>
                   <TextBox x:Name="Hysteresis" Grid.Column="1" VerticalAlignment="Top"/></Grid>
               </StackPanel>
             </GroupBox>
-            <GroupBox Header="Pressure threshold (% of RAM in use) and processes per pass">
+            <GroupBox Header="When automatic care starts (% of RAM in use) and how many programs it handles per round, for each mode">
               <Grid>
                 <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="110"/><ColumnDefinition Width="12"/><ColumnDefinition Width="110"/></Grid.ColumnDefinitions>
                 <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-                <TextBlock Grid.Column="1" Text="Pressure %" Style="{StaticResource StatLabel}" Margin="0,0,0,6"/>
-                <TextBlock Grid.Column="3" Text="Per pass" Style="{StaticResource StatLabel}" Margin="0,0,0,6"/>
+                <TextBlock Grid.Column="1" Text="Starts at % RAM used" Style="{StaticResource StatLabel}" Margin="0,0,0,6"/>
+                <TextBlock Grid.Column="3" Text="Programs per round" Style="{StaticResource StatLabel}" Margin="0,0,0,6"/>
                 <TextBlock Grid.Row="1" Text="Safe" Style="{StaticResource RowLabel}" VerticalAlignment="Center"/>
                 <TextBox x:Name="SafePressure" Grid.Row="1" Grid.Column="1" Margin="0,0,0,8"/><TextBox x:Name="SafePass" Grid.Row="1" Grid.Column="3" Margin="0,0,0,8"/>
                 <TextBlock Grid.Row="2" Text="Balanced" Style="{StaticResource RowLabel}" VerticalAlignment="Center"/>
@@ -181,9 +182,9 @@
             </GroupBox>
             <GroupBox Header="System inventory scanner" Visibility="Collapsed">
               <StackPanel>
-                <CheckBox x:Name="EnableSystemScanner" Content="Enable system inventory scanning"/>
+                <CheckBox x:Name="EnableSystemScanner" Content="Let Intelligence scan this PC (programs, services, Store apps, startup items)"/>
                 <Grid Style="{StaticResource Row}" Margin="0,10,0,0"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="140"/></Grid.ColumnDefinitions>
-                  <TextBlock Text="Maximum rows per scan" Style="{StaticResource RowLabel}" VerticalAlignment="Center"/><TextBox x:Name="ScannerMaxItems" Grid.Column="1"/></Grid>
+                  <TextBlock Text="Most items per kind (at least 500 are always checked)" Style="{StaticResource RowLabel}" VerticalAlignment="Center"/><TextBox x:Name="ScannerMaxItems" Grid.Column="1"/></Grid>
               </StackPanel>
             </GroupBox>
           </StackPanel>

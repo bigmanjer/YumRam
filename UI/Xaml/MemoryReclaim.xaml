@@ -21,7 +21,7 @@
       </StackPanel>
       <StackPanel>
         <TextBlock Text="RAM Reclaim Center" Style="{StaticResource AppTitle}"/>
-        <TextBlock Text="Free up memory now and see exactly what was trimmed and how much Available RAM Windows actually gave back." Style="{StaticResource Caption}" Margin="0,2,0,0" TextWrapping="Wrap"/>
+        <TextBlock Text="Free up memory now and see exactly what was taken back from idle programs and how much more RAM programs really got." Style="{StaticResource Caption}" Margin="0,2,0,0" TextWrapping="Wrap"/>
         <TextBlock x:Name="Summary" Text="Ready." Foreground="{StaticResource Success}" FontWeight="SemiBold" Margin="0,8,0,0" TextWrapping="Wrap"/>
       </StackPanel>
     </DockPanel>

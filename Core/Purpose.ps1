@@ -9,6 +9,7 @@ $script:YumServiceDescriptions=$null
 
 # Device / feature words -> what it is for. First match wins, so specific entries come first.
 $script:YumPurposeDevices=@(
+    @{M='(?i)ui\.xaml|net\.native|vclibs|windowsappruntime|\.framework|\bruntime\b|redistributable|visual c\+\+|\.net (desktop )?runtime|webview2 runtime';U='other apps need it to run (a shared building block - keep it)'}
     @{M='(?i)touch ?pad|precision ?touch|\bptp\b|synaptics|elan(tech)?\b|smartpad';U='your touchpad (gestures, scrolling)'}
     @{M='(?i)finger ?print|biometric|windows hello|face ?auth|goodix|egis';U='fingerprint or face sign-in (Windows Hello)'}
     @{M='(?i)web ?cam|camera|\bcam\b|realsense';U='your camera'}

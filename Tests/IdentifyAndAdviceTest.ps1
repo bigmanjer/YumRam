@@ -82,4 +82,11 @@ Assert-That ((Get-YumResearchOverlapFast ([string[]]@(Convert-YumResearchText 'G
 $drv=Get-YumResearchPlacement -Name 'NVIDIA Graphics Driver 617.42' -Publisher 'NVIDIA Corporation' -Category 'Apps' -Risk 'Review' -RegistryEvidence @([pscustomobject]@{Score=70;Publisher='NVIDIA Corporation'})
 Assert-That ($drv.Placement -eq 'Drivers / Hardware') ('Driver package placed as {0}' -f $drv.Placement)
 
+# 8. Signer / publisher check (5.15.2 fix: the old check compared the wrong way round and never matched).
+Assert-That (Test-YumSignerMatchesPublisher -Signer 'CN=Discord Inc., O=Discord Inc., L=San Francisco, S=California, C=US' -Publisher 'Discord Inc.') 'Discord signer matches Discord publisher.'
+Assert-That (Test-YumSignerMatchesPublisher -Signer 'CN="Anthropic, PBC", O="Anthropic, PBC", L=San Francisco, S=California, C=US' -Publisher 'Anthropic, PBC') 'Quoted certificate names are read.'
+Assert-That (-not (Test-YumSignerMatchesPublisher -Signer 'CN=Evil Corp, O=Evil Corp, C=US' -Publisher 'Discord Inc.')) 'A different signer never matches.'
+Assert-That (-not (Test-YumSignerMatchesPublisher -Signer 'CN=Acme Inc., O=Acme Inc.' -Publisher 'Inc.')) 'Generic words alone ("Inc.") never match.'
+Assert-That (-not (Test-YumSignerMatchesPublisher -Signer 'CN=Acme, O=Acme' -Publisher 'Unknown')) 'Unknown publisher never matches.'
+
 Write-Host ('IdentifyAndAdviceTest passed. {0} installed programs read.' -f $progs.Count)
