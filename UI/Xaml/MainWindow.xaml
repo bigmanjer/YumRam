@@ -112,6 +112,9 @@
           <Button x:Name="Startup" Style="{StaticResource NavButton}" ToolTip="Programs that start with Windows: see what they cost in RAM and turn them off safely. (Ctrl+4)" AutomationProperties.Name="Startup apps">
             <StackPanel Orientation="Horizontal"><TextBlock Text="🚀" Width="24" TextAlignment="Center"/><TextBlock Text="Startup apps" Margin="10,0,0,0"/></StackPanel>
           </Button>
+          <Button x:Name="WindowsBloat" Style="{StaticResource NavButton}" ToolTip="Preinstalled Windows apps and ad, tip and suggestion settings - removed or turned off reversibly. (Ctrl+8)" AutomationProperties.Name="Windows bloat">
+            <StackPanel Orientation="Horizontal"><TextBlock Text="🧹" Width="24" TextAlignment="Center"/><TextBlock Text="Windows bloat" Margin="10,0,0,0"/></StackPanel>
+          </Button>
           <Button x:Name="Intelligence" Style="{StaticResource NavButton}" ToolTip="Identify every program, service and app; unknown items are researched automatically. (Ctrl+5)" AutomationProperties.Name="Intelligence">
             <StackPanel Orientation="Horizontal"><TextBlock Text="🧠" Width="24" TextAlignment="Center"/><TextBlock Text="Intelligence" Margin="10,0,0,0"/></StackPanel>
           </Button>

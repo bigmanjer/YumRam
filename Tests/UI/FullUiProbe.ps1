@@ -56,6 +56,9 @@ $script:Steps=@(
  # Startup apps
  { Go 'Startup' },
  { $st=(PW 'Startup').Tag; Check (@($st.Apps).Count -ge 1) "Startup apps: $(@($st.Apps).Count)"; foreach($a in $st.Apps){ $st.Ui.Items.SelectedItem=$a; if($st.Ui.ExplainTitle.Text -ne $a.Friendly){Check $false "Startup explain for $($a.Friendly)"} }; Check $true 'Startup: every row explains'; Click $st.Ui.Reload; Check (@($st.Apps).Count -ge 1) 'Startup: Check again' },
+# Windows bloat (5.15): open, wait for the background app scan, explain every row. Never presses Remove/Turn off.
+{ Go 'WindowsBloat' }, { }, { }, { },
+{ $st=(PW 'WindowsBloat').Tag; Check ($null -ne $st) 'Windows bloat page opens'; if($st){ Check (-not $st.Busy) "Windows bloat scan finished ($($st.Ui.Details.Text))"; Check (@($st.Settings).Count -ge 10) "Windows bloat settings listed: $(@($st.Settings).Count)"; $bad=0; foreach($r in @($st.Settings)+@($st.Apps)){ if($r.Kind -eq 'App'){$st.Ui.Apps.SelectedItem=$r}else{$st.Ui.Settings.SelectedItem=$r}; if($st.Ui.ExplainTitle.Text -ne $r.Name){$bad++} }; Check ($bad -eq 0) "Windows bloat: every row explains ($(@($st.Apps).Count) apps)"; Shot 'p-bloat' } },
  # Intelligence
  { Go 'Intelligence' },
  { }, { },

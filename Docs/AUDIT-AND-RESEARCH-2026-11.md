@@ -127,7 +127,7 @@ F3, F5, F6 above. Plus: keep online research opt-out and disclosed (only Bing, o
 | Phase | Content | Why this order |
 |---|---|---|
 | 1 (now) | F1, F2, F3 + tests; ARCHITECTURE.md rewrite | safety and honesty before features |
-| 2 | Windows bloat page (apps + settings with undo) | your explicit request; isolated module, no effect on RAM/CPU engines |
+| 2 | Windows bloat page (apps + settings with undo) — **first version built on this branch (Verified by WindowsBloatTest + UI probe)** | your explicit request; isolated module, no effect on RAM/CPU engines |
 | 3 | Memory Engine 2.0: pressure signals (PDH + low-memory notification + list priorities), soft trim, per-program effectiveness | needs Phase 1 safety; measurable with existing retention learning |
 | 4 | CPU Engine 2.0: CPU Sets, IGNORE_TIMER_RESOLUTION, UWP foreground fix, power plan while gaming; game benchmark harness (your TODO) | builds on 5.11 harness |
 | 5 | Diagnostics: paging/disk, kernel pool, health report | needs Phase 3 signals |

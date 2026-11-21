@@ -20,14 +20,14 @@ function Test-YumShellAvailable {
 function Get-YumPageTitle {
     param([string]$Key)
     switch($Key){
-        'Overview'{'Overview'};'Processes'{"What's running"};'ReclaimCenter'{'Reclaim Center'};'Startup'{'Startup apps'};'Intelligence'{'Intelligence'};'Settings'{'Settings'};'About'{'About'}
+        'Overview'{'Overview'};'Processes'{"What's running"};'ReclaimCenter'{'Reclaim Center'};'Startup'{'Startup apps'};'WindowsBloat'{'Windows bloat'};'Intelligence'{'Intelligence'};'Settings'{'Settings'};'About'{'About'}
         default{$Key}
     }
 }
 
 function Update-YumNavSelection {
     param([string]$Key)
-    foreach($k in @('NavOverview','Processes','ReclaimCenter','Startup','Intelligence','Settings','About')){
+    foreach($k in @('NavOverview','Processes','ReclaimCenter','Startup','WindowsBloat','Intelligence','Settings','About')){
         try{
             $b=$script:Yum.Ui[$k]; if($null -eq $b){continue}
             $pageKey=if($k -eq 'NavOverview'){'Overview'}else{$k}
@@ -108,6 +108,7 @@ function Invoke-YumPageFunction {
         'Processes'{Show-YumTopProcesses}
         'ReclaimCenter'{Show-YumMemoryReclaim}
         'Startup'{Show-YumStartupApps}
+        'WindowsBloat'{Show-YumWindowsBloat}
         'Intelligence'{Show-YumIntelligence}
         'Settings'{Show-YumSettings}
         'About'{Show-YumAbout}
@@ -168,7 +169,7 @@ function Set-YumSidebarCompact {
         $script:Yum.SidebarCompact=$Compact
         $ui.Sidebar.Width=if($Compact){68}else{220}
         $vis=if($Compact){[System.Windows.Visibility]::Collapsed}else{[System.Windows.Visibility]::Visible}
-        foreach($k in @('NavOverview','Processes','ReclaimCenter','Startup','Intelligence','Settings','About')){
+        foreach($k in @('NavOverview','Processes','ReclaimCenter','Startup','WindowsBloat','Intelligence','Settings','About')){
             $b=$ui[$k]; if($null -eq $b){continue}
             try{ $b.Content.Children[1].Visibility=$vis }catch{}
             $b.HorizontalContentAlignment=if($Compact){[System.Windows.HorizontalAlignment]::Center}else{[System.Windows.HorizontalAlignment]::Left}
@@ -200,6 +201,7 @@ function Initialize-YumShell {
     $ui.Processes.Add_Click({Open-YumPage -Key 'Processes'})
     $ui.ReclaimCenter.Add_Click({Open-YumPage -Key 'ReclaimCenter'})
     $ui.Startup.Add_Click({Open-YumPage -Key 'Startup'})
+    try{ $ui.WindowsBloat.Add_Click({Open-YumPage -Key 'WindowsBloat'}) }catch{}
     $ui.Intelligence.Add_Click({Open-YumPage -Key 'Intelligence'})
     $ui.Settings.Add_Click({Open-YumPage -Key 'Settings'})
     $ui.About.Add_Click({Open-YumPage -Key 'About'})
@@ -208,7 +210,7 @@ function Initialize-YumShell {
     $script:Yum.Window.Add_PreviewKeyDown({param($s,$e)
         try{
             if(([System.Windows.Input.Keyboard]::Modifiers -band [System.Windows.Input.ModifierKeys]::Control) -eq 0){return}
-            $map=@{D1='Overview';D2='Processes';D3='ReclaimCenter';D4='Startup';D5='Intelligence';D6='Settings';D7='About';NumPad1='Overview';NumPad2='Processes';NumPad3='ReclaimCenter';NumPad4='Startup';NumPad5='Intelligence';NumPad6='Settings';NumPad7='About'}
+            $map=@{D1='Overview';D2='Processes';D3='ReclaimCenter';D4='Startup';D5='Intelligence';D6='Settings';D7='About';D8='WindowsBloat';NumPad8='WindowsBloat';NumPad1='Overview';NumPad2='Processes';NumPad3='ReclaimCenter';NumPad4='Startup';NumPad5='Intelligence';NumPad6='Settings';NumPad7='About'}
             $k=[string]$e.Key
             if($map.ContainsKey($k)){ $e.Handled=$true; Open-YumPage -Key $map[$k] }
         }catch{}

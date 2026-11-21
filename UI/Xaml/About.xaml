@@ -44,8 +44,8 @@
               <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
               <TextBlock x:Name="HotkeyKeys" Text="Ctrl+Alt+R" FontWeight="SemiBold" Foreground="{StaticResource Brand}" Margin="0,0,0,6"/>
               <TextBlock x:Name="HotkeyText" Grid.Column="1" Text="Free RAM now, from anywhere (even from a game or the tray)" Style="{StaticResource Caption}" TextWrapping="Wrap" Margin="0,0,0,6"/>
-              <TextBlock Grid.Row="1" Text="Ctrl+1 … Ctrl+7" FontWeight="SemiBold" Foreground="{StaticResource Brand}" Margin="0,0,0,6"/>
-              <TextBlock Grid.Row="1" Grid.Column="1" Text="Overview · What's running · Reclaim Center · Startup apps · Intelligence · Settings · About" Style="{StaticResource Caption}" TextWrapping="Wrap" Margin="0,0,0,6"/>
+              <TextBlock Grid.Row="1" Text="Ctrl+1 … Ctrl+8" FontWeight="SemiBold" Foreground="{StaticResource Brand}" Margin="0,0,0,6"/>
+              <TextBlock Grid.Row="1" Grid.Column="1" Text="Overview · What's running · Reclaim Center · Startup apps · Intelligence · Settings · About · Windows bloat (Ctrl+8)" Style="{StaticResource Caption}" TextWrapping="Wrap" Margin="0,0,0,6"/>
               <TextBlock Grid.Row="2" Text="☰" FontWeight="SemiBold" Foreground="{StaticResource Brand}"/>
               <TextBlock Grid.Row="2" Grid.Column="1" Text="Show or hide the page names in the sidebar" Style="{StaticResource Caption}" TextWrapping="Wrap"/>
             </Grid>

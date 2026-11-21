@@ -1,5 +1,23 @@
 # Changelog
 
+# YUMRAM 5.15.0 (in progress, branch `audit-5.15`) — Windows bloat, audit fixes
+
+- **Windows bloat page** (sidebar, Ctrl+8). *Preinstalled apps*: only apps on a curated list are ever offered
+  (Microsoft News, Clipchamp, Solitaire, Office hub, Tips, Feedback Hub, retired apps like Cortana and Skype,
+  promoted games…), each marked **Remove** or **Your call** with a plain-word reason. Store, Edge, Terminal,
+  Photos, Calculator, Notepad, Paint, Xbox Identity, App Installer, frameworks and non-removable packages are
+  never offered. Removal is for your account (no administrator); as administrator also for new user accounts.
+  Every removal is listed, and "Get it back" opens its Microsoft Store page. *Settings*: 12 ad / tip /
+  suggestion / AI settings (Start suggestions, silent installs of promoted apps, lock-screen and Settings ads,
+  Explorer promotions, advertising ID, Bing in Start search, Copilot, Recall, Widgets and minimum diagnostic
+  data as whole-PC policies). The exact original value is saved before each change and Undo restores it
+  (value **and** type; values that did not exist are deleted again). App scans and removals run off the UI
+  thread. Research: Win11Debloat and winutil (both MIT) safety lists and undo model; no code copied.
+- **Audit fixes** (see `Docs/AUDIT-AND-RESEARCH-2026-11.md`): automatic care no longer flushes the modified
+  page list (file-cache assist at most every 10 min); automatic care closes listed apps only if you opt in;
+  stale-PID guard before trimming; Free RAM busy-state race fixed.
+- Tests: `WindowsBloatTest` (catalog safety, matching, removal with a stand-in remover, exact undo on a test
+  registry key), `Release515Test`; UI probe opens the new page (60/60 steps).
 # YUMRAM 5.14.0 — Beta: big programs trimmed in chunks, clearer graph, "applied" confirmations
 
 YUMRAM is now **beta**.
