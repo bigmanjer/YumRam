@@ -34,6 +34,13 @@ try{
     Assert-That ($null -eq $none) 'No leftover registry value after undo.'
     Assert-That (-not (Set-YumGpuPreference -ExePath (Join-Path $tmp 'missing.exe')).Success) 'A missing program file is refused.'
 
+    # 5.15.5: network speed in the background (mini bar), never on the UI thread.
+    $sw=[Diagnostics.Stopwatch]::StartNew(); [void](Get-YumLiveNetwork); Assert-That ($sw.ElapsedMilliseconds -lt 300) 'Network speed must not block the UI.'
+    $net=$null; for($i=0;$i -lt 20 -and $null -eq $net;$i++){ Start-Sleep -Milliseconds 500; $net=Get-YumLiveNetwork }
+    Assert-That ($null -ne $net -and $net.Down -ge 0 -and $net.Up -ge 0) 'Network download / upload speed is read.'
+    Assert-That ((Format-YumNetSpeed 1250000) -eq '10.0 Mb/s' -and (Format-YumNetSpeed 0) -eq '0 b/s') 'Network speed shown in bits per second like speed tests.'
+    Write-Host ('Network now: down {0}, up {1}' -f (Format-YumNetSpeed $net.Down),(Format-YumNetSpeed $net.Up))
+
     # 3. Advice and wiring.
     Assert-That ((Get-YumVramAdvice -Name 'discord') -match 'Hardware Acceleration') 'Discord advice says where the switch is.'
     Assert-That ((Get-YumVramAdvice -Name 'chrome') -match 'graphics acceleration') 'Browser advice says where the switch is.'

@@ -14,14 +14,30 @@ $script:YumGpuPrefKey='HKCU:\Software\Microsoft\DirectX\UserGpuPreferences'
 
 function Start-YumVramSampler {
     if($null -ne $script:Yum['VramSampler']){return}
-    $shared=[hashtable]::Synchronized(@{Users=@();Updated=[datetime]::MinValue;WantedUntil=[datetime]::MinValue;Stop=$false;Error=''})
+    $shared=[hashtable]::Synchronized(@{Users=@();Updated=[datetime]::MinValue;WantedUntil=[datetime]::MinValue;Stop=$false;Error='';NetWantedUntil=[datetime]::MinValue;NetDown=$null;NetUp=$null;NetUpdated=[datetime]::MinValue})
     $ps=[powershell]::Create()
     [void]$ps.AddScript({
         param($S)
-        $cat=$null; $names=@{}
+        $cat=$null; $names=@{}; $netCat=$null; $netPrev=$null; $lastVram=[datetime]::MinValue
         while(-not $S.Stop){
+            # 5.15.5: network download / upload speed (all adapters), like IObit's floating monitor - every second, only
+            # while the mini bar or Overview asks for it.
             try{
-                if((Get-Date) -lt $S.WantedUntil){
+                if((Get-Date) -lt $S.NetWantedUntil){
+                    if($null -eq $netCat){ $netCat=New-Object Diagnostics.PerformanceCounterCategory('Network Interface') }
+                    $all=$netCat.ReadCategory(); $rx=$all['Bytes Received/sec']; $tx=$all['Bytes Sent/sec']; $now=@{}
+                    foreach($k in @($rx.Keys)){ $now[[string]$k]=@($rx[$k].Sample,$tx[$k].Sample) }
+                    if($null -ne $netPrev){
+                        $down=0.0;$up=0.0
+                        foreach($k in $now.Keys){ if($netPrev.ContainsKey($k)){ $down+=[Diagnostics.CounterSample]::Calculate($netPrev[$k][0],$now[$k][0]); $up+=[Diagnostics.CounterSample]::Calculate($netPrev[$k][1],$now[$k][1]) } }
+                        $S.NetDown=$down; $S.NetUp=$up; $S.NetUpdated=Get-Date
+                    }
+                    $netPrev=$now
+                } else { $netPrev=$null }
+            }catch{}
+            try{
+                if((Get-Date) -lt $S.WantedUntil -and ((Get-Date)-$lastVram).TotalSeconds -ge 3){
+                    $lastVram=Get-Date
                     if($null -eq $cat){ $cat=New-Object Diagnostics.PerformanceCounterCategory('GPU Process Memory') }
                     $d=$cat.ReadCategory()['dedicated usage']
                     $rows=New-Object System.Collections.Generic.List[object]
@@ -37,11 +53,31 @@ function Start-YumVramSampler {
                     if($names.Count -gt 400){ $names=@{} }
                 }
             }catch{ $S.Error=$_.Exception.Message }
-            Start-Sleep -Milliseconds 3000
+            Start-Sleep -Milliseconds 1000
         }
     }).AddArgument($shared)
     $h=$ps.BeginInvoke()
     $script:Yum['VramSampler']=@{Shared=$shared;Ps=$ps;Handle=$h}
+}
+
+function Get-YumLiveNetwork {
+    # Latest download / upload speed in bytes per second (all network adapters), or $null while warming up.
+    try{
+        Start-YumVramSampler
+        $s=$script:Yum['VramSampler'].Shared
+        $s.NetWantedUntil=(Get-Date).AddSeconds(15)
+        if($null -eq $s.NetDown -or ((Get-Date)-[datetime]$s.NetUpdated).TotalSeconds -gt 5){ return $null }
+        return [pscustomobject]@{Down=[double]$s.NetDown;Up=[double]$s.NetUp}
+    }catch{ return $null }
+}
+
+function Format-YumNetSpeed {
+    param([double]$BytesPerSec)
+    $bits=$BytesPerSec*8
+    if($bits -ge 1e9){ return ('{0:N1} Gb/s' -f ($bits/1e9)) }
+    if($bits -ge 1e6){ return ('{0:N1} Mb/s' -f ($bits/1e6)) }
+    if($bits -ge 1e3){ return ('{0:N0} kb/s' -f ($bits/1e3)) }
+    return ('{0:N0} b/s' -f $bits)
 }
 
 function Stop-YumVramSampler {

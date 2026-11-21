@@ -79,6 +79,8 @@ $logTmp=Join-Path $env:TEMP ('yum-dlog-'+[guid]::NewGuid().ToString('N')); New-I
 $oldDir=$script:Yum.ConfigDirectory; $script:Yum.ConfigDirectory=$logTmp
 try{ [void](Invoke-YumDiskCleanup -Keys @()); Assert-That (Test-Path -LiteralPath (Get-YumDiskCleanupLogPath)) 'Each clean writes the "what was deleted" list.' }finally{ $script:Yum.ConfigDirectory=$oldDir; Remove-Item -LiteralPath $logTmp -Recurse -Force -ErrorAction SilentlyContinue }
 $dx=[IO.File]::ReadAllText((Join-Path $root 'UI\Xaml\DiskCleanup.xaml')); Assert-That ($dx -match 'x:Name="OpenFolder"' -and $dx -match 'x:Name="SeeDeleted"') 'Disk cleanup lets you look first and see what was deleted.'
+Assert-That ((Get-YumStorageSenseOn) -is [bool]) 'Storage Sense status is read.'
+Assert-That ([IO.File]::ReadAllText((Join-Path $root 'UI\Xaml\DiskCleanup.xaml')) -match 'x:Name="StorageSense"') 'Disk cleanup shows Windows Storage Sense.'
 $sw=[Diagnostics.Stopwatch]::StartNew(); $rows=@(Measure-YumDiskJunk); $ms=$sw.ElapsedMilliseconds
 Assert-That ($rows.Count -eq $cats.Count) 'Every category is measured.'
 $x=[IO.File]::ReadAllText((Join-Path $root 'UI\Xaml\MainWindow.xaml')); Assert-That ($x -match 'x:Name="DiskCleanup"') 'Sidebar has Disk cleanup.'

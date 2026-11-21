@@ -21,6 +21,10 @@
 - **Look first, see after:** "Open folder - look before cleaning" opens each category's folder (or the Recycle Bin)
   in File Explorer; "See what was deleted" opens the exact list of files the last clean removed (category, file,
   size), written after every clean, automatic ones included.
+- **Network speed on the mini bar** (download / upload, all adapters, like IObit's floating monitor), read in the
+  background once a second only while the mini bar is shown.
+- **Windows Storage Sense status** in Disk cleanup with a link to its settings: Windows' own long-term cleaner (old
+  Recycle Bin items, old Downloads by your choice, OneDrive files made online-only) is shown rather than duplicated.
 
 # YUMRAM 5.15.4 — updates install themselves
 

@@ -36,7 +36,9 @@
       <Border Style="{StaticResource Card}" Padding="12,10" Margin="0,0,8,0"><StackPanel><TextBlock Text="WINDOWS DRIVE FREE" Style="{StaticResource StatLabel}" Foreground="{StaticResource Brand}"/><TextBlock x:Name="SumDrive" Text="--" Style="{StaticResource StatValue}" FontSize="22"/><ProgressBar x:Name="SumDriveBar" Height="5" Margin="0,4,0,0" Maximum="100"/></StackPanel></Border>
       <Border Style="{StaticResource Card}" Padding="12,10" Margin="0,0,8,0"><StackPanel><TextBlock Text="FREED BY YUMRAM" Style="{StaticResource StatLabel}" Foreground="{StaticResource Pink}"/><TextBlock x:Name="SumFreed" Text="--" Style="{StaticResource StatValue}" FontSize="22"/></StackPanel></Border>
       <Border Style="{StaticResource Card}" Padding="12,10" Margin="0,0,8,0" ToolTip="Once a week YUMRAM removes only the safest leftovers: old temporary files, crash reports and Windows Update downloads older than 10 days. Off until you turn it on.">
-        <StackPanel><TextBlock Text="AUTOMATIC WEEKLY CLEAN" Style="{StaticResource StatLabel}"/><CheckBox x:Name="AutoClean" Content="On" Margin="0,8,0,0"/><TextBlock x:Name="AutoLast" Text="" Style="{StaticResource Caption}" Margin="0,4,0,0"/></StackPanel></Border>
+        <StackPanel><TextBlock Text="AUTOMATIC WEEKLY CLEAN" Style="{StaticResource StatLabel}"/><CheckBox x:Name="AutoClean" Content="On" Margin="0,8,0,0"/><TextBlock x:Name="AutoLast" Text="" Style="{StaticResource Caption}" Margin="0,4,0,0"/>
+          <!-- 5.15.5: Windows' own automatic cleaner (old Downloads / Recycle Bin, OneDrive files online-only) - shown, not duplicated -->
+          <Button x:Name="StorageSense" Content="Windows Storage Sense: …" Style="{StaticResource GhostButton}" Padding="0,2" Margin="0,4,0,0" HorizontalAlignment="Left" FontSize="12" ToolTip="Windows' own automatic cleaner. It can also empty old Recycle Bin items, old Downloads (your choice) and make OneDrive files you have not opened for a while online-only. Opens its settings."/></StackPanel></Border>
     </UniformGrid>
 
     <Grid Grid.Row="2">

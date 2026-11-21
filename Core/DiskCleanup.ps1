@@ -230,6 +230,11 @@ function Measure-YumDiskJunk {
     }
 }
 
+function Get-YumStorageSenseOn {
+    # 5.15.5: is Windows' own Storage Sense turned on? (HKCU ...\StorageSense\Parameters\StoragePolicy, value "01").
+    try{ return ([int](Get-ItemProperty -LiteralPath 'HKCU:\Software\Microsoft\Windows\CurrentVersion\StorageSense\Parameters\StoragePolicy' -Name '01' -ErrorAction Stop).'01' -eq 1) }catch{ return $false }
+}
+
 function Get-YumCatList {
     param($Category,[string]$Name)
     if($null -ne $Category.PSObject.Properties[$Name]){ return [string[]]@($Category.$Name) }

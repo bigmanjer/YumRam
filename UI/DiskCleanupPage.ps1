@@ -102,7 +102,7 @@ function Show-YumDiskCleanup {
         [xml]$xaml=Read-YumXamlText -Path (Join-Path $script:Yum.Root 'UI\Xaml\DiskCleanup.xaml')
         $window=[Windows.Markup.XamlReader]::Load((New-Object System.Xml.XmlNodeReader $xaml))
         $ui=@{}
-        foreach($n in 'Junk','Reload','AdminPill','AdminText','RestartAdmin','SumJunk','SumDrive','SumDriveBar','SumFreed','AutoClean','AutoLast','CleanSelected','UsagePath','UsageScan','UsageUp','UsageOpen','UsageTabs','UsageFolders','UsageFiles','ExplainTitle','ExplainSub','ExplainWhy','ExplainBody','ExplainEffect','ExplainUndo','LastResult','OpenFolder','SeeDeleted','Close','Details'){$ui[$n]=$window.FindName($n);if($null -eq $ui[$n]){throw "Disk cleanup page control missing: $n"}}
+        foreach($n in 'Junk','Reload','AdminPill','AdminText','RestartAdmin','SumJunk','SumDrive','SumDriveBar','SumFreed','AutoClean','AutoLast','CleanSelected','UsagePath','UsageScan','UsageUp','UsageOpen','UsageTabs','UsageFolders','UsageFiles','ExplainTitle','ExplainSub','ExplainWhy','ExplainBody','ExplainEffect','ExplainUndo','LastResult','OpenFolder','SeeDeleted','StorageSense','Close','Details'){$ui[$n]=$window.FindName($n);if($null -eq $ui[$n]){throw "Disk cleanup page control missing: $n"}}
         $state=@{Window=$window;Ui=$ui;Rows=@();Picked=@{};Busy=$false}
         $window.Tag=$state
         foreach($c in 'Junk','Reload','AutoClean','CleanSelected','UsageScan','UsageUp','UsageOpen','UsageFolders','UsageFiles','Close'){$ui[$c].Tag=$state}
@@ -147,6 +147,8 @@ function Show-YumDiskCleanup {
                  $p=[string]$it.Path
                  if(Test-Path -LiteralPath $p -PathType Leaf){ Start-Process explorer.exe -ArgumentList ('/select,"{0}"' -f $p) } elseif(Test-Path -LiteralPath $p){ Start-Process explorer.exe -ArgumentList ('"{0}"' -f $p) } }catch{} })
         $ui.OpenFolder.Tag=$state; $ui.SeeDeleted.Tag=$state
+        $ui.StorageSense.Content=if(Get-YumStorageSenseOn){'Windows Storage Sense: on  ›'}else{'Windows Storage Sense: off - turn on  ›'}
+        $ui.StorageSense.Add_Click({ try{ Start-Process 'ms-settings:storagesense' }catch{} })
         $ui.OpenFolder.Add_Click({param($s,$e)
             try{ $it=$s.Tag.Ui.Junk.SelectedItem; if($null -eq $it){return}
                  if($it.Key -eq 'Recycle'){ Start-Process explorer.exe -ArgumentList 'shell:RecycleBinFolder'; return }
