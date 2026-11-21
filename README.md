@@ -36,6 +36,7 @@ Most "RAM cleaners" flush everything and show a big number. YUMRAM is different:
 | **CPU care** | ProBalance-style priority, plus *making room* on whole cores for your app or game. Adapts to your CPU (cores, SMT, efficiency cores, cache groups), laptop or desktop, battery or plugged in. |
 | **What's running** | Live RAM and CPU per program, sortable, explained in plain words, with your own rules (*never trim*, *never hold back*). |
 | **Memory-leak alerts** | Spots a program whose memory keeps rising and tells you once — restarting it gives the memory back. |
+| **Windows bloat** | Removes preinstalled apps you do not need (News, Clipchamp, Solitaire, promoted games…) and turns off Windows ads, tips, suggestions, Bing in Start search, Copilot and Recall. Store, Edge, Windows Update and Defender are never touched; every change can be undone. |
 | **Startup apps** | What starts with Windows, what it costs in RAM, and safe on/off using the same switch as Task Manager. |
 | **Intelligence** | Identifies every process, service and app (signatures, installed-software records, services, Store packages, optional web lookup). Only identified, non-protected programs are ever trimmed. |
 | **History** | Usage graph for 30 s, 5 min, 1 h and 12 h, kept across restarts. |
