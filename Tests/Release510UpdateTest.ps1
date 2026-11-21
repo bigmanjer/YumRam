@@ -45,8 +45,8 @@ if($Mode -eq 'tamper'){ $i.Sha256=('0'*64); $r=Install-YumUpdate -Info $i -NoRes
 if($Mode -eq 'auto'){
     # 5.15.3 automatic update path: on by default, every 6 h, never while a game runs, background download + verify.
     "AUTOON=$(Test-YumAutoUpdateEnabled)"
-    $script:Yum.Config['UpdateLastCheck']=(Get-Date).AddHours(-7).ToString('o'); "DUE7=$(Test-YumUpdateCheckDue)"
-    $script:Yum.Config['UpdateLastCheck']=(Get-Date).AddHours(-5).ToString('o'); "DUE5=$(Test-YumUpdateCheckDue)"
+    $script:Yum.Config['UpdateLastCheck']=(Get-Date).AddMinutes(-16).ToString('o'); "DUE7=$(Test-YumUpdateCheckDue)"
+    $script:Yum.Config['UpdateLastCheck']=(Get-Date).AddMinutes(-10).ToString('o'); "DUE5=$(Test-YumUpdateCheckDue)"
     "BLOCKIDLE=[$(Get-YumUpdateBlocker)]"
     $script:Yum.Snapshot=[pscustomobject]@{Game=[pscustomobject]@{Detected=$true;ProcessName='testgame';ProcessId=1}}; "BLOCKGAME=[$(Get-YumUpdateBlocker)]"; $script:Yum.Snapshot=$null
     $script:Yum.Config['UpdateAutoInstall']=$false; "AUTOOFF=$(Test-YumAutoUpdateEnabled)"; $script:Yum.Config['UpdateAutoInstall']=$true
@@ -71,7 +71,7 @@ $r=Install-YumUpdate -Info $i -NoRestart
     $out=& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $driver -Installed $installed -Feed $feed -Mode auto
     $o=($out -join "`n")
     Assert-That ($o -match 'AUTOON=True') "Automatic install must be on by default: $o"
-    Assert-That ($o -match 'DUE7=True' -and $o -match 'DUE5=False') "Checks must be due every 6 hours: $o"
+    Assert-That ($o -match 'DUE7=True' -and $o -match 'DUE5=False') "Checks must be due every 15 minutes: $o"
     Assert-That ($o -match 'BLOCKIDLE=\[\]') "Nothing should block an update on an idle PC: $o"
     Assert-That ($o -match 'BLOCKGAME=\[a game is running') "An update must never install while a game runs: $o"
     Assert-That ($o -match 'AUTOOFF=False') "The Settings switch must turn automatic install off: $o"

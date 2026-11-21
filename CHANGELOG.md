@@ -1,5 +1,13 @@
 # Changelog
 
+# YUMRAM 5.15.6 (not released yet) — updates as soon as they come out
+
+- **Checks every 15 minutes** (was every 6 hours; GitHub allows ~60 unauthenticated checks an hour from one address,
+  so 4 an hour is well inside it) and **installs right away** - only a running game (and YUMRAM's own work: Free RAM,
+  an Intelligence scan, a disk clean, Measure games) makes it wait. It no longer waits for "a quiet moment" while you
+  use YUMRAM; with the window open it gives a 10-second heads-up first. Settings: "Install new versions as soon as
+  they come out".
+
 # YUMRAM 5.15.5 — automatic updates, safer and honest disk cleanup, network speed
 
 - **Real-PC disk cleanup test** (test PC, without administrator, default ticks only): temp files 759 MB, browser

@@ -44,8 +44,8 @@
               </ComboBox></Grid>
             <TextBlock x:Name="ElevationHint" Text="" Style="{StaticResource Caption}" TextWrapping="Wrap" Margin="0,0,0,6"/>
             <CheckBox x:Name="StartWithWindows" Content="Start YUMRAM when I sign in to Windows" Margin="0,0,0,4"/>
-            <CheckBox x:Name="UpdateCheckEnabled" Content="Check GitHub for a new YUMRAM (every 6 hours)" Margin="0,10,0,0"/>
-            <CheckBox x:Name="UpdateAutoInstall" Content="Install new versions automatically (checked with SHA-256, never while you play; settings are kept)" Margin="27,6,0,0" ToolTip="Off: you see a banner and choose when to install."/>
+            <CheckBox x:Name="UpdateCheckEnabled" Content="Check GitHub for a new YUMRAM (every 15 minutes)" Margin="0,10,0,0"/>
+            <CheckBox x:Name="UpdateAutoInstall" Content="Install new versions as soon as they come out (checked with SHA-256, never while you play; settings are kept)" Margin="27,6,0,0" ToolTip="Off: you see a banner and choose when to install."/>
             <CheckBox x:Name="GlobalHotkeyEnabled" Content="Global shortcut for Free RAM now (works even from a game or the tray)" Margin="0,10,0,0"/>
             <Grid Margin="27,6,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="160"/><ColumnDefinition/></Grid.ColumnDefinitions>
               <TextBox x:Name="GlobalHotkey" ToolTip="For example Ctrl+Alt+R or Ctrl+Shift+F9. Needs at least one of Ctrl, Alt, Shift or Win." AutomationProperties.Name="Global shortcut"/>

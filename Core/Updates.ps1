@@ -78,9 +78,9 @@ function Get-YumUpdateInfo {
 function Test-YumUpdateCheckDue {
     try{ if(-not [bool]$script:Yum.Config['UpdateCheckEnabled']){return $false} }catch{return $false}
     $last=[datetime]::MinValue;try{$last=[datetime]::Parse([string]$script:Yum.Config['UpdateLastCheck'],[Globalization.CultureInfo]::InvariantCulture)}catch{}
-    # 5.15.3: every 6 hours (was once a day, and only when YUMRAM started - a copy running in the tray for days
-    # never looked again). The UI timer asks every 30 minutes; this decides.
-    return (((Get-Date)-$last).TotalHours -ge 6)
+    # 5.15.6 (user: "update as soon as it's available, just not while gaming"): every 15 minutes. GitHub allows ~60
+    # unauthenticated checks per hour from one address, so 4 per hour is well inside it. The UI timer asks every 5 min.
+    return (((Get-Date)-$last).TotalMinutes -ge 15)
 }
 
 function Invoke-YumApplyStagedUpdate {

@@ -408,7 +408,7 @@ function Update-YumUpdateUi {
         if([string]$r.Status -eq 'Available'){
             $ui.UpdateTitle.Text=('YUMRAM {0} is available' -f $r.Latest)
             $ui.UpdateText.Text=('You have {0}. The download is checked against its published SHA-256 before anything is installed; your settings and statistics are kept, and the current version is kept so you can go back.' -f $r.Current)
-            if(Test-YumAutoUpdateEnabled){ $ui.UpdateText.Text=('You have {0}. YUMRAM downloads it in the background, checks its SHA-256 and installs it automatically at a quiet moment (never while you play). Your settings are kept. Or press Install and restart now.' -f $r.Current) }
+            if(Test-YumAutoUpdateEnabled){ $ui.UpdateText.Text=('You have {0}. YUMRAM downloads it in the background, checks its SHA-256 and installs it right away - it only waits while you play. Your settings are kept. Or press Install and restart now.' -f $r.Current) }
             $ui.UpdateBanner.Visibility='Visible'
             if(-not $script:Yum.Window.IsVisible -and -not (Test-YumAutoUpdateEnabled)){Show-YumTrayNotice -Title ('YUMRAM {0} is available' -f $r.Latest) -Text 'Open YUMRAM to install it.'}
         } else { $ui.UpdateBanner.Visibility='Collapsed' }
@@ -423,7 +423,6 @@ function Get-YumUpdateBlocker {
     try{ $iw=$script:Yum.IntelligenceWindow; if((Test-YumPageAlive -Window $iw) -and $null -ne $iw.Tag -and ([bool]$iw.Tag.Busy -or [bool]$iw.Tag.ResearchBusy)){ return 'an Intelligence scan is running' } }catch{}
     try{ if([bool]$script:Yum['DiskAutoRunning']){ return 'a disk clean is running' }; $dp=$script:Yum.Pages['DiskCleanup']; if($null -ne $dp -and $null -ne $dp.Window.Tag -and [bool]$dp.Window.Tag.Busy){ return 'Disk cleanup is working' } }catch{}
     try{ $b=[int]$script:Yum['CpuBenchPid']; if($b -gt 0 -and (Get-Process -Id $b -ErrorAction SilentlyContinue)){ return 'Measure games is running' } }catch{}
-    try{ if($script:Yum.Window.IsVisible -and $script:Yum.Window.IsActive -and ((Get-Date)-[datetime]$script:Yum['LastUserInput']).TotalSeconds -lt 60){ return 'you are using YUMRAM' } }catch{}
     return ''
 }
 
@@ -433,9 +432,9 @@ function Update-YumAutoUpdate {
     #  - downloads and verifies a new version in the background,
     #  - installs it at the first moment nothing important is going on, then YUMRAM restarts (hidden again if it was).
     try{
-        if(((Get-Date)-[datetime]$script:Yum['LastAutoUpdateTick']).TotalSeconds -lt 30){return}
+        if(((Get-Date)-[datetime]$script:Yum['LastAutoUpdateTick']).TotalSeconds -lt 5){return}
         $script:Yum['LastAutoUpdateTick']=Get-Date
-        if(((Get-Date)-[datetime]$script:Yum['LastUpdateCheckAsk']).TotalMinutes -ge 30){ $script:Yum['LastUpdateCheckAsk']=Get-Date; try{ Start-YumUpdateCheck }catch{} }
+        if(((Get-Date)-[datetime]$script:Yum['LastUpdateCheckAsk']).TotalMinutes -ge 5){ $script:Yum['LastUpdateCheckAsk']=Get-Date; try{ Start-YumUpdateCheck }catch{} }
         if(-not (Test-YumAutoUpdateEnabled)){return}
         $info=$script:Yum['UpdateInfo']; if($null -eq $info -or [string]$info.Status -ne 'Available'){return}
         $done=Receive-YumUpdateDownload
@@ -449,7 +448,14 @@ function Update-YumAutoUpdate {
             return
         }
         $why=Get-YumUpdateBlocker
-        if($why){ try{ $script:Yum.Ui.UpdateText.Text=('YUMRAM {0} is downloaded and checked. It installs automatically as soon as {1} has finished - or press Install and restart.' -f $info.Latest,$why) }catch{}; return }
+        if($why){ $script:Yum['UpdateHeadsUpAt']=[datetime]::MinValue; try{ $script:Yum.Ui.UpdateText.Text=('YUMRAM {0} is downloaded and checked. It installs automatically as soon as {1} has finished - or press Install and restart.' -f $info.Latest,$why) }catch{}; return }
+        # 5.15.6: no waiting for "a quiet moment" any more - only gaming (and YUMRAM's own work) delays it. If the window
+        # is open, a 10-second heads-up first so nobody is surprised mid-click.
+        if($script:Yum.Window.IsVisible){
+            $hu=[datetime]$script:Yum['UpdateHeadsUpAt']
+            if($hu -eq [datetime]::MinValue){ $script:Yum['UpdateHeadsUpAt']=Get-Date; try{ Show-YumToast -Text ('Updating YUMRAM to {0} in a few seconds - back right after with your settings.' -f $info.Latest) -Seconds 8 }catch{}; return }
+            if(((Get-Date)-$hu).TotalSeconds -lt 10){ return }
+        }
         $hidden=-not $script:Yum.Window.IsVisible
         Update-YumConfigValue -Name StartHiddenOnce -Value $hidden
         Write-YumLog ('Automatic update: installing {0} now (YUMRAM restarts{1}).' -f $info.Latest,$(if($hidden){' hidden in the tray'}else{''}))

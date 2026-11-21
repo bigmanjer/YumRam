@@ -71,6 +71,7 @@
         UpdateStaged = ''
         UpdateStagedVersion = ''
         UpdateFailures = 0
+        UpdateHeadsUpAt = [datetime]::MinValue
         DiskAutoRunning = $false
         LastUiReclaimResultVersion = 0
         ReclaimVerificationTimer = $null
