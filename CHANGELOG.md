@@ -1,5 +1,28 @@
 # Changelog
 
+# YUMRAM 5.15.3 — Disk cleanup button fix, deeper disk cleanup, graphics memory (VRAM) help
+
+Compared with 5.15.2 (test PC: Ryzen 7 4800H, RTX 3050 Laptop + Radeon iGPU):
+
+- **Fix: the Disk cleanup sidebar button did nothing** (it was not in the main window's control list; Ctrl+9 worked).
+  New test: every sidebar button is registered; the UI probe clicks the real button.
+- **Fix (Intelligence): "signer matches publisher" never counted** - the certificate subject was compared against the
+  publisher the wrong way round. Now the publisher's distinctive words must be in the certificate's CN / O (generic
+  words such as Inc / LLC never match alone). Exact developer-signed packages from a publisher with an installed
+  program (Notepad++, WinRAR, AMD shell extensions) are identified. Fresh admin scan: 4 -> 0 Unknown.
+- **Disk cleanup 9 -> 15 categories:** app caches (Discord, Spotify, Steam, Epic, Teams, VS Code), graphics driver
+  installer leftovers, Windows logs older than 30 days, Windows Update clean-up via `DISM /StartComponentCleanup`
+  (no /ResetBase), old driver packages and Windows.old via Windows' own Disk Cleanup handlers (`cleanmgr /sagerun`,
+  flags removed afterwards; *your call*). "Restart as administrator" button when categories are locked.
+- **Graphics memory (VRAM):** Windows' video memory manager owns VRAM; no program can free another's. YUMRAM now shows
+  per-program VRAM and chip in What's running with where to turn hardware acceleration off, can move a background
+  program to the power-saving chip on two-chip laptops (Windows' per-app setting, exact undo), warns once per game
+  when the gaming chip is >= 90 % full, and lists the biggest users in the GPU tile tooltip. Read in a background
+  runspace every 3 s only while needed.
+- Clearer Settings labels, About lists the new features, "what is it for" explains Windows building blocks; Startup
+  apps no longer shows the previous program's text after the selection is cleared.
+- Tests: 66 (new VramTest); UI probe 82 steps.
+
 # YUMRAM 5.15.2 — Intelligence fixes, Disk cleanup, floating mini bar, clearer Overview, plain words everywhere
 
 Compared with 5.15.1 (measured on the test PC: Ryzen 7 4800H, RTX 3050 Laptop + Radeon iGPU):

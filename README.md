@@ -4,7 +4,7 @@
 
 **Keeps your Windows PC fast by keeping RAM free and the CPU fair — automatically.**
 
-[![Version](https://img.shields.io/badge/version-5.15.2-a855f7)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-5.15.3-a855f7)](CHANGELOG.md)
 [![Platform](https://img.shields.io/badge/Windows-10%20%7C%2011-0078d4)](#requirements)
 [![Stage](https://img.shields.io/badge/stage-beta-22c55e)](#status)
 
@@ -138,7 +138,7 @@ Open <b>About › Log</b> (or <code>YUMRAM.log</code> in the YUMRAM folder) and
 ## Development
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File Tests\Run-AllTests.ps1     # 65 tests, each in its own process
+powershell -NoProfile -ExecutionPolicy Bypass -File Tests\Run-AllTests.ps1     # 66 tests, each in its own process
 powershell -NoProfile -ExecutionPolicy Bypass -STA -File Tests\UI\FullUiProbe.ps1 -Root . -Out $env:TEMP\yum-ui
 powershell -NoProfile -ExecutionPolicy Bypass -File Tools\Build-Release.ps1    # dist\: setup, zip, SHA256SUMS
 ```
