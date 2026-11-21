@@ -180,7 +180,7 @@ function Get-YumCpuProfile {
             $keep=@($l3 | Sort-Object @{Expression={[int]$_.SizeKB};Descending=$true},@{Expression={[uint64]$_.Mask}} | Select-Object -First 1)[0]
             $hogMask=[uint64]($all - ($all -band [uint64]$keep.Mask))
             $freeCores=@($cores | Where-Object { ([uint64]$_.Mask -band [uint64]$keep.Mask) -ne 0 }).Count
-            $how=('{0} core groups with their own cache: your app keeps the {1}largest-cache group' -f $l3.Count,$(if(@($l3|ForEach-Object{$_.SizeKB}|Sort-Object -Unique).Count -gt 1){''}else{'first / '}))
+            $how=('your app keeps one of the {0} core groups to itself' -f $l3.Count)
         } else {
             $half=[math]::Ceiling($cores.Count/2)
             for($i=$half;$i -lt $cores.Count;$i++){$hogMask=$hogMask -bor [uint64]$cores[$i].Mask}
@@ -189,7 +189,7 @@ function Get-YumCpuProfile {
         }
     }
     $prof=[pscustomobject]@{Name=$name;Laptop=$laptop;Logical=$logical;Cores=$cores.Count;Smt=$smt;Hybrid=$hybrid;L3Groups=$l3.Count;AllMask=$all;HogMask=$hogMask;FreeCores=$freeCores;RoomHow=$how
-        Summary=('{0}: {1} cores / {2} threads{3}{4}{5}, {6}' -f $(if($name){$name}else{'CPU'}),$cores.Count,$logical,$(if($smt){' (SMT)'}else{''}),$(if($hybrid){', performance + efficiency cores'}else{''}),$(if($l3.Count -gt 1){(', {0} cache groups' -f $l3.Count)}else{''}),$(if($laptop){'laptop'}else{'desktop'}))}
+        Summary=('{0}: {1} cores / {2} threads{3}{4}{5}, {6}' -f $(if($name){$name}else{'CPU'}),$cores.Count,$logical,'',$(if($hybrid){', performance + efficiency cores'}else{''}),'',$(if($laptop){'laptop'}else{'desktop'}))}
     $script:Yum['CpuProfile']=$prof
     return $prof
 }

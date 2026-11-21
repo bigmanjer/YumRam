@@ -1,4 +1,4 @@
-﻿{
+{
   "Version": "5.15.1",
   "TelemetryIntervalSeconds": 0.5,
   "UIRefreshIntervalSeconds": 0.25,
@@ -340,6 +340,7 @@
   "EnableOnlineResearch": true,
   "ShowTrayIcon": true,
   "MinimizeToTray": true,
+  "CloseToBackground": true,
   "GlobalHotkeyEnabled": true,
   "GlobalHotkey": "Ctrl+Alt+R",
   "UpdateCheckEnabled": true,

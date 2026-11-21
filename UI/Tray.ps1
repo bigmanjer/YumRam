@@ -6,6 +6,7 @@ YUMRAM notification-area (tray) icon (5.4).
   (purple < 70 %, amber < 85 %, red above).
 - Menu: Open YUMRAM, Free RAM now, Start/Stop monitoring, Exit. Left-click or double-click opens.
 - Minimizing the main window hides it to the tray when MinimizeToTray is on.
+- 5.15.2: the X button keeps YUMRAM running (CloseToBackground); "Exit YUMRAM" in the tray menu quits.
 
 Requirements met elsewhere: the main window runs with Show() + a DispatcherFrame (UI\MainWindow.ps1);
 with ShowDialog(), hiding the window would end the application.
@@ -72,7 +73,7 @@ function Initialize-YumTray {
     $open.Add_Click({ Show-YumMainWindow })
     $free.Add_Click({ try{ if(Request-YumMemoryReclaim -Mode Quick){ $script:Yum.TrayReclaimPending=$true; Set-YumFooter 'Freeing RAM from the tray…' } }catch{ Write-YumLogException -Context 'Tray Free RAM failed' -Exception $_.Exception } })
     $mon.Add_Click({ try{ if($null -eq $script:Yum.TelemetryTimer){Start-YumMonitoring}else{Stop-YumMonitoring} }catch{ Write-YumLogException -Context 'Tray monitoring toggle failed' -Exception $_.Exception } })
-    $exit.Add_Click({ try{ $script:Yum.Window.Close() }catch{} })
+    $exit.Add_Click({ Exit-YumApp })
     $menu.Add_Opening({
         try{
             $script:Yum.TrayMenuMonitor.Text=if($null -eq $script:Yum.TelemetryTimer){'Start monitoring'}else{'Stop monitoring'}
@@ -150,6 +151,33 @@ function Hide-YumToTray {
         $script:Yum.TrayHintShown=$true
         try{ $script:Yum.TrayIcon.ShowBalloonTip(4000,'YUMRAM is still running','It keeps working from the notification area. Click the icon to open it.',[System.Windows.Forms.ToolTipIcon]::Info) }catch{}
     }
+}
+
+function Exit-YumApp {
+    # Really quit (tray "Exit YUMRAM", installing an update, Windows signing out). The X button only hides.
+    $script:Yum['ExitRequested']=$true
+    try{ $script:Yum.Window.Close() }catch{}
+}
+
+function Test-YumCloseToBackground {
+    # 5.15.2 (user request: "close should put it to task bar to run in background").
+    if([bool]$script:Yum['ExitRequested']){return $false}
+    $c=$script:Yum.Config['CloseToBackground']
+    return (($null -eq $c) -or [bool]$c)
+}
+
+function Invoke-YumCloseToBackground {
+    # With the tray icon: hide to the notification area. Without it: minimize to the taskbar (never vanish).
+    $w=$script:Yum.Window
+    if($null -ne $script:Yum.TrayIcon){
+        $first=-not [bool]$script:Yum['CloseHintShown']; $script:Yum['CloseHintShown']=$true
+        $script:Yum.TrayHintShown=$true
+        Hide-YumToTray
+        if($first){ try{ $script:Yum.TrayIcon.ShowBalloonTip(6000,'YUMRAM is still running','Closing the window keeps YUMRAM working in the background. Click the icon near the clock to open it; right-click it and choose Exit YUMRAM to quit.',[System.Windows.Forms.ToolTipIcon]::Info) }catch{} }
+    } else {
+        $w.WindowState=[System.Windows.WindowState]::Minimized
+    }
+    try{ Write-YumLog 'Window closed with X: YUMRAM keeps running in the background.' }catch{}
 }
 
 function Show-YumTrayNotice {

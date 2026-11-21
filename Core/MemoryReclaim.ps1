@@ -298,7 +298,7 @@ function Get-YumFastReclaimCandidates {
                 $optionalBonus=if($optionalNames -contains $nameKey){15.0}else{0.0}
                 $learning=Get-YumReclaimLearningForProcess -Process $p
                 $score=[math]::Round($sizeScore+$idleScore+$optionalBonus+[double]$learning.HistoricalBonus,1)
-                $reason=if($learning.Samples -ge 2 -and $learning.EwmaGainRatio -ge 0.25){'Historical reclaim effectiveness is good; prior trims returned useful available RAM'}elseif($learning.Samples -ge 2 -and $learning.EwmaGainRatio -lt 0.03){'Historical reclaim effectiveness is poor; candidate is deprioritized'}elseif($optionalBonus -gt 0){'Approved optional background process; meaningful resident memory'}elseif($cpu -lt 1){'Low CPU activity with meaningful resident working set'}else{'Large resident working set; eligible for one-shot reclaim review'}
+                $reason=if($learning.Samples -ge 2 -and $learning.EwmaGainRatio -ge 0.25){'Freeing it worked well before on this PC'}elseif($learning.Samples -ge 2 -and $learning.EwmaGainRatio -lt 0.03){'Freeing it barely helped before, so it goes last'}elseif($optionalBonus -gt 0){'Optional background program holding a lot of RAM'}elseif($cpu -lt 1){'Idle right now and holding a lot of RAM'}else{'Holding a lot of RAM'}
                 [void]$rows.Add([pscustomobject]@{Process=$p;PID=[int]$p.Id;ProcessName=[string]$p.ProcessName;WorkingSetBytes=$ws;WorkingSetMB=[math]::Round($wsMB,0);CPU=[math]::Round($cpu,1);Score=$score;Optional=($optionalBonus -gt 0);Reason=$reason;Policy=if($optionalBonus -gt 0){'Candidate'}else{'Review'};HistoricalSamples=$learning.Samples;HistoricalEffectiveness=[math]::Round($learning.EwmaGainRatio,3);HistoricalGainMB=[math]::Round($learning.EwmaGainMB,1);HistoricalBonus=$learning.HistoricalBonus})
                 if($rows.Count -ge $TopN){break}
             } catch {}
@@ -483,7 +483,7 @@ function Invoke-YumMemoryReclaim {
             [void]$rows.Add([pscustomobject]@{Type='Memory Area';PID='—';Process=$Label;BeforeMB=[math]::Round([double]$areaBefore.AvailableGB*1024,0);AfterMB=[math]::Round([double]$areaAfter.AvailableGB*1024,0);ReducedMB=[math]::Round($gain*1024,0);Action='Purge';Result=$areaResult;Reason=$areaReason;CPU='—';Score=0})
             if(-not $r.Success -and $areaResult -ne 'Skipped'){[void]$notes.Add(('{0} was unavailable or denied.' -f $Label))}
         }
-        if([bool]$script:Yum.Config.ReclaimLowPriorityStandby){ & $runMemoryArea 'PurgeLowPriorityStandby' 'Low-priority standby list' }
+        if([bool]$script:Yum.Config.ReclaimLowPriorityStandby){ & $runMemoryArea 'PurgeLowPriorityStandby' 'Old cache (low priority)' }
 
         # 5.3.0: was "-TopN (if(...){16}else{10})" which PowerShell runs as a command named 'if'.
         $maxActions=[math]::Max(1,[int]$script:Yum.Config.ReclaimMaxProcessActions)
@@ -498,24 +498,24 @@ function Invoke-YumMemoryReclaim {
         $elevated=Test-YumIsElevated
         $assistOk=($elevated -and -not $gameActive -and ($Force -or $Mode -eq 'Deep'))
         if($assistOk -and $(if($script:Yum.Config.Contains('ReclaimSystemFileCache')){[bool]$script:Yum.Config['ReclaimSystemFileCache']}else{$true})){ & $runMemoryArea 'TrimSystemFileCache' 'System file cache' }
-        if($assistOk -and [bool]$script:Yum.Config.ReclaimModifiedPageList){ & $runMemoryArea 'FlushModifiedList' 'Modified page list' }
+        if($assistOk -and [bool]$script:Yum.Config.ReclaimModifiedPageList){ & $runMemoryArea 'FlushModifiedList' 'Changes waiting to be saved' }
         # 5.12: memory combining (identical pages kept once). Measured here: first run +0.26 GB Available (261 MB
         # combined, 3.5 s); repeats within minutes find only 10-16 MB. Deep always; Free RAM now every 15 min.
         $combineOn=$true;try{if($script:Yum.Config.Contains('ReclaimCombineMemory')){$combineOn=[bool]$script:Yum.Config['ReclaimCombineMemory']}}catch{}
         $lastCombine=[datetime]::MinValue;try{if($null -ne $script:Yum['LastMemoryCombine']){$lastCombine=[datetime]$script:Yum['LastMemoryCombine']}}catch{}
         if($assistOk -and $combineOn -and ($Mode -eq 'Deep' -or ((Get-Date)-$lastCombine).TotalMinutes -ge 15)){
             $cb=Invoke-YumCombineMemory;$script:Yum['LastMemoryCombine']=Get-Date
-            [void]$rows.Add([pscustomobject]@{Type='Memory Area';PID='—';Process='Identical pages (memory combining)';BeforeMB='—';AfterMB='—';ReducedMB=[math]::Round([double]$cb.SavedMB,0);Action='Combine';Result=$(if($cb.Success){'Completed'}else{'Skipped'});Reason=[string]$cb.Reason;CPU='—';Score=0})
+            [void]$rows.Add([pscustomobject]@{Type='Memory Area';PID='—';Process='Duplicate memory combined';BeforeMB='—';AfterMB='—';ReducedMB=[math]::Round([double]$cb.SavedMB,0);Action='Combine';Result=$(if($cb.Success){'Completed'}else{'Skipped'});Reason=[string]$cb.Reason;CPU='—';Score=0})
         }
         if(-not $elevated){[void]$notes.Add('Not running as administrator: the system file cache and Windows memory lists were skipped (process trimming only).')}
-        if($Mode -eq 'Deep' -and [bool]$script:Yum.Config.ReclaimStandbyList){ & $runMemoryArea 'PurgeStandby' 'Standby list' }
+        if($Mode -eq 'Deep' -and [bool]$script:Yum.Config.ReclaimStandbyList){ & $runMemoryArea 'PurgeStandby' 'All cache (standby)' }
 
         # A manual deep reclaim can optionally clear system working sets last.
         # It is intentionally not part of automatic monitoring because it is more
         # likely to cause immediate page faults in active applications.
         if($Mode -eq 'Deep' -and [bool]$script:Yum.Config.ReclaimSystemWorkingSet -and $Force -and -not $gameActive){
             $r2=Invoke-YumNativeMemoryCommand -Command EmptyWorkingSets
-            [void]$rows.Add([pscustomobject]@{Type='Memory Area';PID='—';Process='System/user working sets';BeforeMB='—';AfterMB='—';ReducedMB='—';Action='Empty working sets';Result=if($r2.Success){'Completed'}else{'Failed'};Reason=$r2.Reason;CPU='—';Score=0})
+            [void]$rows.Add([pscustomobject]@{Type='Memory Area';PID='—';Process='Every program''s memory';BeforeMB='—';AfterMB='—';ReducedMB='—';Action='Empty working sets';Result=if($r2.Success){'Completed'}else{'Failed'};Reason=$r2.Reason;CPU='—';Score=0})
             # 5.6 (measured as administrator): emptying every working set parks ~4 GB of changed pages on the
             # modified list; Windows only writes them out (-> Available) 3-5 s later, so Deep reported +1.4 GB
             # while the real gain 5 s later was +3.5 GB. A forced flush fixed the number but took ~13 s of
@@ -558,7 +558,7 @@ function Invoke-YumMemoryReclaim {
             Success=$success;Skipped=$false;Mode=$Mode;Before=$before;After=$after;AvailableGainGB=$availableGain;WorkingSetReducedMB=$wsReduced;Actions=$rows.Count;Rows=$rows.ToArray();Notes=$notes.ToArray();Timestamp=Get-Date
             FreeBeforeGB=$(if($listsBefore){$listsBefore.FreeGB}else{$null});FreeAfterGB=$(if($listsAfter){$listsAfter.FreeGB}else{$null});FreeJumpGB=$freeJump
             StandbyBeforeGB=$(if($listsBefore){$listsBefore.StandbyGB}else{$null});StandbyAfterGB=$(if($listsAfter){$listsAfter.StandbyGB}else{$null})
-            Summary=('Available RAM {0:N2} → {1:N2} GB (+{2:N2} GB). Process working sets reduced {3:N0} MB. {4} completed.{5}{6}' -f $before.AvailableGB,$after.AvailableGB,$availableGain,$wsReduced,$($doneCount=@($rows|Where-Object{$_.Result -eq 'Completed'}).Count;if($doneCount -eq 1){'1 action'}else{'{0} actions' -f $doneCount}),$(if($wsReduced -le 0){' Nothing left to trim right now - idle programs were already trimmed.'}else{''}),$freeNote)
+            Summary=('Free RAM {0:N2} → {1:N2} GB (+{2:N2} GB). Took {3:N0} MB back from idle programs. {4} done.{5}{6}' -f $before.AvailableGB,$after.AvailableGB,$availableGain,$wsReduced,$($doneCount=@($rows|Where-Object{$_.Result -eq 'Completed'}).Count;if($doneCount -eq 1){'1 action'}else{'{0} actions' -f $doneCount}),$(if($wsReduced -le 0){' Nothing left to trim right now - idle programs were already trimmed.'}else{''}),$freeNote)
         }
         try {
             $script:Yum.LastReclaim=$result

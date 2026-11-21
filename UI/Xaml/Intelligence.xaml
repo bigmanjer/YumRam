@@ -64,13 +64,13 @@
     <!-- Summary cards: Tag = the Show filter each card applies when clicked -->
     <UniformGrid x:Name="CounterStrip" Grid.Row="2" Columns="8" Margin="0,0,-8,12">
       <Border Style="{StaticResource Counter}" Tag="All Items" ToolTip="Everything YUMRAM knows about on this PC (running now and saved). Click to show all."><StackPanel><TextBlock Text="ALL ITEMS" Style="{StaticResource StatLabel}"/><TextBlock x:Name="ScannedCount" Text="--" Style="{StaticResource CounterValue}"/></StackPanel></Border>
-      <Border Style="{StaticResource Counter}" Tag="Organized" ToolTip="Identified and organized. Click to show them."><StackPanel><TextBlock Text="RESOLVED" Style="{StaticResource StatLabel}" Foreground="{StaticResource Success}"/><TextBlock x:Name="ResolvedCount" Text="--" Style="{StaticResource CounterValue}"/></StackPanel></Border>
-      <Border Style="{StaticResource Counter}" Tag="Protected" ToolTip="Windows, security, drivers and games; never trimmed. Click to show them."><StackPanel><TextBlock Text="PROTECTED" Style="{StaticResource StatLabel}" Foreground="{StaticResource Pink}"/><TextBlock x:Name="ProtectedCount" Text="--" Style="{StaticResource CounterValue}"/></StackPanel></Border>
-      <Border Style="{StaticResource Counter}" Tag="Review Queue" ToolTip="Waiting for research or your decision. Click to show them."><StackPanel><TextBlock Text="REVIEW" Style="{StaticResource StatLabel}" Foreground="{StaticResource Warning}"/><TextBlock x:Name="ReviewCount" Text="--" Style="{StaticResource CounterValue}"/></StackPanel></Border>
-      <Border Style="{StaticResource Counter}" Tag="Unknown" ToolTip="Could not be identified; never managed automatically. Click to show them."><StackPanel><TextBlock Text="UNKNOWN" Style="{StaticResource StatLabel}"/><TextBlock x:Name="UnknownCount" Text="--" Style="{StaticResource CounterValue}"/></StackPanel></Border>
-      <Border Style="{StaticResource Counter}" Tag="Researching" ToolTip="Being researched right now. Click to show them."><StackPanel><TextBlock Text="RESEARCHING" Style="{StaticResource StatLabel}" Foreground="{StaticResource Brand}"/><TextBlock x:Name="ResearchingCount" Text="--" Style="{StaticResource CounterValue}"/></StackPanel></Border>
-      <Border Style="{StaticResource Counter}" Tag="Cached / Knowledge" ToolTip="Resolved from saved knowledge in the last scan, without new research. Click to show them."><StackPanel><TextBlock Text="CACHED" Style="{StaticResource StatLabel}" Foreground="{StaticResource Info}"/><TextBlock x:Name="CachedCount" Text="--" Style="{StaticResource CounterValue}"/></StackPanel></Border>
-      <Border Style="{StaticResource Counter}" Tag="Research Errors" ToolTip="Research attempts that failed and will be retried. Click to show them."><StackPanel><TextBlock Text="ERRORS" Style="{StaticResource StatLabel}" Foreground="{StaticResource Danger}"/><TextBlock x:Name="ResearchErrorCount" Text="--" Style="{StaticResource CounterValue}"/></StackPanel></Border>
+      <Border Style="{StaticResource Counter}" Tag="Organized" ToolTip="YUMRAM knows what these are. Click to show them."><StackPanel><TextBlock Text="IDENTIFIED" Style="{StaticResource StatLabel}" Foreground="{StaticResource Success}"/><TextBlock x:Name="ResolvedCount" Text="--" Style="{StaticResource CounterValue}"/></StackPanel></Border>
+      <Border Style="{StaticResource Counter}" Tag="Protected" ToolTip="Windows, security, drivers and games. YUMRAM never touches these. Click to show them."><StackPanel><TextBlock Text="NEVER TOUCHED" Style="{StaticResource StatLabel}" Foreground="{StaticResource Pink}"/><TextBlock x:Name="ProtectedCount" Text="--" Style="{StaticResource CounterValue}"/></StackPanel></Border>
+      <Border Style="{StaticResource Counter}" Tag="Review Queue" ToolTip="Not looked up yet. Run Scan checks them for you. Click to show them."><StackPanel><TextBlock Text="NOT CHECKED YET" Style="{StaticResource StatLabel}" Foreground="{StaticResource Warning}"/><TextBlock x:Name="ReviewCount" Text="--" Style="{StaticResource CounterValue}"/></StackPanel></Border>
+      <Border Style="{StaticResource Counter}" Tag="Unknown" ToolTip="Could not be identified. YUMRAM leaves them alone; use Look it up online or Open file location to check them. Click to show them."><StackPanel><TextBlock Text="NOT IDENTIFIED" Style="{StaticResource StatLabel}"/><TextBlock x:Name="UnknownCount" Text="--" Style="{StaticResource CounterValue}"/></StackPanel></Border>
+      <Border Style="{StaticResource Counter}" Tag="Researching" ToolTip="Being looked up right now. Click to show them."><StackPanel><TextBlock Text="CHECKING NOW" Style="{StaticResource StatLabel}" Foreground="{StaticResource Brand}"/><TextBlock x:Name="ResearchingCount" Text="--" Style="{StaticResource CounterValue}"/></StackPanel></Border>
+      <Border Style="{StaticResource Counter}" Tag="Cached / Knowledge" ToolTip="Recognised from what YUMRAM already learned, so no new lookup was needed. Click to show them."><StackPanel><TextBlock Text="ALREADY KNOWN" Style="{StaticResource StatLabel}" Foreground="{StaticResource Info}"/><TextBlock x:Name="CachedCount" Text="--" Style="{StaticResource CounterValue}"/></StackPanel></Border>
+      <Border Style="{StaticResource Counter}" Tag="Research Errors" ToolTip="The lookup did not work this time (for example no internet). They are tried again next scan. Click to show them."><StackPanel><TextBlock Text="WILL RETRY" Style="{StaticResource StatLabel}" Foreground="{StaticResource Danger}"/><TextBlock x:Name="ResearchErrorCount" Text="--" Style="{StaticResource CounterValue}"/></StackPanel></Border>
     </UniformGrid>
 
     <!-- Filter bar -->
@@ -104,22 +104,49 @@
             <GridViewColumn Header="Item" DisplayMemberBinding="{Binding Name}" Width="210"/>
             <GridViewColumn Header="Type" DisplayMemberBinding="{Binding Source}" Width="72"/>
             <GridViewColumn Header="Publisher" DisplayMemberBinding="{Binding Publisher}" Width="150"/>
-            <GridViewColumn Header="Category" DisplayMemberBinding="{Binding Category}" Width="160"/>
-            <GridViewColumn Header="Risk" Width="96">
+            <GridViewColumn Header="Kind" Width="160">
               <GridViewColumn.CellTemplate><DataTemplate>
-                <Border x:Name="Pill" CornerRadius="9" Padding="8,1" Background="{StaticResource Surface2}" HorizontalAlignment="Left">
-                  <TextBlock x:Name="PillText" Text="{Binding Risk}" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource TextMuted}"/>
-                </Border>
+                <TextBlock x:Name="CatText" Text="{Binding Category}" TextTrimming="CharacterEllipsis"/>
                 <DataTemplate.Triggers>
-                  <DataTrigger Binding="{Binding Risk}" Value="Protected"><Setter TargetName="PillText" Property="Foreground" Value="{StaticResource Pink}"/></DataTrigger>
-                  <DataTrigger Binding="{Binding Risk}" Value="Candidate"><Setter TargetName="PillText" Property="Foreground" Value="{StaticResource Success}"/></DataTrigger>
-                  <DataTrigger Binding="{Binding Risk}" Value="Safe"><Setter TargetName="PillText" Property="Foreground" Value="{StaticResource Success}"/></DataTrigger>
-                  <DataTrigger Binding="{Binding Risk}" Value="Review"><Setter TargetName="PillText" Property="Foreground" Value="{StaticResource Warning}"/></DataTrigger>
-                  <DataTrigger Binding="{Binding Risk}" Value="Unknown"><Setter TargetName="PillText" Property="Foreground" Value="{StaticResource Danger}"/></DataTrigger>
+                  <DataTrigger Binding="{Binding Category}" Value="Identified Applications"><Setter TargetName="CatText" Property="Text" Value="App"/></DataTrigger>
+                  <DataTrigger Binding="{Binding Category}" Value="User Background Apps"><Setter TargetName="CatText" Property="Text" Value="Background app"/></DataTrigger>
+                  <DataTrigger Binding="{Binding Category}" Value="Protected"><Setter TargetName="CatText" Property="Text" Value="Part of Windows"/></DataTrigger>
+                  <DataTrigger Binding="{Binding Category}" Value="Unknown / Quarantine"><Setter TargetName="CatText" Property="Text" Value="Not identified"/></DataTrigger>
+                  <DataTrigger Binding="{Binding Category}" Value="Unknown"><Setter TargetName="CatText" Property="Text" Value="Not identified"/></DataTrigger>
                 </DataTemplate.Triggers>
               </DataTemplate></GridViewColumn.CellTemplate>
             </GridViewColumn>
-            <GridViewColumn Header="Status" DisplayMemberBinding="{Binding ResearchStatus}" Width="92"/>
+            <GridViewColumn Header="Our advice" Width="120">
+              <GridViewColumn.CellTemplate><DataTemplate>
+                <Border x:Name="Pill" CornerRadius="9" Padding="8,1" Background="{StaticResource Surface2}" HorizontalAlignment="Left">
+                  <TextBlock x:Name="PillText" Text="Your call" FontSize="12" FontWeight="SemiBold" Foreground="#7DD3FC"/>
+                </Border>
+                <DataTemplate.Triggers>
+                  <DataTrigger Binding="{Binding Risk}" Value="Candidate"><Setter TargetName="PillText" Property="Text" Value="Turn off is fine"/><Setter TargetName="PillText" Property="Foreground" Value="#4ADE80"/></DataTrigger>
+                  <DataTrigger Binding="{Binding Risk}" Value="Safe"><Setter TargetName="PillText" Property="Text" Value="Turn off is fine"/><Setter TargetName="PillText" Property="Foreground" Value="#4ADE80"/></DataTrigger>
+                  <DataTrigger Binding="{Binding Risk}" Value="Safe to Manage"><Setter TargetName="PillText" Property="Text" Value="Turn off is fine"/><Setter TargetName="PillText" Property="Foreground" Value="#4ADE80"/></DataTrigger>
+                  <DataTrigger Binding="{Binding Advice}" Value="YourCall"><Setter TargetName="PillText" Property="Text" Value="Your call"/><Setter TargetName="PillText" Property="Foreground" Value="#7DD3FC"/></DataTrigger>
+                  <DataTrigger Binding="{Binding Risk}" Value="Protected"><Setter TargetName="PillText" Property="Text" Value="Keep"/><Setter TargetName="PillText" Property="Foreground" Value="#F9A8D4"/></DataTrigger>
+                  <DataTrigger Binding="{Binding Advice}" Value="Keep"><Setter TargetName="PillText" Property="Text" Value="Keep"/><Setter TargetName="PillText" Property="Foreground" Value="#F9A8D4"/></DataTrigger>
+                  <DataTrigger Binding="{Binding Advice}" Value="Game"><Setter TargetName="PillText" Property="Text" Value="Keep"/><Setter TargetName="PillText" Property="Foreground" Value="#F9A8D4"/></DataTrigger>
+                  <DataTrigger Binding="{Binding Category}" Value="Games / Gaming"><Setter TargetName="PillText" Property="Text" Value="Keep"/><Setter TargetName="PillText" Property="Foreground" Value="#F9A8D4"/></DataTrigger>
+                  <DataTrigger Binding="{Binding Category}" Value="Unknown / Quarantine"><Setter TargetName="PillText" Property="Text" Value="Careful"/><Setter TargetName="PillText" Property="Foreground" Value="#F87171"/></DataTrigger>
+                  <DataTrigger Binding="{Binding Risk}" Value="Unknown"><Setter TargetName="PillText" Property="Text" Value="Careful"/><Setter TargetName="PillText" Property="Foreground" Value="#F87171"/></DataTrigger>
+                </DataTemplate.Triggers>
+              </DataTemplate></GridViewColumn.CellTemplate>
+            </GridViewColumn>
+            <GridViewColumn Header="Checked?" Width="110">
+              <GridViewColumn.CellTemplate><DataTemplate>
+                <TextBlock x:Name="StText" Text="{Binding ResearchStatus}"/>
+                <DataTemplate.Triggers>
+                  <DataTrigger Binding="{Binding ResearchStatus}" Value="Organized"><Setter TargetName="StText" Property="Text" Value="Identified"/></DataTrigger>
+                  <DataTrigger Binding="{Binding ResearchStatus}" Value="Review"><Setter TargetName="StText" Property="Text" Value="Not checked yet"/></DataTrigger>
+                  <DataTrigger Binding="{Binding ResearchStatus}" Value="Unknown"><Setter TargetName="StText" Property="Text" Value="Not identified"/></DataTrigger>
+                  <DataTrigger Binding="{Binding ResearchStatus}" Value="Research Error"><Setter TargetName="StText" Property="Text" Value="Will retry"/></DataTrigger>
+                  <DataTrigger Binding="{Binding ResearchStatus}" Value="Researching"><Setter TargetName="StText" Property="Text" Value="Checking now"/></DataTrigger>
+                </DataTemplate.Triggers>
+              </DataTemplate></GridViewColumn.CellTemplate>
+            </GridViewColumn>
             <GridViewColumn Header="RAM" DisplayMemberBinding="{Binding Memory}" Width="58"/>
           </GridView></ListView.View>
         </ListView>

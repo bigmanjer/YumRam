@@ -123,3 +123,71 @@ function Format-YumVram {
     if($lines.Count -eq 0){return ''}
     return ((@('VRAM in use')+$lines) -join [Environment]::NewLine)
 }
+
+# 5.15.2 (user request: "add disk information like task manager"). Same numbers Task Manager's Disk page uses:
+# active time = 100 - PhysicalDisk "% Idle Time", read/write speed, average response time, plus free space per
+# drive and SSD/HDD. One ReadCategory per refresh (a few ms); disk type is looked up once.
+$script:YumLive.DiskCategory=$null; $script:YumLive.DiskPrev=@{}; $script:YumLive.DiskTypes=$null
+
+function Get-YumDiskTypes {
+    if($null -eq $script:YumLive.DiskTypes){
+        $t=@{}
+        try{ foreach($d in @(Get-CimInstance -Namespace root\Microsoft\Windows\Storage -ClassName MSFT_PhysicalDisk -ErrorAction Stop -OperationTimeoutSec 3)){
+                 $kind=switch([int]$d.MediaType){4{'SSD'}3{'HDD'}default{''}}
+                 if([int]$d.BusType -eq 17 -and $kind -eq 'SSD'){$kind='SSD (NVMe)'}
+                 if([int]$d.BusType -eq 7){$kind=if($kind){"USB $kind"}else{'USB drive'}}
+                 $t[[string]$d.DeviceId]=$kind } }catch{}
+        $script:YumLive.DiskTypes=$t
+    }
+    return $script:YumLive.DiskTypes
+}
+
+function Get-YumLiveDisk {
+    # Returns @{Disks=[@{Number;Letters;Type;ActivePercent;ReadMBs;WriteMBs;ResponseMs}]; Busiest; ReadMBs; WriteMBs; Drives=[@{Letter;FreeGB;TotalGB}]}
+    $L=$script:YumLive
+    $disks=@()
+    try{
+        if($null -eq $L.DiskCategory){ $L.DiskCategory=New-Object System.Diagnostics.PerformanceCounterCategory('PhysicalDisk') }
+        $all=$L.DiskCategory.ReadCategory(); $next=@{}
+        $idle=$all['% Idle Time']; $rd=$all['Disk Read Bytes/sec']; $wr=$all['Disk Write Bytes/sec']; $resp=$all['Avg. Disk sec/Transfer']
+        $types=Get-YumDiskTypes
+        foreach($key in @($idle.Keys)){
+            $inst=[string]$key; if($inst -eq '_Total'){continue}
+            $cur=@{Idle=$idle[$key].Sample;Read=$rd[$key].Sample;Write=$wr[$key].Sample;Resp=$resp[$key].Sample}; $next[$inst]=$cur
+            $num=($inst -split ' ')[0]; $letters=(($inst -split ' ' | Select-Object -Skip 1) -join ' ').Trim().ToUpperInvariant()
+            $active=$null;$r=$null;$w=$null;$ms=$null
+            if($L.DiskPrev.ContainsKey($inst)){
+                $p=$L.DiskPrev[$inst]
+                $active=[math]::Round([math]::Min(100,[math]::Max(0,100-[double][System.Diagnostics.CounterSample]::Calculate($p.Idle,$cur.Idle))),0)
+                $r=[double][System.Diagnostics.CounterSample]::Calculate($p.Read,$cur.Read)/1MB
+                $w=[double][System.Diagnostics.CounterSample]::Calculate($p.Write,$cur.Write)/1MB
+                $ms=[double][System.Diagnostics.CounterSample]::Calculate($p.Resp,$cur.Resp)*1000
+            }
+            $disks+=[pscustomobject]@{Number=$num;Letters=$letters;Type=[string]$types[$num];ActivePercent=$active;ReadMBs=$r;WriteMBs=$w;ResponseMs=$ms}
+        }
+        $L.DiskPrev=$next
+    }catch{}
+    $drives=@()
+    try{ foreach($d in [IO.DriveInfo]::GetDrives()){ if($d.DriveType -eq [IO.DriveType]::Fixed -and $d.IsReady){ $drives+=[pscustomobject]@{Letter=$d.Name.TrimEnd('\');FreeGB=$d.AvailableFreeSpace/1GB;TotalGB=$d.TotalSize/1GB} } } }catch{}
+    $ready=@($disks | Where-Object { $null -ne $_.ActivePercent })
+    $busiest=if($ready.Count){[double]($ready | Measure-Object ActivePercent -Maximum).Maximum}else{$null}
+    $sumR=if($ready.Count){[double]($ready | Measure-Object ReadMBs -Sum).Sum}else{$null}
+    $sumW=if($ready.Count){[double]($ready | Measure-Object WriteMBs -Sum).Sum}else{$null}
+    return [pscustomobject]@{Disks=@($disks | Sort-Object Number);Busiest=$busiest;ReadMBs=$sumR;WriteMBs=$sumW;Drives=$drives}
+}
+
+function Format-YumDiskSpeed { param($MBs) if($null -eq $MBs){return '--'}; if([double]$MBs -lt 1){ return ('{0:N0} KB/s' -f ([double]$MBs*1024)) }; return ('{0:N1} MB/s' -f [double]$MBs) }
+
+function Format-YumDiskLines {
+    # Task Manager style, one line per physical disk, then free space per drive.
+    #   Disk 0 (C:) SSD  3 % · 120 KB/s read · 1.1 MB/s write · 0.4 ms
+    #   C:  120 GB free of 476 GB
+    param($Disk,[string]$SkipDrive)
+    if($null -eq $Disk){return ''}
+    $lines=foreach($d in @($Disk.Disks)){
+        $name=('Disk {0}' -f $d.Number); if($d.Letters){$name+=(' ({0})' -f $d.Letters)}; if($d.Type){$name+=(' '+$d.Type)}
+        if($null -eq $d.ActivePercent){ $name } else { ('{0}: {1} % busy · read {2} · write {3} · {4:N1} ms' -f $name,$d.ActivePercent,(Format-YumDiskSpeed $d.ReadMBs),(Format-YumDiskSpeed $d.WriteMBs),[double]$d.ResponseMs) }
+    }
+    $space=foreach($v in @($Disk.Drives | Where-Object { $_.Letter -ne $SkipDrive })){ ('{0}  {1:N0} GB free of {2:N0} GB' -f $v.Letter,[double]$v.FreeGB,[double]$v.TotalGB) }
+    return ((@($lines)+@($space) | Where-Object { $_ }) -join [Environment]::NewLine)
+}

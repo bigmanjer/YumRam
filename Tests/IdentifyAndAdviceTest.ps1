@@ -60,4 +60,15 @@ $sc=[IO.File]::ReadAllText((Join-Path $root 'Core\Scanner.ps1'))
 Assert-That ($sc -match '\$wide=\[math\]::Max\(\$MaxItems,500\)') 'Scan covers every item, not the first 80.'
 Assert-That ((Get-YumResearchStageWords -Stage 'Researching Online') -match 'online') 'Research stage in plain words.'
 foreach($x in 'Startup.xaml','WindowsBloat.xaml','TopProcesses.xaml'){ $t=[IO.File]::ReadAllText((Join-Path $root ('UI\Xaml\'+$x))); Assert-That ($t -match 'Our advice|OUR ADVICE') "$x shows 'Our advice'" }
+# 6. Plain words (user: "make sure the user will be able to understand everything"). Labels people see.
+$intel=[IO.File]::ReadAllText((Join-Path $root 'UI\Xaml\Intelligence.xaml'))
+foreach($w in 'Text="RESOLVED"','Text="CACHED"','Header="Risk"','Header="Status"'){ Assert-That (-not $intel.Contains($w)) "Intelligence still shows jargon: $w" }
+foreach($w in 'Header="Our advice"','Text="NOT CHECKED YET"','Value="Turn off is fine"','Value="Careful"'){ Assert-That ($intel.Contains($w)) "Intelligence is missing plain label: $w" }
+$rc=[IO.File]::ReadAllText((Join-Path $root 'UI\Xaml\MemoryReclaim.xaml'))
+foreach($w in 'TRIMMED LAST RUN','Before MB','Trimmed MB','STANDBY CACHE'){ Assert-That (-not $rc.Contains($w)) "Reclaim Center still shows jargon: $w" }
+$mr=[IO.File]::ReadAllText((Join-Path $root 'Core\MemoryReclaim.ps1'))
+Assert-That ($mr -notmatch 'Process working sets reduced' -and $mr -notmatch 'Historical reclaim effectiveness is') 'Reclaim summary and reasons in plain words.'
+$mwp=[IO.File]::ReadAllText((Join-Path $root 'UI\MainWindow.ps1'))
+Assert-That ($mwp -notmatch "'Telemetry: \{0" -and $mwp -notmatch 'Below configured target') 'Status bar / footer in plain words.'
+
 Write-Host ('IdentifyAndAdviceTest passed. {0} installed programs read.' -f $progs.Count)

@@ -90,7 +90,7 @@
                 </DataTemplate.Triggers>
               </DataTemplate></GridViewColumn.CellTemplate>
             </GridViewColumn>
-            <GridViewColumn Header="YUMRAM" DisplayMemberBinding="{Binding YumText}" Width="110"/>
+            <GridViewColumn Header="What YUMRAM does" DisplayMemberBinding="{Binding YumText}" Width="130"/>
           </GridView></ListView.View>
         </ListView>
       </Border>

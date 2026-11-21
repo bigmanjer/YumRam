@@ -34,4 +34,26 @@ Assert-That ($mw -match 'Update-YumLiveReadingsUi -Paused') 'Overview refresh ca
 Assert-That ($mw -notmatch 'start monitoring for live CPU') 'No more "start monitoring for live CPU".'
 $x=[IO.File]::ReadAllText((Join-Path $root 'UI\Xaml\MainWindow.xaml'))
 Assert-That ($x -match 'x:Name="GpuVram"' -and $x -match 'GPU busy = how hard') 'GPU card shows VRAM and explains itself.'
-Write-Host ('LiveReadingsTest passed. CPU {0}% {1} MHz ({2:N0} ms); {3} ({4:N0} ms)' -f $c.Percent,$c.MHz,$cpuMs,$txt,$gpuMs)
+
+# 5.15.2: disk like Task Manager (busy %, read/write, response, free space) and X keeps YUMRAM running.
+$null=Get-YumLiveDisk; Start-Sleep -Milliseconds 1100
+$sw=[Diagnostics.Stopwatch]::StartNew(); $d=Get-YumLiveDisk; $diskMs=$sw.Elapsed.TotalMilliseconds
+Assert-That (@($d.Disks).Count -ge 1) 'No physical disk found.'
+Assert-That ($null -ne $d.Busiest -and [double]$d.Busiest -ge 0 -and [double]$d.Busiest -le 100) ('Disk busy out of range: {0}' -f $d.Busiest)
+Assert-That ([double]$d.ReadMBs -ge 0 -and [double]$d.WriteMBs -ge 0) 'Disk speeds must not be negative.'
+Assert-That (@($d.Drives | Where-Object { $_.Letter -eq $env:SystemDrive }).Count -eq 1) 'Windows drive free space missing.'
+Assert-That ($diskMs -lt 250) ('Disk reading should be cheap, took {0:N0} ms.' -f $diskMs)
+$dl=Format-YumDiskLines $d
+Assert-That ($dl -match 'Disk 0' -and $dl -match 'GB free of') ('Disk text incomplete: "{0}"' -f $dl)
+Assert-That ((Format-YumDiskSpeed 0.5) -match 'KB/s' -and (Format-YumDiskSpeed 12.34) -eq ('{0:N1} MB/s' -f 12.34) -and (Format-YumDiskSpeed $null) -eq '--') 'Disk speed wording.'
+Assert-That ($x -match 'x:Name="DiskBusy"' -and $x -match 'x:Name="DiskSpaceBar"' -and $x -match 'Active time') 'Overview has the disk card and explains it.'
+$script:Yum['ExitRequested']=$false; $script:Yum.Config['CloseToBackground']=$true
+Assert-That (Test-YumCloseToBackground) 'X keeps YUMRAM running by default.'
+$script:Yum.Config['CloseToBackground']=$false; Assert-That (-not (Test-YumCloseToBackground)) 'Setting off: X quits.'
+$script:Yum.Config['CloseToBackground']=$true; $script:Yum['ExitRequested']=$true; Assert-That (-not (Test-YumCloseToBackground)) 'Tray Exit / update / sign-out still quits.'
+$script:Yum['ExitRequested']=$false
+$tray=[IO.File]::ReadAllText((Join-Path $root 'UI\Tray.ps1'))
+Assert-That ($tray -match '\$exit\.Add_Click\(\{ Exit-YumApp \}\)') 'Tray Exit really quits.'
+Assert-That ($mw -match 'Add_Closing' -and $mw -match '0x11' -and $mw -match 'YUMRAM-V5-ShowWindow') 'Closing hook, sign-out hook and re-open signal are wired.'
+Assert-That ([IO.File]::ReadAllText((Join-Path $root 'UI\Xaml\Settings.xaml')) -match 'x:Name="CloseToBackground"') 'Settings has the close option.'
+Write-Host ('LiveReadingsTest passed. Disk {5:N0} ms.  CPU {0}% {1} MHz ({2:N0} ms); {3} ({4:N0} ms)' -f $c.Percent,$c.MHz,$cpuMs,$txt,$gpuMs,$diskMs)

@@ -86,6 +86,9 @@
         CleanupCandidateSnapshotUtc = [datetime]::MinValue
         SingleInstanceMutex = $null
         SingleInstanceOwned = $false
+        ShowSignal = $null
+        ExitRequested = $false
+        CloseHintShown = $false
         StoppedOptionalServices = New-Object System.Collections.Generic.List[string]
         CacheLock = New-Object object
         LogLock = New-Object object
