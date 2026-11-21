@@ -37,8 +37,12 @@ Most "RAM cleaners" flush everything and show a big number. YUMRAM is different:
 | **What's running** | Live RAM and CPU per program, sortable, explained in plain words, with your own rules (*never trim*, *never hold back*). |
 | **Memory-leak alerts** | Spots a program whose memory keeps rising and tells you once — restarting it gives the memory back. |
 | **Windows bloat** | Removes preinstalled apps you do not need (News, Clipchamp, Solitaire, promoted games…) and turns off Windows ads, tips, suggestions, Bing in Start search, Copilot and Recall. Store, Edge, Windows Update and Defender are never touched; every change can be undone. |
+| **Disk cleanup** | Frees space from caches and leftovers that rebuild themselves (temp files, browser caches, picture previews, crash reports, old Windows Update files, Recycle Bin) — sizes and a plain explanation first, never your files, cookies or passwords. Optional weekly automatic clean. |
+| **What's using my disk** | Biggest folders (click to go deeper) and biggest files, like WinDirStat, with Open location. |
+| **Live readings** | RAM, CPU, GPU (busy + VRAM per graphics chip) and disk (busy, read/write, free space) as four rings on the Overview — also while monitoring is off. |
+| **Floating mini bar** | A small always-on-top bar with RAM, CPU, GPU and disk you can drag anywhere, with Free RAM and hide-to-tray. |
 | **Startup apps** | What starts with Windows, what it costs in RAM, and safe on/off using the same switch as Task Manager. |
-| **Intelligence** | Identifies every process, service and app (signatures, installed-software records, services, Store packages, optional web lookup). Only identified, non-protected programs are ever trimmed. |
+| **Intelligence** | Identifies every process, service, installed program and app (signatures, installed-software records, services, Store packages, optional web lookup) and says what each one is *for* (which device or feature) with one plain piece of advice: *Keep*, *Turn off is fine*, *Your call* or *Careful*. Only identified, non-protected programs are ever trimmed. |
 | **History** | Usage graph for 30 s, 5 min, 1 h and 12 h, kept across restarts. |
 | **Game measurement** | *Measure games on this PC* tests each CPU care level with a test game; while you play, YUMRAM uses what worked best here. Optional, opt-in sharing helps everyone with the same CPU. |
 | **Tray & updates** | Lives in the tray with live RAM %, low-RAM and leak notices; checks GitHub for updates and installs them verified. |
@@ -134,7 +138,7 @@ Open <b>About › Log</b> (or <code>YUMRAM.log</code> in the YUMRAM folder) and
 ## Development
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File Tests\Run-AllTests.ps1     # 64 tests, each in its own process
+powershell -NoProfile -ExecutionPolicy Bypass -File Tests\Run-AllTests.ps1     # 65 tests, each in its own process
 powershell -NoProfile -ExecutionPolicy Bypass -STA -File Tests\UI\FullUiProbe.ps1 -Root . -Out $env:TEMP\yum-ui
 powershell -NoProfile -ExecutionPolicy Bypass -File Tools\Build-Release.ps1    # dist\: setup, zip, SHA256SUMS
 ```

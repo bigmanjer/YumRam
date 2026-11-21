@@ -58,8 +58,16 @@ Assert-That ($xaml -match 'x:Name="Range12h"' -and $xaml -notmatch 'Range24h') '
 
 # 5. Administrator choices.
 Assert-That ((Get-YumElevationMode) -eq 'Ask') 'Default is to ask.'
-$r=Set-YumElevationChoice -Mode 'Never' -StartWithWindows $false
-Assert-That ($r.Success -and (Get-YumElevationMode) -eq 'Never') 'Never must apply without administrator.'
+if((Get-YumElevatedTask) -and -not (Test-YumIsElevated)){
+    # The PC's own (installed) YUMRAM has the no-prompt task: removing it needs administrator, and the test must
+    # never change the user's real setup. Check that YUMRAM says so clearly instead.
+    $r=Set-YumElevationChoice -Mode 'Never' -StartWithWindows $false
+    Assert-That (-not $r.Success -and [string]$r.Message -match 'administrator') 'Without administrator, removing an existing no-prompt task is refused with a clear reason.'
+    Write-Host 'Note: a no-prompt task from the installed YUMRAM exists; the "Never" switch was checked for its clear refusal only.'
+} else {
+    $r=Set-YumElevationChoice -Mode 'Never' -StartWithWindows $false
+    Assert-That ($r.Success -and (Get-YumElevationMode) -eq 'Never') 'Never must apply without administrator.'
+}
 $man=Get-Content -Raw (Join-Path $root 'Launcher\YUMRAM.manifest')
 Assert-That ($man -match 'level="asInvoker"') 'YUMRAM.exe must not force a UAC prompt; YUMRAM decides (task / ask / never).'
 $mw=Get-Content -Raw (Join-Path $root 'UI\MainWindow.ps1')

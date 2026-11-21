@@ -59,6 +59,8 @@
         LiveCpu = $null
         LiveGpuBusy = 0.0
         LastSideScanRead = [datetime]::MinValue
+        LastDiskAutoCheck = [datetime]::MinValue
+        DiskAutoRunning = $false
         LastUiReclaimResultVersion = 0
         ReclaimVerificationTimer = $null
         UiTimer = $null

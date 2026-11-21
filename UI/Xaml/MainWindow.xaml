@@ -120,6 +120,9 @@
           <Button x:Name="WindowsBloat" Style="{StaticResource NavButton}" ToolTip="Preinstalled Windows apps and ad, tip and suggestion settings - removed or turned off reversibly. (Ctrl+8)" AutomationProperties.Name="Windows bloat">
             <StackPanel Orientation="Horizontal"><TextBlock Text="🧹" Width="24" TextAlignment="Center"/><TextBlock Text="Windows bloat" Margin="10,0,0,0"/></StackPanel>
           </Button>
+          <Button x:Name="DiskCleanup" Style="{StaticResource NavButton}" ToolTip="Free disk space: caches and leftovers that rebuild themselves, and what is using your disk. Never your files. (Ctrl+9)" AutomationProperties.Name="Disk cleanup">
+            <StackPanel Orientation="Horizontal"><TextBlock Text="💽" Width="24" TextAlignment="Center"/><TextBlock Text="Disk cleanup" Margin="10,0,0,0"/></StackPanel>
+          </Button>
           <Button x:Name="Intelligence" Style="{StaticResource NavButton}" ToolTip="Identify every program, service and app; unknown items are researched automatically. (Ctrl+5)" AutomationProperties.Name="Intelligence">
             <StackPanel Orientation="Horizontal"><TextBlock Text="🧠" Width="24" TextAlignment="Center"/><TextBlock Text="Intelligence" Margin="10,0,0,0"/></StackPanel>
           </Button>

@@ -1130,6 +1130,7 @@ function Invoke-YumResearch {
     $lastFlush=Get-Date
 
     foreach($r in @($Records)){
+        $finalResearchStatus=$null; $researchTerminal=$false   # per item: never carry the previous item's result over
         $queueIndex++
         try {
             [void](Ensure-YumResearchRecordSchema -Record $r)
@@ -1219,6 +1220,11 @@ function Invoke-YumResearch {
                 Set-YumResearchStatus -Key $key -Name ([string]$r.Name) -Stage 'Cached' -Index $queueIndex -Total $totalRecords -Confidence ([int]$cached.Confidence) -Placement ([string]$cached.Placement) -Message 'Using valid cached research; no new research required.'
                 Add-YumResearchHistory -Key $key -Name ([string]$r.Name) -Stage 'Cached' -Message 'Valid cached research reused; re-research suppressed.' -Confidence ([int]$cached.Confidence) -Placement ([string]$cached.Placement)
                 $cachedCount++
+                # 5.15.2 fix: the final status below was only computed on the research path, so a cached item (e.g. a second
+                # Chrome or Discord process) inherited the PREVIOUS item's status - an identified app could show "Unknown".
+                $finalResearchStatus=[string]$cached.ResearchStatus
+                if([string]::IsNullOrWhiteSpace($finalResearchStatus)){ $finalResearchStatus=if([string]$cached.Placement -eq 'Unknown / Quarantine for Review'){'Unknown'}else{'Organized'} }
+                $researchTerminal=($finalResearchStatus -in @('Organized','Unknown','Research Error'))
                 $r|Add-Member -NotePropertyName ResearchRunDisposition -NotePropertyValue 'Cached' -Force
                 $r|Add-Member -NotePropertyName ResearchRunResolved -NotePropertyValue ([bool]($beforeResearchStatus -in @('Review','Research Error') -and [string]$cached.ResearchStatus -in @('Organized','Unknown'))) -Force
                 $r|Add-Member -NotePropertyName ResearchRunOnline -NotePropertyValue $false -Force
@@ -1473,6 +1479,7 @@ function Invoke-YumResearch {
                 $r|Add-Member -NotePropertyName Category -NotePropertyValue $resolvedCategory -Force
             }
             # Publish the single authoritative research state to the record before persistence/UI merge.
+            if($null -eq $finalResearchStatus){ $finalResearchStatus=if($null -ne $r.PSObject.Properties['ResearchStatus'] -and [string]$r.ResearchStatus){[string]$r.ResearchStatus}else{'Not Researched'}; $researchTerminal=($finalResearchStatus -in @('Organized','Unknown','Research Error')) }
             $r|Add-Member -NotePropertyName ResearchComplete -NotePropertyValue ([bool]$researchTerminal) -Force
             $r|Add-Member -NotePropertyName ResearchPerformed -NotePropertyValue ([bool]($didResearch -or ($null -ne $cached))) -Force
             $r|Add-Member -NotePropertyName ResearchStatus -NotePropertyValue $finalResearchStatus -Force

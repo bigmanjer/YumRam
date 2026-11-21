@@ -1,0 +1,157 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Disk cleanup (5.15.2). Names used by Show-YumDiskCleanup in UI\DiskCleanupPage.ps1.
+  Layout: header -> summary cards -> [junk categories | what's using my disk] | details panel -> footer.
+  Only caches and leftovers that rebuild themselves; nothing personal. Sizes are shown before anything is removed.
+-->
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="YUMRAM - Disk cleanup" Width="1160" Height="780" MinWidth="920" MinHeight="580" WindowStartupLocation="CenterOwner"
+        Background="{StaticResource Bg}" Foreground="{StaticResource Text}" FontFamily="{StaticResource UiFont}" FontSize="14" UseLayoutRounding="True">
+  <Window.Resources>
+    <Style x:Key="Answer" TargetType="TextBlock"><Setter Property="TextWrapping" Value="Wrap"/><Setter Property="Margin" Value="0,2,0,0"/><Setter Property="LineHeight" Value="20"/></Style>
+    <Style x:Key="Question" TargetType="TextBlock" BasedOn="{StaticResource StatLabel}"><Setter Property="Margin" Value="0,14,0,2"/></Style>
+  </Window.Resources>
+  <Grid Margin="20,16,20,14">
+    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+
+    <!-- Header -->
+    <DockPanel Margin="0,0,0,12">
+      <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+        <Border x:Name="AdminPill" Style="{StaticResource Pill}" Margin="0,0,10,0" VerticalAlignment="Center">
+          <TextBlock x:Name="AdminText" Text="" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource Warning}"/>
+        </Border>
+        <Button x:Name="Reload" Content="↻  Check again" Style="{StaticResource GhostButton}" ToolTip="Measure every category again."/>
+      </StackPanel>
+      <StackPanel>
+        <TextBlock Text="Disk cleanup" Style="{StaticResource AppTitle}"/>
+        <TextBlock Text="Free disk space by removing caches and leftovers that Windows and your programs rebuild by themselves. Never your files, cookies, saved passwords or browser history. You see the size of everything before anything is removed." Style="{StaticResource Caption}" Margin="0,2,0,0" TextWrapping="Wrap"/>
+        <TextBlock Margin="0,6,0,0" FontSize="12" TextWrapping="Wrap" Foreground="{StaticResource TextMuted}"><Run Text="Our advice:  "/><Run Text="Clean (recommended)" Foreground="{StaticResource Success}" FontWeight="SemiBold"/><Run Text=" safe for everyone  •  "/><Run Text="Your call" Foreground="{StaticResource Info}" FontWeight="SemiBold"/><Run Text=" safe, with a small side effect (click it to read)."/></TextBlock>
+      </StackPanel>
+    </DockPanel>
+
+    <!-- Summary -->
+    <UniformGrid Grid.Row="1" Columns="4" Margin="0,0,-8,12">
+      <Border Style="{StaticResource Card}" Padding="12,10" Margin="0,0,8,0"><StackPanel><TextBlock Text="CAN BE FREED NOW" Style="{StaticResource StatLabel}" Foreground="{StaticResource Success}"/><TextBlock x:Name="SumJunk" Text="--" Style="{StaticResource StatValue}" FontSize="22"/></StackPanel></Border>
+      <Border Style="{StaticResource Card}" Padding="12,10" Margin="0,0,8,0"><StackPanel><TextBlock Text="WINDOWS DRIVE FREE" Style="{StaticResource StatLabel}" Foreground="{StaticResource Brand}"/><TextBlock x:Name="SumDrive" Text="--" Style="{StaticResource StatValue}" FontSize="22"/><ProgressBar x:Name="SumDriveBar" Height="5" Margin="0,4,0,0" Maximum="100"/></StackPanel></Border>
+      <Border Style="{StaticResource Card}" Padding="12,10" Margin="0,0,8,0"><StackPanel><TextBlock Text="FREED BY YUMRAM" Style="{StaticResource StatLabel}" Foreground="{StaticResource Pink}"/><TextBlock x:Name="SumFreed" Text="--" Style="{StaticResource StatValue}" FontSize="22"/></StackPanel></Border>
+      <Border Style="{StaticResource Card}" Padding="12,10" Margin="0,0,8,0" ToolTip="Once a week YUMRAM removes only the safest leftovers: old temporary files, crash reports and Windows Update downloads older than 10 days. Off until you turn it on.">
+        <StackPanel><TextBlock Text="AUTOMATIC WEEKLY CLEAN" Style="{StaticResource StatLabel}"/><CheckBox x:Name="AutoClean" Content="On" Margin="0,8,0,0"/><TextBlock x:Name="AutoLast" Text="" Style="{StaticResource Caption}" Margin="0,4,0,0"/></StackPanel></Border>
+    </UniformGrid>
+
+    <Grid Grid.Row="2">
+      <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="360"/></Grid.ColumnDefinitions>
+      <Grid Margin="0,0,12,0">
+        <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="12"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+
+        <!-- Junk categories -->
+        <Border Style="{StaticResource Card}" Padding="0">
+          <DockPanel>
+            <DockPanel DockPanel.Dock="Top" Margin="14,10,10,6">
+              <Button x:Name="CleanSelected" DockPanel.Dock="Right" Content="Clean selected" Style="{StaticResource PrimaryButton}" Padding="14,4" ToolTip="Removes the ticked categories after you confirm the total."/>
+              <TextBlock Text="SAFE TO CLEAN" Style="{StaticResource StatLabel}" VerticalAlignment="Center"/>
+            </DockPanel>
+            <ListView x:Name="Junk" BorderThickness="0" Background="Transparent" Margin="1" SelectionMode="Single" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+              <ListView.View><GridView>
+                <GridViewColumn Header="" Width="40">
+                  <GridViewColumn.CellTemplate><DataTemplate><CheckBox x:Name="Pick" IsChecked="{Binding Selected, Mode=OneWay}" Tag="{Binding Key}" VerticalAlignment="Center"/>
+                    <DataTemplate.Triggers><DataTrigger Binding="{Binding Locked}" Value="True"><Setter TargetName="Pick" Property="IsEnabled" Value="False"/></DataTrigger></DataTemplate.Triggers>
+                  </DataTemplate></GridViewColumn.CellTemplate>
+                </GridViewColumn>
+                <GridViewColumn Header="Our advice" Width="150">
+                  <GridViewColumn.CellTemplate><DataTemplate>
+                    <Border CornerRadius="9" Padding="8,1" Background="{StaticResource Surface2}" HorizontalAlignment="Left">
+                      <TextBlock x:Name="AdviceText" Text="Your call" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource Info}"/>
+                    </Border>
+                    <DataTemplate.Triggers><DataTrigger Binding="{Binding Advice}" Value="Clean"><Setter TargetName="AdviceText" Property="Foreground" Value="{StaticResource Success}"/><Setter TargetName="AdviceText" Property="Text" Value="Clean (recommended)"/></DataTrigger></DataTemplate.Triggers>
+                  </DataTemplate></GridViewColumn.CellTemplate>
+                </GridViewColumn>
+                <GridViewColumn Header="What" Width="300">
+                  <GridViewColumn.CellTemplate><DataTemplate>
+                    <StackPanel Margin="0,2">
+                      <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                      <TextBlock Text="{Binding SubTitle}" FontSize="12" Foreground="{StaticResource TextMuted}" TextTrimming="CharacterEllipsis"/>
+                    </StackPanel>
+                  </DataTemplate></GridViewColumn.CellTemplate>
+                </GridViewColumn>
+                <GridViewColumn Header="Size" Width="100">
+                  <GridViewColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding SizeText}" FontWeight="SemiBold" HorizontalAlignment="Right"/></DataTemplate></GridViewColumn.CellTemplate>
+                </GridViewColumn>
+              </GridView></ListView.View>
+            </ListView>
+          </DockPanel>
+        </Border>
+
+        <!-- What's using my disk -->
+        <Border Grid.Row="2" Style="{StaticResource Card}" Padding="0">
+          <DockPanel>
+            <DockPanel DockPanel.Dock="Top" Margin="14,10,10,6">
+              <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                <Button x:Name="UsageUp" Content="↑ Up" Style="{StaticResource GhostButton}" Padding="10,3" Margin="0,0,6,0" ToolTip="Go to the folder above."/>
+                <Button x:Name="UsageScan" Content="Scan" Style="{StaticResource GhostButton}" Padding="10,3" Margin="0,0,6,0" ToolTip="Measure every folder below the path on the left (a full drive can take a minute or two)."/>
+                <Button x:Name="UsageOpen" Content="Open location" Style="{StaticResource GhostButton}" Padding="10,3" ToolTip="Show the selected folder or file in File Explorer. YUMRAM never deletes your files; you decide there."/>
+              </StackPanel>
+              <TextBlock Text="WHAT'S USING MY DISK" Style="{StaticResource StatLabel}" VerticalAlignment="Center" Margin="0,0,10,0"/>
+              <TextBox x:Name="UsagePath" VerticalAlignment="Center" Margin="0,0,8,0" ToolTip="Folder or drive to measure, e.g. C:\ or your user folder."/>
+            </DockPanel>
+            <TabControl x:Name="UsageTabs" Margin="8,0,8,8" Background="Transparent" BorderThickness="0">
+              <TabItem Header="Biggest folders">
+                <ListView x:Name="UsageFolders" BorderThickness="0" Background="Transparent" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ToolTip="Double-click a folder to look inside it.">
+                  <ListView.View><GridView>
+                    <GridViewColumn Header="Folder" Width="250">
+                      <GridViewColumn.CellTemplate><DataTemplate><StackPanel><TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/><TextBlock Text="{Binding FilesText}" FontSize="11.5" Foreground="{StaticResource TextMuted}"/></StackPanel></DataTemplate></GridViewColumn.CellTemplate>
+                    </GridViewColumn>
+                    <GridViewColumn Header="Share" Width="170">
+                      <GridViewColumn.CellTemplate><DataTemplate><Grid Width="150"><ProgressBar Height="8" Maximum="100" Value="{Binding Share, Mode=OneWay}" Foreground="#7DD3FC"/></Grid></DataTemplate></GridViewColumn.CellTemplate>
+                    </GridViewColumn>
+                    <GridViewColumn Header="Size" Width="100">
+                      <GridViewColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding SizeText}" FontWeight="SemiBold" HorizontalAlignment="Right"/></DataTemplate></GridViewColumn.CellTemplate>
+                    </GridViewColumn>
+                  </GridView></ListView.View>
+                </ListView>
+              </TabItem>
+              <TabItem Header="Biggest files">
+                <ListView x:Name="UsageFiles" BorderThickness="0" Background="Transparent" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                  <ListView.View><GridView>
+                    <GridViewColumn Header="File" Width="330">
+                      <GridViewColumn.CellTemplate><DataTemplate><StackPanel><TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/><TextBlock Text="{Binding Folder}" FontSize="11.5" Foreground="{StaticResource TextMuted}" TextTrimming="CharacterEllipsis"/></StackPanel></DataTemplate></GridViewColumn.CellTemplate>
+                    </GridViewColumn>
+                    <GridViewColumn Header="Changed" Width="95" DisplayMemberBinding="{Binding Modified}"/>
+                    <GridViewColumn Header="Size" Width="95">
+                      <GridViewColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding SizeText}" FontWeight="SemiBold" HorizontalAlignment="Right"/></DataTemplate></GridViewColumn.CellTemplate>
+                    </GridViewColumn>
+                  </GridView></ListView.View>
+                </ListView>
+              </TabItem>
+            </TabControl>
+          </DockPanel>
+        </Border>
+      </Grid>
+
+      <!-- Details -->
+      <Border Grid.Column="1" Style="{StaticResource Card}">
+        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+          <StackPanel>
+            <TextBlock Text="WHAT IS IT?" Style="{StaticResource StatLabel}"/>
+            <TextBlock x:Name="ExplainTitle" Text="Click a category" FontSize="18" FontWeight="SemiBold" Foreground="{StaticResource Brand}" TextWrapping="Wrap" Margin="0,4,0,0"/>
+            <TextBlock x:Name="ExplainSub" Text="" Style="{StaticResource Caption}" TextWrapping="Wrap"/>
+            <TextBlock x:Name="ExplainWhy" Text="Pick a category to see what it is, what removing it changes and our advice. Tick the ones you want and press Clean selected." Style="{StaticResource Answer}" Margin="0,10,0,0"/>
+            <StackPanel x:Name="ExplainBody" Visibility="Collapsed">
+              <TextBlock Text="WHAT HAPPENS IF I CLEAN IT?" Style="{StaticResource Question}"/>
+              <TextBlock x:Name="ExplainEffect" Style="{StaticResource Answer}"/>
+              <TextBlock Text="CAN I UNDO IT?" Style="{StaticResource Question}"/>
+              <TextBlock x:Name="ExplainUndo" Style="{StaticResource Answer}"/>
+            </StackPanel>
+            <TextBlock Text="LAST CLEAN" Style="{StaticResource Question}" Margin="0,22,0,2"/>
+            <TextBlock x:Name="LastResult" Text="Nothing cleaned yet." Style="{StaticResource Answer}"/>
+          </StackPanel>
+        </ScrollViewer>
+      </Border>
+    </Grid>
+
+    <!-- Footer -->
+    <DockPanel Grid.Row="3" Margin="0,12,0,0">
+      <Button x:Name="Close" DockPanel.Dock="Right" Content="Done" Style="{StaticResource PrimaryButton}" MinWidth="90"/>
+      <TextBlock x:Name="Details" Text="" Style="{StaticResource Caption}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" Margin="0,0,16,0"/>
+    </DockPanel>
+  </Grid>
+</Window>

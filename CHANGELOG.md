@@ -28,6 +28,30 @@ Compared with 5.15.1 (measured on the test PC: Ryzen 7 4800H, RTX 3050 Laptop + 
   *Careful* (red, not identified), with a legend on Startup apps and Windows bloat and an "Our advice" badge in
   Intelligence and What's running. Startup shows "Turn off (recommended)", "Keep on (required)",
   "Keep on (device)", "Your call"; Windows bloat "Remove (recommended)" / "Turn off (recommended)" / "Your call".
+- **Intelligence identifies installed programs again (big fix).** Research read only 3 of the ~265 installed
+  programs on the test PC: one program without a version number made a strict-mode error drop the rest of that
+  registry hive. On a fresh first scan WinRAR, Git, GPU-Z, CPU-Z, Notepad++, the NVIDIA and Realtek drivers and
+  ~40 more ended "Unknown". Fresh first scan on the test PC: **48 -> 21 Unknown, 0 left in Review**; the 21 left are
+  hidden system processes whose file a non-admin app cannot read (run as administrator to identify them).
+  Installed driver packages from hardware makers are now filed under Drivers / Hardware (advice: Keep).
+- **Fix: a second copy of a program could show "Unknown".** When research reused a result found earlier in the
+  same scan (a second Chrome / Discord / Steam process), the item inherited the previous item's status.
+- **Research 3.75x faster:** 30 items 60 s -> 16 s; a fresh first scan's research ~10 min -> 3.5 min (312 items,
+  test PC). Signatures are checked 6 at a time up front, each file is hashed once, the installed-program /
+  service / Store / WinGet lists are split into words once per run instead of once per item, and the 4 MB cache
+  and live checkpoint are written at most every 2 s instead of after every item.
+- **Disk cleanup page (new, Ctrl+9):** like BleachBit / CCleaner, but every category shows its size and a plain
+  explanation before anything is removed, and it never touches your files, cookies, saved passwords or browser
+  history: temporary files (yours and Windows'), web browser caches (Chrome, Edge, Brave, Opera, Vivaldi,
+  Firefox), picture previews, game shader caches (your call), crash dumps and error reports, Windows Update
+  downloads older than 10 days, Delivery Optimization (Windows' own command) and the Recycle Bin (your call).
+  Junctions / links are never followed, files in use and temp files newer than a day are skipped. Optional
+  weekly automatic clean of the safest leftovers (off by default). Test PC: 2.4 GB found without admin
+  (+2.5 GB of old Windows Update files with admin).
+- **"What's using my disk"** (like WinDirStat / WizTree): biggest folders with share bars (double-click to go
+  deeper, Up to go back) and the 50 biggest files, with Open location. YUMRAM never deletes your files there.
+- **Fix: Settings > Apply no longer stops** when the administrator choice cannot be changed without admin (it
+  used to save nothing else); the reason is shown in amber next to that choice.
 - **Overview reorganised** (user: "cluttered, hard to understand"): the top row answers "what is my PC doing
   right now?" with four matching ring tiles - RAM free, CPU, Graphics (GPU) and Disk. Below: the History graph on
   the left and everything you can do on the right (Free RAM, automatic care, game, RAM freed, CPU care, goal).
@@ -54,7 +78,7 @@ Compared with 5.15.1 (measured on the test PC: Ryzen 7 4800H, RTX 3050 Laptop + 
 - Costs / trade-offs: the scan uses up to 6 threads for a few seconds; the Intelligence list is longer (all
   items, not 240). Older saved Intelligence records keep their saved category until the next scan; the advice
   badge already uses the new knowledge.
-- Tests: 64 (new LiveReadingsTest, IdentifyAndAdviceTest, PurposeAndMiniBarTest); UI probe 77 steps (paused readings, rings, mini bar, X button, advice badge,
+- Tests: 65 (new LiveReadingsTest, IdentifyAndAdviceTest, PurposeAndMiniBarTest, DiskCleanupTest); UI probe 82 steps (disk cleanup, (paused readings, rings, mini bar, X button, advice badge,
   scan visibility). GitHub Actions workflow is manual-only while the account's billing lock is on.
 # YUMRAM 5.15.1 — CPU load reading fix, readable Store publishers, docs
 

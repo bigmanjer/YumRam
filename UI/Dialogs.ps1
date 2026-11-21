@@ -676,7 +676,9 @@ function Show-YumSettings {
                 if($null -ne $u.ElevationMode -and $null -ne $u.ElevationMode.SelectedItem){
                     $r=Set-YumElevationChoice -Mode ([string]$u.ElevationMode.SelectedItem.Tag) -StartWithWindows ([bool]$u.StartWithWindows.IsChecked)
                     $u.ElevationHint.Text=[string]$r.Message
-                    if(-not $r.Success){throw [string]$r.Message}
+                    # 5.15.2: an administrator choice that needs admin rights no longer blocks every other setting
+                    # (Apply used to stop here and save nothing else). Say so next to the choice and carry on.
+                    if(-not $r.Success){ try{ $u.ElevationHint.Foreground=Get-YumBrush '#FBBF24'; Show-YumToast -Kind 'Warn' -Text ([string]$r.Message) }catch{} }
                 }
                 if($null -ne $u.CpuBalanceEnabled){
                     $cs=0.0;$cp=0.0

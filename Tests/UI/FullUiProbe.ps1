@@ -16,7 +16,7 @@ $tmp=Join-Path $env:TEMP ('yum-full-'+[guid]::NewGuid().ToString('N'));New-Item 
 Get-ChildItem $Root -Filter *.json | Copy-Item -Destination $tmp
 $script:Yum.ConfigDirectory=$tmp;$script:Yum.ConfigFile=(Join-Path $tmp 'config.json');$script:Yum.Config.LogFileName=(Join-Path $tmp 'probe.log')
 $script:Yum.Config.StartMonitoringAutomatically=$false; $script:Yum.Config['UpdateCheckEnabled']=$false
-$script:R=New-Object System.Collections.Generic.List[string];$script:Fails=0;$script:WaitN=0
+$script:R=New-Object System.Collections.Generic.List[string];$script:Fails=0;$script:WaitN=0;$script:WaitD=0;$script:WaitE=0
 function Check([bool]$c,[string]$m){ if($c){$script:R.Add("PASS  $m")}else{$script:R.Add("FAIL  $m");$script:Fails++} }
 function Note([string]$m){ $script:R.Add("      $m") }
 function Click($b){ $b.RaiseEvent((New-Object System.Windows.RoutedEventArgs([System.Windows.Controls.Button]::ClickEvent))) }
@@ -66,6 +66,12 @@ $script:Steps=@(
 { Go 'WindowsBloat' }, { }, { }, { },
 { $st=(PW 'WindowsBloat').Tag; Check ($null -ne $st) 'Windows bloat page opens'; if($st){ Check (-not $st.Busy) "Windows bloat scan finished ($($st.Ui.Details.Text))"; Check (@($st.Settings).Count -ge 10) "Windows bloat settings listed: $(@($st.Settings).Count)"; $bad=0; foreach($r in @($st.Settings)+@($st.Apps)){ if($r.Kind -eq 'App'){$st.Ui.Apps.SelectedItem=$r}else{$st.Ui.Settings.SelectedItem=$r}; if($st.Ui.ExplainTitle.Text -ne $r.Name){$bad++} }; Check ($bad -eq 0) "Windows bloat: every row explains ($(@($st.Apps).Count) apps)"; Shot 'p-bloat' } },
  # Intelligence
+ # 5.15.2: Disk cleanup - measures only (never cleans the real PC in the probe), explains, analyses a folder.
+ { Go 'DiskCleanup' },
+ { if((PW 'DiskCleanup') -and (PW 'DiskCleanup').Tag.Busy -and $script:WaitD++ -lt 25){ $script:I-- } },
+ { $st=(PW 'DiskCleanup').Tag; Check ($null -ne $st -and -not $st.Busy -and @($st.Rows).Count -ge 8) ("Disk cleanup measured {0} categories ({1}; can free {2})" -f @($st.Rows).Count,$st.Ui.Details.Text,$st.Ui.SumJunk.Text); $st.Ui.Junk.SelectedIndex=0; Check ($st.Ui.ExplainBody.Visibility -eq 'Visible' -and $st.Ui.ExplainEffect.Text.Length -gt 10) "Disk cleanup explains: $($st.Ui.ExplainTitle.Text)"; Start-YumDiskUsage -State $st -Path (Join-Path $script:Yum.Root 'Tests') },
+ { if((PW 'DiskCleanup').Tag.Busy -and $script:WaitE++ -lt 40){ $script:I-- } },
+ { $st=(PW 'DiskCleanup').Tag; Check (@($st.Ui.UsageFolders.ItemsSource).Count -ge 1 -and @($st.Ui.UsageFiles.ItemsSource).Count -ge 1) "What's using my disk: $($st.Ui.Details.Text)"; Shot 'p-disk' },
  { Go 'Intelligence' },
  { }, { },
  { $st=$script:Yum.IntelligenceWindow.Tag; foreach($card in 'ALL ITEMS','PROTECTED','RESOLVED','REVIEW','UNKNOWN','CACHED','ERRORS','RESEARCHING'){ try{ Set-YumIntelligenceFilter -State $st -Name $card; Note ("card {0,-12} -> filter '{1}' | {2}" -f $card,[string]$st.Filter.SelectedItem.Content,$st.ResultCount.Text) }catch{ Check $false "card $card : $($_.Exception.Message)" } }; Check $true 'Intelligence: all cards switch the view' },

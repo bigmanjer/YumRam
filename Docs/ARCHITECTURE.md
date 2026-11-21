@@ -35,6 +35,7 @@ Only the UI thread touches WPF objects; workers publish data into `$script:Yum` 
 | Live readings | `Core\LiveReadings.ps1` | Overview CPU % / speed / GPU busy / VRAM per chip (counters + DXGI) and disk busy / speed / free space (PhysicalDisk counters), UI thread, every 2 s only while the Overview or mini bar is visible; works with monitoring off |
 | What is it for | `Core\Purpose.ps1` | Plain "what is it / used for which device" text from the catalog, service descriptions and file version info; cached; used by Intelligence, What's running and Startup apps |
 | Mini bar | `UI\MiniBar.ps1` | Small always-on-top floating bar (RAM / CPU / GPU / disk, Free RAM, Open, hide to tray); position saved as MiniBarLeft / MiniBarTop |
+| Disk cleanup | `Core\DiskCleanup.ps1`, `UI\DiskCleanupPage.ps1` | Cache / leftover categories measured then cleaned by a compiled walker (`YumDiskWalk`: never follows reparse points, skips files in use, minimum file age); folder / biggest-file analysis; opt-in weekly auto clean from the UI timer (checked every 30 min, work in a background runspace) |
 | UI | `UI\Shell.ps1`, `UI\MainWindow.ps1`, `UI\Dialogs.ps1`, `UI\*Page.ps1`, `UI\Tray.ps1`, `UI\Xaml\*` | one window with a sidebar (Ctrl+1..8), tray, global hotkey, toasts |
 
 ## Data files (next to YUMRAM; never in the release package)
