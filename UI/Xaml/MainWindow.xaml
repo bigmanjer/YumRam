@@ -87,6 +87,11 @@
               </WrapPanel>
               <TextBlock x:Name="SideRamText" Text="--% used • -- GB free" Style="{StaticResource Caption}" Margin="0,0,0,6"/>
               <ProgressBar x:Name="SideRamBar" Maximum="100" Height="6" Foreground="{StaticResource SeriesMemory}"/>
+              <!-- 5.15.2: an Intelligence scan / research is visible from every page -->
+              <StackPanel x:Name="SideScanPanel" Visibility="Collapsed" Margin="0,10,0,0" Cursor="Hand" ToolTip="Intelligence is scanning or researching. Click to open it.">
+                <TextBlock x:Name="SideScanText" Text="🔍 Scanning…" FontSize="11.5" FontWeight="SemiBold" Foreground="#C084FC" TextTrimming="CharacterEllipsis" Margin="0,0,0,4"/>
+                <ProgressBar x:Name="SideScanBar" Maximum="100" Height="6" Foreground="#C084FC"/>
+              </StackPanel>
             </StackPanel>
           </Border>
           <TextBlock x:Name="SideRamCompact" Text="--%" HorizontalAlignment="Center" FontWeight="SemiBold" Margin="0,0,0,10" Visibility="Collapsed" ToolTip="RAM in use"/>
@@ -300,7 +305,7 @@
                 <UniformGrid Columns="2" Rows="1">
                   <StackPanel Visibility="Collapsed"><TextBlock x:Name="Memory" Text="--%"/></StackPanel>
                   <StackPanel Visibility="Collapsed"><TextBlock x:Name="CPU" Text="--%"/></StackPanel>
-                  <StackPanel Margin="0,0,8,0"><TextBlock Style="{StaticResource StatLabel}"><Run Text="● " Foreground="{StaticResource SeriesGpu}"/><Run Text="GPU 3D"/></TextBlock><TextBlock x:Name="GPU" Text="--%" Style="{StaticResource StatValue}"/></StackPanel>
+                  <StackPanel Margin="0,0,8,0" ToolTip="GPU busy = how hard your graphics chip's 3D engine is working right now (games and 3D apps use it; the same number as Task Manager's GPU '3D' graph). VRAM = the graphics card's own memory in use out of its total."><TextBlock Style="{StaticResource StatLabel}"><Run Text="● " Foreground="{StaticResource SeriesGpu}"/><Run Text="GPU BUSY (3D)"/></TextBlock><TextBlock x:Name="GPU" Text="--%" Style="{StaticResource StatValue}"/><TextBlock x:Name="GpuVram" Text="" Style="{StaticResource Caption}" Margin="0,2,0,0" TextWrapping="Wrap"/></StackPanel>
                   <StackPanel><TextBlock Text="GAME" Style="{StaticResource StatLabel}"/><TextBlock x:Name="Game" Text="None" Style="{StaticResource StatValue}" FontSize="16" Margin="0,6,0,0" TextTrimming="CharacterEllipsis"/></StackPanel>
                 </UniformGrid>
               </Border>

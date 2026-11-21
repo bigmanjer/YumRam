@@ -55,6 +55,10 @@
         FreedStats = $null
         LastStatReclaimKey = ''
         LastPausedMemoryRead = [datetime]::MinValue
+        LastLiveReadingsRead = [datetime]::MinValue
+        LiveCpu = $null
+        LiveGpuBusy = 0.0
+        LastSideScanRead = [datetime]::MinValue
         LastUiReclaimResultVersion = 0
         ReclaimVerificationTimer = $null
         UiTimer = $null

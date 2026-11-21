@@ -29,6 +29,9 @@ function ErrCount(){ @(Get-Content $script:Yum.Config.LogFileName -ErrorAction S
 
 $script:Steps=@(
  { $u=$script:Yum.Ui; Check ($u.Status.Text -match 'Paused') "Overview: paused status ($($u.Status.Text))"; Check ($u.SideRamText.Text -notmatch '--') "Sidebar RAM live while paused ($($u.SideRamText.Text))"; Check ([string]$script:Yum.HotkeyStatus -match 'Ctrl\+Alt\+R') "Hotkey registered ($($script:Yum.HotkeyStatus))" },
+ { }, { },
+ # 5.15.2: CPU %, speed, GPU busy and VRAM are live while monitoring is off (user report: "-- GHz", frozen GPU).
+ { $u=$script:Yum.Ui; Check ($null -eq $script:Yum.TelemetryTimer) 'Still paused for the live-readings check'; Check ($u.CpuSpeed.Text -match '^\d+\.\d+ GHz$') "Paused: CPU speed shown ($($u.CpuSpeed.Text))"; Check ($u.CpuRingText.Text -ne '--') "Paused: CPU ring live ($($u.CpuRingText.Text) $($u.CpuRingState.Text))"; Check ($u.GpuVram.Text -match 'VRAM') "Paused: VRAM shown ($(($u.GpuVram.Text -replace '\r?\n',' | ')))"; Shot 'p-overview-paused' },
  { $u=$script:Yum.Ui; Click $u.Monitor },
  { $u=$script:Yum.Ui; Check ($null -ne $script:Yum.TelemetryTimer -and $u.Status.Text -match 'Monitoring|Starting') "Start Monitoring ($($u.Status.Text), button '$($u.Monitor.Content)')" },
  { $u=$script:Yum.Ui; foreach($m in 'Safe','Aggressive','Balanced'){ foreach($it in $u.ModeBox.Items){ if([string]$it.Tag -eq $m){$u.ModeBox.SelectedItem=$it} }; Check ($script:Yum.Config.Mode -eq $m -and $u.Mode.Text -eq $m.ToUpper() -or $script:Yum.Config.Mode -eq $m) "Mode box -> $m (config $($script:Yum.Config.Mode))" } },
@@ -66,7 +69,10 @@ $script:Steps=@(
  { $st=$script:Yum.IntelligenceWindow.Tag; foreach($card in 'ALL ITEMS','PROTECTED','RESOLVED','REVIEW','UNKNOWN','CACHED','ERRORS','RESEARCHING'){ try{ Set-YumIntelligenceFilter -State $st -Name $card; Note ("card {0,-12} -> filter '{1}' | {2}" -f $card,[string]$st.Filter.SelectedItem.Content,$st.ResultCount.Text) }catch{ Check $false "card $card : $($_.Exception.Message)" } }; Check $true 'Intelligence: all cards switch the view' },
  { $st=$script:Yum.IntelligenceWindow.Tag; Set-YumIntelligenceFilter -State $st -Name 'ALL ITEMS'; $st.Search.Text='microsoft' },
  { },
- { $st=$script:Yum.IntelligenceWindow.Tag; Check ($st.ResultCount.Text -match '^\d') "Search 'microsoft' -> $($st.ResultCount.Text)"; $st.Search.Text=''; $res=$st.ListView; if(@($res.Items).Count -gt 0){$res.SelectedIndex=0}; Check ($st.SelectedName.Text -ne 'Nothing selected') "Select item -> $($st.SelectedName.Text)"; Check ($st.DecisionCard.IsEnabled) 'Decision card enabled on selection'; Shot 'p-intel' },
+ { $st=$script:Yum.IntelligenceWindow.Tag; Check ($st.ResultCount.Text -match '^\d') "Search 'microsoft' -> $($st.ResultCount.Text)"; $st.Search.Text=''; $res=$st.ListView; if(@($res.Items).Count -gt 0){$res.SelectedIndex=0}; Check ($st.SelectedName.Text -ne 'Nothing selected') "Select item -> $($st.SelectedName.Text)"; Check ($st.DecisionCard.IsEnabled) 'Decision card enabled on selection'; Check ($st.SelectedAdvice.Text -in @('Keep','Your call','Turn off is fine','Careful')) "Our advice shown ($($st.SelectedAdvice.Text))"; Shot 'p-intel' },
+ # 5.15.2: a running scan is easy to see (simulated busy state - no real scan / online research in the probe).
+ { $st=$script:Yum.IntelligenceWindow.Tag; $st.Busy=$true; $st.ActivityStatus.Text='SCANNING SYSTEM'; $st.ActivityDetail.Text='Collecting processes, services, apps, startup entries, and identity evidence…'; $st.ActivityProgress.IsIndeterminate=$true },
+ { $st=$script:Yum.IntelligenceWindow.Tag; Check ($st.ActivityPercent.Text -eq 'working…') "Scan strip highlighted ($($st.ActivityPercent.Text))"; Check ($script:Yum.Ui.SideScanPanel.Visibility -eq 'Visible') "Sidebar shows the scan ($($script:Yum.Ui.SideScanText.Text))"; Shot 'p-intel-busy'; $st.Busy=$false; $st.ActivityStatus.Text='READY'; $st.ActivityProgress.IsIndeterminate=$false },
  # Settings
  { Go 'Settings' },
  { $w=PW 'Settings'; $u=$w.FindName('Apply').Tag.Ui; $script:SU=$u

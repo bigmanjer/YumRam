@@ -89,6 +89,30 @@ $script:YumProcessGuide=@{
     'rtkauduservice64'=@('Realtek Audio','Your sound card''s software.','Hardware')
     'msiafterburner'=@('MSI Afterburner','Graphics card tuning and FPS overlay.','Hardware')
     'overwolf'=@('Overwolf','A platform for in-game overlays and gaming apps.','Background')
+    # 5.15.2 (user report: VoiceMeeter, Roblox beta, ASUS and HP were not recognised)
+    'robloxplayerbeta'=@('Roblox','The Roblox game client. "RobloxPlayerBeta" is simply the normal Roblox player''s file name, not a test version.','Game')
+    'robloxplayerlauncher'=@('Roblox Launcher','Starts and updates Roblox.','Game')
+    'robloxstudiobeta'=@('Roblox Studio','The Roblox game editor.','App')
+    'robloxcrashhandler'=@('Roblox Crash Handler','Part of Roblox; reports crashes.','Background')
+    'bloxstrap'=@('Bloxstrap','A community launcher that starts Roblox with extra settings.','App')
+    'voicemeeter'=@('VoiceMeeter','Virtual audio mixer (VB-Audio). Routes your microphone and speakers; closing it cuts your sound until you open it again.','Hardware')
+    'voicemeeterpro'=@('VoiceMeeter Banana','Virtual audio mixer (VB-Audio). Routes your microphone and speakers; closing it cuts your sound until you open it again.','Hardware')
+    'voicemeeter8'=@('VoiceMeeter Potato','Virtual audio mixer (VB-Audio). Routes your microphone and speakers; closing it cuts your sound until you open it again.','Hardware')
+    'voicemeeter8x64'=@('VoiceMeeter Potato','Virtual audio mixer (VB-Audio). Routes your microphone and speakers; closing it cuts your sound until you open it again.','Hardware')
+    'asusosd'=@('ASUS On-Screen Display','Shows the pop-up when you press Fn keys (volume, brightness).','Hardware')
+    'asushotkey'=@('ASUS Fn Keys','Makes the Fn keys work.','Hardware')
+    'asusoptimization'=@('ASUS Optimization (MyASUS)','Battery care, fan profiles and other MyASUS hardware settings.','Hardware')
+    'asussystemanalysis'=@('ASUS System Analysis (MyASUS)','MyASUS health checks in the background. Optional.','Background')
+    'asussystemdiagnosis'=@('ASUS System Diagnosis (MyASUS)','MyASUS diagnostics in the background. Optional.','Background')
+    'asussoftwaremanager'=@('ASUS Software Manager (MyASUS)','Checks for ASUS app and driver updates. Optional.','Background')
+    'asusswitch'=@('ASUS Switch (MyASUS Link)','Connects your phone or another ASUS PC. Optional.','Background')
+    'asuswifismartconnect'=@('ASUS WiFi SmartConnect','Switches to the strongest Wi-Fi automatically. Optional.','Background')
+    'armourycratecontrolinterface'=@('ASUS Armoury Crate','ASUS control for fans, performance modes and lighting.','Hardware')
+    'armourycratekeycontrol'=@('ASUS Armoury Crate Keys','Makes the Armoury Crate key and keyboard shortcuts work.','Hardware')
+    'hpaudioswitch'=@('HP Audio Switch','Switches between speakers and headsets.','Hardware')
+    'hphotkeymonitor'=@('HP Fn Keys','Makes the Fn keys work.','Hardware')
+    'omencommandcenter'=@('OMEN Gaming Hub','HP OMEN control for fans, performance modes and lighting.','Hardware')
+    'sysinfocap'=@('HP System Info','HP helper that collects system information for HP support apps. Optional.','Background')
 }
 
 function Get-YumProcessKind {
@@ -149,4 +173,21 @@ function Get-YumProcessExplanation {
     $memory=('Using {0}{1}{2}. {3}' -f $size,$share,$parts,$amount)
     if($key -eq 'memory compression'){$memory=('Holding {0} of compressed memory{1}. This is Windows saving space, not a problem.' -f $size,$share)}
     [pscustomobject]@{Title=$title;What=$what;Safe=$safe;Yumram=$yum;Memory=$memory}
+}
+
+function Get-YumKindAdvice {
+    # 5.15.2: the same four answers as Intelligence / Startup (Keep / Turn off is fine / Your call / Careful) for a
+    # running program; specific well-known programs (VoiceMeeter, ASUS / HP extras...) use their own advice.
+    param([string]$Kind,[string]$Name,[string]$Path='',[string]$Company='')
+    $k=$null;try{ if(Get-Command Get-YumKnownApp -ErrorAction SilentlyContinue){ $k=Get-YumKnownApp -Name $Name -Path $Path -Publisher $Company } }catch{}
+    if($Kind -eq 'Unknown'){ return [pscustomobject]@{Label='Careful';Color='#F87171'} }
+    if($null -ne $k -and $k.Label -notin @('ASUS software','HP software')){
+        if($k.Advice -eq 'YourCall'){ return [pscustomobject]@{Label='Your call';Color='#7DD3FC'} }
+        return [pscustomobject]@{Label='Keep';Color='#F9A8D4'}
+    }
+    switch($Kind){
+        {$_ -in @('Windows','Security','Hardware','Game')} { return [pscustomobject]@{Label='Keep';Color='#F9A8D4'} }
+        'App' { return [pscustomobject]@{Label='Turn off is fine';Color='#4ADE80'} }
+        default { return [pscustomobject]@{Label='Your call';Color='#7DD3FC'} }
+    }
 }

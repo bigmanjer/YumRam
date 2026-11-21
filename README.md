@@ -134,7 +134,7 @@ Open <b>About › Log</b> (or <code>YUMRAM.log</code> in the YUMRAM folder) and
 ## Development
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File Tests\Run-AllTests.ps1     # 61 tests, each in its own process
+powershell -NoProfile -ExecutionPolicy Bypass -File Tests\Run-AllTests.ps1     # 63 tests, each in its own process
 powershell -NoProfile -ExecutionPolicy Bypass -STA -File Tests\UI\FullUiProbe.ps1 -Root . -Out $env:TEMP\yum-ui
 powershell -NoProfile -ExecutionPolicy Bypass -File Tools\Build-Release.ps1    # dist\: setup, zip, SHA256SUMS
 ```

@@ -179,6 +179,25 @@ function Set-YumSidebarCompact {
     }catch{}
 }
 
+function Update-YumSideScanUi {
+    # 5.15.2: shows a running Intelligence scan / research in the sidebar on every page (user report: the scan
+    # was hard to notice). Reads the page's busy flags and, while researching, the small status file (1/s).
+    try{
+        $ui=$script:Yum.Ui;if($null -eq $ui['SideScanPanel']){return}
+        $st=$null;try{ if(Test-YumPageAlive -Window $script:Yum.IntelligenceWindow){ $st=$script:Yum.IntelligenceWindow.Tag } }catch{}
+        $scanning=($null -ne $st -and [bool]$st.Busy); $research=($null -ne $st -and [bool]$st.ResearchBusy)
+        if(-not $scanning -and -not $research){ if($ui.SideScanPanel.Visibility -ne 'Collapsed'){$ui.SideScanPanel.Visibility='Collapsed'}; return }
+        if(((Get-Date)-[datetime]$script:Yum['LastSideScanRead']).TotalSeconds -lt 1){return}
+        $script:Yum['LastSideScanRead']=Get-Date
+        $ui.SideScanPanel.Visibility='Visible'
+        if($scanning -and -not $research){ $ui.SideScanText.Text='🔍 Scanning this PC…'; $ui.SideScanBar.IsIndeterminate=$true; return }
+        $s=$null;try{ $s=Get-Content -LiteralPath (Get-YumResearchStatusPath) -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop }catch{}
+        if($null -ne $s -and [int]$s.Total -gt 0){
+            $ui.SideScanText.Text=('🔍 Researching {0}/{1}: {2}' -f [int]$s.Index,[int]$s.Total,[string]$s.Name)
+            $ui.SideScanBar.IsIndeterminate=$false; $ui.SideScanBar.Value=[math]::Min(100,[math]::Max(0,100.0*[int]$s.Index/[int]$s.Total))
+        } else { $ui.SideScanText.Text='🔍 Researching…'; $ui.SideScanBar.IsIndeterminate=$true }
+    }catch{}
+}
 function Update-YumSidebarStatus {
     param([double]$UsedPercent,[double]$AvailableGB,[double]$TotalGB)
     try{

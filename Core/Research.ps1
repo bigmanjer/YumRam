@@ -528,7 +528,12 @@ function Get-YumResearchSourceTrust {
             'steampowered.com','epicgames.com','riotgames.com','ubisoft.com',
             'ea.com','blizzard.com','xbox.com','playstation.com','cisco.com',
             'cloudflare.com','vmware.com','paloaltonetworks.com','crowdstrike.com',
-            'sentinelone.com','eset.com','bitdefender.com','malwarebytes.com','sophos.com'
+            'sentinelone.com','eset.com','bitdefender.com','malwarebytes.com','sophos.com',
+            # 5.15.2: PC and device makers whose names do not match their sites ("ASUSTeK" -> asus.com,
+            # "HP Inc." -> hp.com) plus common audio/game software (user report: ASUS, HP, VoiceMeeter, Roblox).
+            'asus.com','rog.asus.com','hp.com','support.hp.com','dell.com','lenovo.com','acer.com','msi.com',
+            'gigabyte.com','razer.com','corsair.com','logitech.com','logitechg.com','steelseries.com','realtek.com',
+            'vb-audio.com','roblox.com','discord.com','spotify.com','obsproject.com'
         )
         foreach($d in $authoritative){ if($urlHost -eq $d -or $urlHost.EndsWith('.'+$d)){return 96} }
         # 5.4: the publisher's own site (e.g. logitechg.com for 'Logitech') is authoritative for its products.

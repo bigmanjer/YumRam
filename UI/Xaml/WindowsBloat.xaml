@@ -15,8 +15,8 @@
         <TextBlock x:Name="AdviceText" Text="{Binding Suggest}" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource Info}"/>
       </Border>
       <DataTemplate.Triggers>
-        <DataTrigger Binding="{Binding Suggest}" Value="Remove"><Setter TargetName="AdviceText" Property="Foreground" Value="{StaticResource Success}"/></DataTrigger>
-        <DataTrigger Binding="{Binding Suggest}" Value="Recommended"><Setter TargetName="AdviceText" Property="Foreground" Value="{StaticResource Success}"/></DataTrigger>
+        <DataTrigger Binding="{Binding Suggest}" Value="Remove"><Setter TargetName="AdviceText" Property="Foreground" Value="{StaticResource Success}"/><Setter TargetName="AdviceText" Property="Text" Value="Remove (recommended)"/></DataTrigger>
+        <DataTrigger Binding="{Binding Suggest}" Value="Recommended"><Setter TargetName="AdviceText" Property="Foreground" Value="{StaticResource Success}"/><Setter TargetName="AdviceText" Property="Text" Value="Turn off (recommended)"/></DataTrigger>
       </DataTemplate.Triggers>
     </DataTemplate>
   </Window.Resources>
@@ -34,6 +34,7 @@
       <StackPanel>
         <TextBlock Text="Windows bloat" Style="{StaticResource AppTitle}"/>
         <TextBlock Text="Apps that came with Windows and Windows settings that show ads, tips and suggestions. Everything here can be undone: removed apps come back from the Microsoft Store, and settings go back exactly as they were. YUMRAM never touches the Store, Edge, Windows Update, Defender or services." Style="{StaticResource Caption}" Margin="0,2,0,0" TextWrapping="Wrap"/>
+        <TextBlock Margin="0,6,0,0" FontSize="12" TextWrapping="Wrap" Foreground="{StaticResource TextMuted}"><Run Text="Our advice:  "/><Run Text="Remove / Turn off (recommended)" Foreground="{StaticResource Success}" FontWeight="SemiBold"/><Run Text=" almost nobody needs it  •  "/><Run Text="Your call" Foreground="{StaticResource Info}" FontWeight="SemiBold"/><Run Text=" keep it if you use it. Everything can be undone."/></TextBlock>
       </StackPanel>
     </DockPanel>
 
@@ -59,8 +60,8 @@
             </DockPanel>
             <ListView x:Name="Apps" BorderThickness="0" Background="Transparent" Margin="1" SelectionMode="Single" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
               <ListView.View><GridView>
-                <GridViewColumn Header="Advice" Width="128" CellTemplate="{StaticResource AdvicePill}"/>
-                <GridViewColumn Header="App" Width="300">
+                <GridViewColumn Header="Our advice" Width="178" CellTemplate="{StaticResource AdvicePill}"/>
+                <GridViewColumn Header="App" Width="255">
                   <GridViewColumn.CellTemplate><DataTemplate>
                     <StackPanel Margin="0,2">
                       <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
@@ -85,8 +86,8 @@
             </DockPanel>
             <ListView x:Name="Settings" BorderThickness="0" Background="Transparent" Margin="1" SelectionMode="Single" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
               <ListView.View><GridView>
-                <GridViewColumn Header="Advice" Width="128" CellTemplate="{StaticResource AdvicePill}"/>
-                <GridViewColumn Header="Setting" Width="330">
+                <GridViewColumn Header="Our advice" Width="178" CellTemplate="{StaticResource AdvicePill}"/>
+                <GridViewColumn Header="Setting" Width="285">
                   <GridViewColumn.CellTemplate><DataTemplate>
                     <StackPanel Margin="0,2">
                       <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>

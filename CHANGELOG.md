@@ -1,5 +1,40 @@
 # Changelog
 
+# YUMRAM 5.15.2 (not released yet) — live readings when paused, clearer advice, better identification
+
+Compared with 5.15.1 (measured on the test PC: Ryzen 7 4800H, RTX 3050 Laptop + Radeon iGPU):
+
+- **CPU speed, CPU % and GPU now update while monitoring is off** (was "-- GHz", "--" and a frozen GPU).
+  The Overview reads cheap Windows counters every 2 s while it is on screen (13-40 ms per read; nothing while
+  hidden or on another page).
+- **GPU card explained and VRAM added.** "GPU 3D" is now "GPU busy (3D)" with a tooltip (how hard the graphics
+  chip's 3D engine works - Task Manager's "3D" graph). VRAM in use / total is shown per graphics chip, because
+  laptops have two (busy % can come from the built-in chip while the gaming card idles).
+- **Intelligence scan is easy to see:** big status, what is being looked at in plain words ("Now looking at:
+  X - looking it up online on trusted sites"), a full-width bar with a percentage, a highlighted frame, and a
+  "Scanning / Researching 12/40" bar in the sidebar on every page (click it to open Intelligence).
+- **Scan finds everything, 4x faster:** every process, service and Store app (was the first 80 of each, which
+  hid small programs like VoiceMeeter) plus classic installed programs (Settings > Apps; never scanned before).
+  Signature checks run once per file, 6 at a time. Test PC: 240 items in 39.5 s -> 603 items in 8.9 s.
+  Background services that hide their path from a non-admin app are matched to their service file and
+  signature-checked: "Unknown" items 46 -> 18.
+- **Known programs:** Roblox ("RobloxPlayerBeta" is the normal player), Bloxstrap, VoiceMeeter (all editions),
+  VB-Cable, ASUS (Armoury Crate, Fn keys, touchpad, MyASUS parts) and HP (Support Assistant, Insights Analytics,
+  HSA helpers, OMEN Gaming Hub, Wolf Security, printer apps) get a plain description and advice. A name alone
+  never makes an unverified file trusted (it stays Unknown with a hint). Online research trusts asus.com,
+  hp.com, vb-audio.com, roblox.com and other PC / device makers' sites.
+- **Intelligence: Open file location** and **Look it up online** for the selected item.
+- **One advice vocabulary everywhere:** *Keep* (pink), *Turn off is fine* (green), *Your call* (blue),
+  *Careful* (red, not identified), with a legend on Startup apps and Windows bloat and an "Our advice" badge in
+  Intelligence and What's running. Startup shows "Turn off (recommended)", "Keep on (required)",
+  "Keep on (device)", "Your call"; Windows bloat "Remove (recommended)" / "Turn off (recommended)" / "Your call".
+- CPU care while gaming steps in from 50 % whole-PC load (was 70 %): the focused re-test showed games starved
+  at 50-55 % total load with nothing held back.
+- Costs / trade-offs: the scan uses up to 6 threads for a few seconds; the Intelligence list is longer (all
+  items, not 240). Older saved Intelligence records keep their saved category until the next scan; the advice
+  badge already uses the new knowledge.
+- Tests: 63 (new LiveReadingsTest, IdentifyAndAdviceTest); UI probe 69 steps (paused readings, advice badge,
+  scan visibility). GitHub Actions workflow is manual-only while the account's billing lock is on.
 # YUMRAM 5.15.1 — CPU load reading fix, readable Store publishers, docs
 
 - **Fix: CPU care thought an idle PC was ~100 % busy.** The one-call process snapshot (5.15.0) includes the System

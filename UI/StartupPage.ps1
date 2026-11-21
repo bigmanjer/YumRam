@@ -11,6 +11,9 @@ function ConvertTo-YumStartupRow {
     $App | Add-Member -NotePropertyName StateText -NotePropertyValue $(if($App.Enabled){'On'}else{'Off'}) -Force
     $App | Add-Member -NotePropertyName SubTitle -NotePropertyValue ($sub -join '  •  ') -Force
     $App | Add-Member -NotePropertyName MemoryText -NotePropertyValue $mem -Force
+    # 5.15.2: say plainly what to do (user report: hard to tell recommended / your call / keep).
+    $label=switch([string]$App.Suggestion){'Turn off'{'Turn off (recommended)'};'Keep'{'Keep on (required)'};'Careful'{'Keep on (device)'};default{'Your call'}}
+    $App | Add-Member -NotePropertyName AdviceLabel -NotePropertyValue $label -Force
     return $App
 }
 

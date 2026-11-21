@@ -566,6 +566,7 @@ function Update-YumProcessExplanation {
             elseif($c -ge 0.5){'A little: {0} of your whole CPU.' -f $row.CpuText}
             else{'Resting - it is not using the CPU right now.'}
     }
+    try{ $adv=Get-YumKindAdvice -Kind ([string]$row.Kind) -Name ([string]$row.Name) -Path ([string]$row.Path) -Company ([string]$row.Company); $u.ExplainAdviceLabel.Text=$adv.Label; $u.ExplainAdviceLabel.Foreground=Get-YumBrush $adv.Color; $u.ExplainAdviceBadge.BorderBrush=Get-YumBrush $adv.Color }catch{}   # 5.15.2
     $u.ExplainSafe.Text=$x.Safe
     $u.ExplainYum.Text=$x.Yumram
     $u.ExplainPath.Text=if([string]::IsNullOrWhiteSpace($row.Path)){'Windows keeps this location private (protected process).'}else{$row.Path}
@@ -582,7 +583,7 @@ function Show-YumTopProcesses {
         $reader=New-Object System.Xml.XmlNodeReader $xaml
         $window=[Windows.Markup.XamlReader]::Load($reader)
         $ui=@{}
-        foreach($n in 'Items','Details','Refresh','Pause','LiveText','EndTask','Close','SumUsed','SumAvailable','SumPrograms','SumBiggest','ExplainTitle','ExplainSub','ExplainWhat','ExplainBody','ExplainMemory','ExplainSafe','ExplainYum','ExplainPath','OpenLocation','SumCpu','SumCpuTop','SumCpuBar','SortRam','SortCpu','ExplainCpu','RuleNeverTrim','RuleNeverHold'){$ui[$n]=$window.FindName($n);if($null -eq $ui[$n]){throw "Top processes control missing: $n"}}
+        foreach($n in 'Items','Details','Refresh','Pause','LiveText','EndTask','Close','SumUsed','SumAvailable','SumPrograms','SumBiggest','ExplainTitle','ExplainSub','ExplainWhat','ExplainBody','ExplainMemory','ExplainSafe','ExplainYum','ExplainPath','OpenLocation','SumCpu','SumCpuTop','SumCpuBar','SortRam','SortCpu','ExplainCpu','RuleNeverTrim','RuleNeverHold','ExplainAdviceBadge','ExplainAdviceLabel'){$ui[$n]=$window.FindName($n);if($null -eq $ui[$n]){throw "Top processes control missing: $n"}}
         $rows=New-Object 'System.Collections.ObjectModel.ObservableCollection[object]'
         $ui.Items.ItemsSource=$rows
         # Intelligence knowledge by program name (used for kinds and explanations).
@@ -1207,11 +1208,21 @@ function Update-YumIntelligenceSelectionPanel {
     if(-not $has){
         if($null -ne $State.SelectedName){$State.SelectedName.Text='Nothing selected'}
         if($null -ne $State.SelectedMeta){$State.SelectedMeta.Text='Select an item in the list to see what it is, the evidence and what YUMRAM will do with it.'}
+        try{ $State.SelectedAdvice.Text='—';$State.SelectedAdviceWhy.Text='';$State.OpenLocation.IsEnabled=$false;$State.SearchOnline.IsEnabled=$false }catch{}
         return
     }
     if($null -ne $State.SelectedName){$State.SelectedName.Text=(& $get $r 'Name')}
     $meta=@(@((& $get $r 'Source'),(& $get $r 'Publisher'),(& $get $r 'Category'),(& $get $r 'Risk'))|Where-Object{-not [string]::IsNullOrWhiteSpace($_)})
     if($null -ne $State.SelectedMeta){$State.SelectedMeta.Text=($meta -join '  •  ')}
+    # 5.15.2: one clear piece of advice + open file location / look it up online.
+    try{
+        $adv=Get-YumRecordAdvice -Record $r
+        $State.SelectedAdvice.Text=$adv.Label;$State.SelectedAdvice.Foreground=Get-YumBrush $adv.Color
+        $State.SelectedAdviceBadge.BorderBrush=Get-YumBrush $adv.Color;$State.SelectedAdviceBadge.BorderThickness=New-Object System.Windows.Thickness 1
+        $known=(& $get $r 'KnownApp');$State.SelectedAdviceWhy.Text=if($known){'{0} — {1}' -f $known,$adv.Why}else{$adv.Why}
+        $State.OpenLocation.IsEnabled=(-not [string]::IsNullOrWhiteSpace((& $get $r 'Path')))
+        $State.SearchOnline.IsEnabled=$true
+    }catch{}
     # Start the decision from the item's current category (instead of always "Games / Gaming").
     $cat=(& $get $r 'Category');$placement=(& $get $r 'Placement');$idx=-1;$i=0
     foreach($item in @($State.ManualCategory.Items)){$c=[string]$item.Content;if($c -eq $cat -or $c -eq $placement -or ($c -eq 'Unknown / Quarantine' -and $placement -like 'Unknown*')){$idx=$i;break};$i++}
@@ -1247,7 +1258,7 @@ function Show-YumIntelligence {
             Details=$window.FindName('Details'); Summary=$window.FindName('Summary'); LastScan=$window.FindName('LastScan')
             Busy=$false; ResearchBusy=$false; ResearchRunId=''; ForceFreshResearch=$false; ResearchConcurrency=1; ResearchProgressCount=0; ResearchProgressText='Ready'; ResearchPendingManual=$false; Data=$null; Timer=$null; SearchTimer=$null; LastListSignature='';LastRenderedRevision=-1
             ScannedCount=$window.FindName('ScannedCount'); ReviewCount=$window.FindName('ReviewCount'); ResearchingCount=$window.FindName('ResearchingCount'); ResolvedCount=$window.FindName('ResolvedCount'); UnknownCount=$window.FindName('UnknownCount'); ProtectedCount=$window.FindName('ProtectedCount'); CachedCount=$window.FindName('CachedCount'); ResearchErrorCount=$window.FindName('ResearchErrorCount')
-            OverviewMessage=$window.FindName('OverviewMessage'); DatabaseStatus=$window.FindName('DatabaseStatus'); DatabaseCount=$window.FindName('DatabaseCount'); ResearchProgress=$window.FindName('ResearchProgress'); ActivityStatus=$window.FindName('ActivityStatus'); ActivityDetail=$window.FindName('ActivityDetail'); ActivityProgress=$window.FindName('ActivityProgress'); SelectedResearch=$window.FindName('SelectedResearch'); SelectedAction=$window.FindName('SelectedAction')
+            OverviewMessage=$window.FindName('OverviewMessage'); DatabaseStatus=$window.FindName('DatabaseStatus'); DatabaseCount=$window.FindName('DatabaseCount'); ResearchProgress=$window.FindName('ResearchProgress'); ActivityStatus=$window.FindName('ActivityStatus'); ActivityDetail=$window.FindName('ActivityDetail'); ActivityProgress=$window.FindName('ActivityProgress'); ActivityCard=$window.FindName('ActivityCard'); ActivityPercent=$window.FindName('ActivityPercent'); SelectedResearch=$window.FindName('SelectedResearch'); SelectedAction=$window.FindName('SelectedAction'); SelectedAdvice=$window.FindName('SelectedAdvice'); SelectedAdviceBadge=$window.FindName('SelectedAdviceBadge'); SelectedAdviceWhy=$window.FindName('SelectedAdviceWhy'); OpenLocation=$window.FindName('OpenLocation'); SearchOnline=$window.FindName('SearchOnline')
         }
         try {
             [void](Load-YumIntelligenceDb)
@@ -1359,6 +1370,20 @@ $stateLabel=if($null -ne $r.StateText){[string]$r.StateText}else{if($r.Live){'LI
             [void](Refresh-YumIntelligenceView -State $ctx);$ctx.ManualOrganizationStatus.Text=('RESET • {0} is back in Review Queue.' -f [string]$item.Name);Set-YumFooter ('↩ Manual organization reset • {0}' -f [string]$item.Name)
         }catch{Write-YumLogException -Context 'Manual Intelligence organization reset failed' -Exception $_;try{$s.Tag.ManualOrganizationStatus.Text='Reset failed — no changes were committed. Check YUMRAM.log.'}catch{}}})
 
+        $state.OpenLocation.Tag=$state;$state.SearchOnline.Tag=$state
+        $state.OpenLocation.Add_Click({param($s,$e) try{
+            $r=$s.Tag.ListView.SelectedItem; if($null -eq $r){return}
+            $loc=Resolve-YumRecordLocation -Record $r
+            if([string]::IsNullOrWhiteSpace($loc)){ Set-YumFooter ('Could not find the file for {0} on this PC (it may be hidden by Windows or no longer installed).' -f [string]$r.Name); return }
+            if(Test-Path -LiteralPath $loc -PathType Leaf){ Start-Process explorer.exe -ArgumentList ('/select,"{0}"' -f $loc) } else { Start-Process explorer.exe -ArgumentList ('"{0}"' -f $loc) }
+            Set-YumFooter ('📂 Opened {0}' -f $loc)
+        }catch{ Write-YumLogException -Context 'Open file location failed' -Exception $_.Exception } })
+        $state.SearchOnline.Add_Click({param($s,$e) try{
+            $r=$s.Tag.ListView.SelectedItem; if($null -eq $r){return}
+            $n=[string]$r.Name; $pub=''; try{ $pub=[string]$r.Publisher }catch{}; if($pub -eq 'Unknown'){$pub=''}
+            $q=('"{0}" {1} what is it' -f ($n -replace '\.exe$',''),$pub).Trim()
+            Start-Process ('https://www.bing.com/search?q='+[uri]::EscapeDataString($q))
+        }catch{ Write-YumLogException -Context 'Look it up online failed' -Exception $_.Exception } })
         $state.ResearchSelected.Add_Click({param($s,$e)try{
             $ctx=$s.Tag;$item=$ctx.ListView.SelectedItem
             if($null -eq $item){Set-YumFooter 'Select an item first.';return}
@@ -1412,6 +1437,7 @@ $stateLabel=if($null -ne $r.StateText){[string]$r.StateText}else{if($r.Live){'LI
                 # this dialog because it is a separate WPF window with its own state snapshot.
                 if($null -ne $ctx -and (Test-YumPageShowing -Window $ctx.Window)){
                     try { Get-YumResearchStatusForUi -State $ctx | Out-Null } catch {}
+                    Update-YumIntelligenceActivityLook -State $ctx
                     try { if((-not $ctx.Busy -and -not $ctx.ResearchBusy) -and ((@($ctx.Data.Records)).Count -eq 0)){[void](Refresh-YumIntelligenceView -State $ctx)} else { Update-YumIntelligenceList -State $ctx } } catch { Write-YumLogException -Context 'Intelligence live UI refresh failed' -Exception $_.Exception }
                 }
             } catch { Write-YumLogException -Context 'Intelligence UI timer failed' -Exception $_.Exception }
@@ -1524,7 +1550,7 @@ function Get-YumResearchStatusForUi {
             }
             if($null -ne $State.ResearchProgress){
                 if($stage -eq 'Complete'){ $State.ResearchProgress.Text=('Complete • {0}' -f $message); try{$State.ActivityStatus.Text='RESEARCH COMPLETE';$State.ActivityDetail.Text=$message;$State.ActivityProgress.IsIndeterminate=$false;$State.ActivityProgress.Value=100}catch{} } elseif($stage -eq 'Research Error'){ $State.ResearchProgress.Text=('Research ERROR {0}/{1} • {2} • {3}' -f $index,$total,$name,$message); try{$State.ActivityStatus.Text='RESEARCH ERROR';$State.ActivityDetail.Text=$message;$State.ActivityProgress.IsIndeterminate=$false;$State.ActivityProgress.Value=([math]::Min(100,[math]::Max(0,($index / [double][math]::Max(1,$total))*100)))}catch{} }
-                elseif($total -gt 0){ $State.ResearchProgress.Text=('Research {0}/{1} • {2}' -f $index,$total,$stage); try{$State.ActivityStatus.Text=('RESEARCHING • {0}/{1}' -f $index,$total);$State.ActivityDetail.Text=('{0} • {1}' -f $stage,$name);$State.ActivityProgress.IsIndeterminate=$false;$State.ActivityProgress.Value=[math]::Min(100,[math]::Max(0,($index / [double]$total)*100))}catch{} }
+                elseif($total -gt 0){ $State.ResearchProgress.Text=('Research {0}/{1} • {2}' -f $index,$total,$stage); try{$State.ActivityStatus.Text=('RESEARCHING {0} OF {1}' -f $index,$total);$State.ActivityDetail.Text=('Now looking at: {0}  —  {1}' -f $name,(Get-YumResearchStageWords -Stage $stage));$State.ActivityProgress.IsIndeterminate=$false;$State.ActivityProgress.Value=[math]::Min(100,[math]::Max(0,($index / [double]$total)*100))}catch{} }
                 else { $State.ResearchProgress.Text=('Research • {0}' -f $stage) }
             }
             # 5.5: per-item results (Organized/Unknown/...) used to clear ResearchBusy between items while the
@@ -1888,6 +1914,29 @@ function Start-YumIntelligenceResearchAsync {
     }
 }
 
+function Get-YumResearchStageWords {
+    # 5.15.2: research stages in plain words for the activity strip.
+    param([string]$Stage)
+    switch($Stage){
+        'Researching Local'  { 'checking the file on this PC: publisher signature, version details, install location' }
+        'Researching Online' { 'looking it up online on trusted sites' }
+        'Queued'             { 'waiting its turn' }
+        default              { 'starting' }
+    }
+}
+function Update-YumIntelligenceActivityLook {
+    # 5.15.2 (user report: a running scan was hard to notice): outline the strip in the brand colour and show
+    # a big percentage while anything runs; calm look when idle.
+    param($State)
+    try{
+        if($null -eq $State.ActivityCard){return}
+        $running=([bool]$State.Busy -or [bool]$State.ResearchBusy)
+        if($running){$State.ActivityCard.BorderBrush=Get-YumBrush '#C084FC'}else{$State.ActivityCard.ClearValue([System.Windows.Controls.Border]::BorderBrushProperty)}
+        $State.ActivityCard.BorderThickness=New-Object System.Windows.Thickness ($(if($running){2}else{1}))
+        $State.ActivityStatus.Foreground=if($running){Get-YumBrush '#C084FC'}else{Get-YumBrush '#86EFAC'}
+        $State.ActivityPercent.Text=if(-not $running){''}elseif($State.ActivityProgress.IsIndeterminate){'working…'}else{'{0:N0} %' -f [double]$State.ActivityProgress.Value}
+    }catch{}
+}
 function Start-YumIntelligenceScanAsync {
     param([Parameter(Mandatory)][hashtable]$State)
     if($State.Busy){return}
@@ -2153,7 +2202,7 @@ function Update-YumIntelligenceList {
         'Processes' {$rows=@($rows|Where-Object {$_.Source -eq 'Process'})}
         default {$rows=$all}
     }
-    if($query){$rows=@($rows|Where-Object {([string]$_.Name).ToLowerInvariant().Contains($query) -or ([string]$_.Category).ToLowerInvariant().Contains($query) -or ([string]$_.Publisher).ToLowerInvariant().Contains($query) -or ([string]$_.ResearchReason).ToLowerInvariant().Contains($query)})}
+    if($query){$rows=@($rows|Where-Object {([string]$_.Name).ToLowerInvariant().Contains($query) -or ([string]$_.Category).ToLowerInvariant().Contains($query) -or ([string]$_.Publisher).ToLowerInvariant().Contains($query) -or ([string]$_.ResearchReason).ToLowerInvariant().Contains($query) -or ([string]$_.Reason).ToLowerInvariant().Contains($query) -or ($null -ne $_.PSObject.Properties['KnownApp'] -and ([string]$_.KnownApp).ToLowerInvariant().Contains($query)) -or ($null -ne $_.PSObject.Properties['DisplayName'] -and ([string]$_.DisplayName).ToLowerInvariant().Contains($query))})}
     $signature=('{0}|{1}|rev={2}|count={3}' -f $filter,$query,$revision,$rows.Count)
     if($signature -ne [string]$State.LastListSignature){
         $selectedKey=''; try{if($null -ne $State.ListView.SelectedItem){$selectedKey=[string]$State.ListView.SelectedItem.Key}}catch{}

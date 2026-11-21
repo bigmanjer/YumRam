@@ -1,8 +1,9 @@
 name: tests
 
+# Push/PR triggers are off while GitHub Actions is unavailable on this account (billing lock): every run
+# failed before starting a single step, so each commit showed a red X although all tests pass locally.
+# To turn automatic runs back on: add "push:" and "pull_request:" under "on:" again.
 on:
-  push:
-  pull_request:
   workflow_dispatch:
 
 permissions:

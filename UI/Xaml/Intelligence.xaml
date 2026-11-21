@@ -47,12 +47,17 @@
     </DockPanel>
 
     <!-- Activity strip: the only live status line -->
-    <Border Grid.Row="1" Style="{StaticResource Card}" Padding="14,10" Margin="0,0,0,12">
+    <!-- 5.15.2 (user report: the scan was hard to notice): big status, what is being looked at, full-width bar.
+         Outlined in the brand colour while a scan or research runs (Update-YumIntelligenceActivityLook). -->
+    <Border x:Name="ActivityCard" Grid.Row="1" Style="{StaticResource Card}" Padding="16,12" Margin="0,0,0,12" BorderThickness="1">
       <Grid>
-        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="260"/></Grid.ColumnDefinitions>
-        <TextBlock x:Name="ActivityStatus" Text="READY" FontSize="12" FontWeight="Bold" Foreground="{StaticResource Success}" VerticalAlignment="Center" Margin="0,0,16,0"/>
-        <TextBlock x:Name="ActivityDetail" Grid.Column="1" Text="No scan or research is running." Style="{StaticResource Caption}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" Margin="0,0,16,0"/>
-        <ProgressBar x:Name="ActivityProgress" Grid.Column="2" Minimum="0" Maximum="100" Value="0" IsIndeterminate="False" VerticalAlignment="Center"/>
+        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+        <DockPanel>
+          <TextBlock x:Name="ActivityPercent" DockPanel.Dock="Right" Text="" FontSize="18" FontWeight="Bold" Foreground="{StaticResource Brand}" VerticalAlignment="Center"/>
+          <TextBlock x:Name="ActivityStatus" Text="READY" FontSize="18" FontWeight="Bold" Foreground="{StaticResource Success}" VerticalAlignment="Center"/>
+        </DockPanel>
+        <TextBlock x:Name="ActivityDetail" Grid.Row="1" Text="No scan or research is running." FontSize="14" Foreground="{StaticResource Text}" TextWrapping="Wrap" MaxHeight="44" Margin="0,4,0,8"/>
+        <ProgressBar x:Name="ActivityProgress" Grid.Row="2" Minimum="0" Maximum="100" Value="0" IsIndeterminate="False" Height="14"/>
       </Grid>
     </Border>
 
@@ -130,6 +135,16 @@
               <TextBlock x:Name="SelectedMeta" Text="Select an item in the list to see what it is, the evidence and what YUMRAM will do with it." Style="{StaticResource Caption}" TextWrapping="Wrap" Margin="0,2,0,0"/>
               <TextBlock Text="WHAT YUMRAM WILL DO" Style="{StaticResource PanelLabel}"/>
               <TextBlock x:Name="SelectedAction" Text="—" Foreground="{StaticResource Success}" FontWeight="SemiBold" TextWrapping="Wrap"/>
+              <!-- 5.15.2: one clear piece of advice (Keep / Your call / Turn off is fine / Careful) + where the file is -->
+              <TextBlock Text="OUR ADVICE" Style="{StaticResource PanelLabel}"/>
+              <Border x:Name="SelectedAdviceBadge" CornerRadius="9" Padding="10,3" HorizontalAlignment="Left" Background="{StaticResource Surface2}">
+                <TextBlock x:Name="SelectedAdvice" Text="—" FontWeight="Bold" FontSize="13"/>
+              </Border>
+              <TextBlock x:Name="SelectedAdviceWhy" Text="" Style="{StaticResource Caption}" TextWrapping="Wrap" Margin="0,4,0,0"/>
+              <WrapPanel Margin="0,10,0,0">
+                <Button x:Name="OpenLocation" Content="📂  Open file location" Margin="0,0,8,6" IsEnabled="False" ToolTip="Show this program's file in File Explorer."/>
+                <Button x:Name="SearchOnline" Content="🌐  Look it up online" Margin="0,0,0,6" IsEnabled="False" ToolTip="Search the web for this name and publisher in your browser."/>
+              </WrapPanel>
               <Expander Header="Evidence (details)" IsExpanded="False" Margin="0,12,0,0">
                 <TextBlock x:Name="Details" Text="—" Style="{StaticResource Caption}" TextWrapping="Wrap"/>
               </Expander>

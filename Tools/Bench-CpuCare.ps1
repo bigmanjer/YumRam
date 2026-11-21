@@ -21,7 +21,7 @@ Limits (stated in the report): a synthetic game is not a real game engine (no GP
 laptop temperature drifts during a long run; one PC. Treat results as this PC's tendencies, not universal truth.
 #>
 param([string]$OutDir=(Join-Path $env:TEMP 'yum-bench'),[int]$Seconds=12,[switch]$Quick,[string]$KnowledgeDir='',[string]$FromResults='',[switch]$Validate,
-      [int]$Repeat=3,[ValidateSet('Full','User','Quick')][string]$Profile='Full',[string]$CodeRoot='',[int64]$PerMs=0)
+      [int]$Repeat=3,[ValidateSet('Full','User','Quick')][string]$Profile='Full',[string]$CodeRoot='',[int64]$PerMs=0,[string]$OnlyGame='',[string]$OnlyHog='')
 # -FromResults <cpu-bench.json>  rebuild knowledge/report from an earlier run without measuring again
 # -Validate  afterwards replay every case where the knowledge picks another level than Balanced, with the
 #            user level Balanced and adaptation ON, to check the learned level really helps
@@ -110,6 +110,9 @@ switch($Profile){
     'Quick'{ $games=@($games | Where-Object { $_.Key -in 'Medium','Heavy' }); $hogs=@($hogs | Where-Object { $_.Key -in 'None','Saturating','Bursty' }) }
     'User' { $games=@($games | Where-Object { $_.Key -in 'Light','Medium','Heavy' }); $hogs=@($hogs | Where-Object { $_.Key -in 'None','Saturating','Bursty' }) }
 }
+# -OnlyGame / -OnlyHog: measure one case (plus the no-load baseline), e.g. a focused re-test.
+if($OnlyGame){ $games=@($games | Where-Object { $_.Key -eq $OnlyGame }) }
+if($OnlyHog){ $hogs=@($hogs | Where-Object { $_.Key -in @('None',$OnlyHog) }) }
 $levels=@('Off','Gentle','Balanced','Strong')
 
 function Measure-YumBenchRun {

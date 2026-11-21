@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <!--
   Startup apps (5.7). Names used by Show-YumStartupApps in UI\StartupPage.ps1.
   Layout: header -> summary cards -> list | "Should I turn it off?" panel -> footer.
@@ -25,6 +25,7 @@
       <StackPanel>
         <TextBlock Text="Startup apps" Style="{StaticResource AppTitle}"/>
         <TextBlock Text="Programs that start by themselves when you sign in. Every one that starts uses RAM all day, even if you never open it. Turning one off does not uninstall it - you can still open it yourself, and turn it back on here or in Task Manager." Style="{StaticResource Caption}" Margin="0,2,0,0" TextWrapping="Wrap"/>
+        <TextBlock Margin="0,6,0,0" FontSize="12" TextWrapping="Wrap" Foreground="{StaticResource TextMuted}"><Run Text="Our advice:  "/><Run Text="Turn off (recommended)" Foreground="{StaticResource Success}" FontWeight="SemiBold"/><Run Text=" nothing breaks  •  "/><Run Text="Your call" Foreground="{StaticResource Info}" FontWeight="SemiBold"/><Run Text=" depends whether you use it  •  "/><Run Text="Keep on" Foreground="{StaticResource Pink}" FontWeight="SemiBold"/><Run Text=" Windows, security or your devices need it"/></TextBlock>
       </StackPanel>
     </DockPanel>
 
@@ -52,7 +53,7 @@
                 </DataTemplate.Triggers>
               </DataTemplate></GridViewColumn.CellTemplate>
             </GridViewColumn>
-            <GridViewColumn Header="Program" Width="300">
+            <GridViewColumn Header="Program" Width="270">
               <GridViewColumn.CellTemplate><DataTemplate>
                 <StackPanel Margin="0,2">
                   <TextBlock Text="{Binding Friendly}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
@@ -65,15 +66,15 @@
                 <TextBlock Text="{Binding MemoryText}" FontWeight="SemiBold" HorizontalAlignment="Right" MinWidth="80" TextAlignment="Right"/>
               </DataTemplate></GridViewColumn.CellTemplate>
             </GridViewColumn>
-            <GridViewColumn Header="Advice" Width="130">
+            <GridViewColumn Header="Our advice" Width="175">
               <GridViewColumn.CellTemplate><DataTemplate>
                 <Border CornerRadius="9" Padding="8,1" Background="{StaticResource Surface2}" HorizontalAlignment="Left">
-                  <TextBlock x:Name="AdviceText" Text="{Binding Suggestion}" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource TextMuted}"/>
+                  <TextBlock x:Name="AdviceText" Text="{Binding AdviceLabel}" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource TextMuted}"/>
                 </Border>
                 <DataTemplate.Triggers>
                   <DataTrigger Binding="{Binding Suggestion}" Value="Turn off"><Setter TargetName="AdviceText" Property="Foreground" Value="{StaticResource Success}"/></DataTrigger>
                   <DataTrigger Binding="{Binding Suggestion}" Value="Keep"><Setter TargetName="AdviceText" Property="Foreground" Value="{StaticResource Pink}"/></DataTrigger>
-                  <DataTrigger Binding="{Binding Suggestion}" Value="Careful"><Setter TargetName="AdviceText" Property="Foreground" Value="{StaticResource Warning}"/></DataTrigger>
+                  <DataTrigger Binding="{Binding Suggestion}" Value="Careful"><Setter TargetName="AdviceText" Property="Foreground" Value="{StaticResource Pink}"/></DataTrigger>
                   <DataTrigger Binding="{Binding Suggestion}" Value="Your call"><Setter TargetName="AdviceText" Property="Foreground" Value="{StaticResource Info}"/></DataTrigger>
                 </DataTemplate.Triggers>
               </DataTemplate></GridViewColumn.CellTemplate>

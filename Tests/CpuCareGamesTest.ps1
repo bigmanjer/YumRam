@@ -73,6 +73,10 @@ try{
     Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
 }
 
+# 3b. While gaming the PC counts as busy from 50 % (focused re-test: starved game at 50-55 % whole-PC load).
+$cbx=[IO.File]::ReadAllText((Join-Path $root 'Core\CpuBalance.ps1'))
+Assert-That ($cbx -match '\$busyAt=if\(\$gamingNow\)\{\[math\]::Min\(\[double\]\$cfg\.SystemPercent,50\.0\)\}' -and $cbx -match 'if\(\$total -ge \$busyAt\)') 'Gaming lowers the busy trigger to 50 %.'
+
 # 4. Wiring.
 $cb=[IO.File]::ReadAllText((Join-Path $root 'Core\CpuBalance.ps1'))
 Assert-That ($cb -notmatch 'Get-CimInstance Win32_Process\b') 'No per-program WMI query in CPU care any more.'

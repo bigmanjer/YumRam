@@ -107,6 +107,8 @@
               <TextBlock x:Name="ExplainMemory" Style="{StaticResource Answer}"/>
               <TextBlock Text="HOW BUSY IS IT?" Style="{StaticResource Question}"/>
               <TextBlock x:Name="ExplainCpu" Style="{StaticResource Answer}"/>
+              <TextBlock Text="OUR ADVICE" Style="{StaticResource Question}"/>
+              <Border x:Name="ExplainAdviceBadge" CornerRadius="9" Padding="10,3" HorizontalAlignment="Left" Background="{StaticResource Surface2}" BorderThickness="1"><TextBlock x:Name="ExplainAdviceLabel" Text="—" FontWeight="Bold" FontSize="13"/></Border>
               <TextBlock Text="CAN I CLOSE IT?" Style="{StaticResource Question}"/>
               <TextBlock x:Name="ExplainSafe" Style="{StaticResource Answer}"/>
               <TextBlock Text="WHAT DOES YUMRAM DO WITH IT?" Style="{StaticResource Question}"/>

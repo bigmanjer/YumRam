@@ -478,6 +478,12 @@ function Invoke-YumCpuBalanceTick {
         }
     }
     $st['EffectiveLevel']=$effLevel
+    # 5.15.2: while a detected game is in front, the PC counts as busy from 50 % (or the user's lower setting).
+    # Focused re-test (7 passes, heavy test game vs a saturating load): in every run where CPU care did nothing
+    # (game at ~8 FPS instead of 90-113), the whole PC measured 50-55 % - just under the 70 % trigger - while
+    # the game was starved to 6 % CPU. YUMRAM's reading itself matched Windows' counters.
+    $busyAt=if($gamingNow){[math]::Min([double]$cfg.SystemPercent,50.0)}else{[double]$cfg.SystemPercent}
+    $st['BusyAt']=$busyAt
 
     # 1) Restore: exited, now foreground/same app, calm, or the PC is no longer busy.
     foreach($r in @($st.Restrained.Values)){
@@ -489,14 +495,14 @@ function Invoke-YumCpuBalanceTick {
         # Measured flip-flop: once room is made the hog itself keeps the PC near 50 %, so "PC calm" fired,
         # the hog was restored, took everything again and was restrained again. With room made, only the
         # hog quieting down counts as calm.
-        $pcCalm=($total -lt ($cfg.SystemPercent-20)) -and ([uint64]$r.RoomMask -eq 0)
+        $pcCalm=($total -lt ($busyAt-20)) -and ([uint64]$r.RoomMask -eq 0)
         if($pct -lt $cfg.RestorePercent -or $pcCalm){ $r.CalmTicks=[int]$r.CalmTicks+1 } else { $r.CalmTicks=0 }
         if([int]$r.CalmTicks -ge $cfg.CalmSeconds){Restore-YumCpuBalanceProcess -Record $r -Why ('calm again ({0:N0}% CPU, PC at {1:N0}%)' -f $pct,$total)}
     }
 
     # 2) Restrain: background hogs while the PC is busy.
     $hot=@{}
-    if($total -ge $cfg.SystemPercent){
+    if($total -ge $busyAt){
         foreach($id in @($usage.Keys)){
             if([double]$usage[$id] -lt $cfg.ProcessPercent -or $st.Restrained.ContainsKey($id)){continue}
             $hot[$id]=[int]$st.Hot[$id]+1
@@ -564,7 +570,7 @@ function Invoke-YumCpuBalanceTick {
                 try{Write-YumLog ('CPU care: room for {0} kept - {1} gets {2:N0}% CPU (was {3:N0}%).' -f $r.Name,$fgName,[double]$afterAvg,[double]$r.FgBefore)}catch{}
             }
         }
-    if($effLevel -ne 'Gentle' -and [uint64]$prof.HogMask -ne 0 -and $total -ge $(if($gaming){70}else{85})){
+    if($effLevel -ne 'Gentle' -and [uint64]$prof.HogMask -ne 0 -and $total -ge $(if($gaming){$busyAt}else{85})){
         $after=if($gaming){1}elseif($effLevel -eq 'Strong'){3}else{8}
         if($fgBusy -ge 3.0 -or $gaming){
             foreach($r in @($st.Restrained.Values)){

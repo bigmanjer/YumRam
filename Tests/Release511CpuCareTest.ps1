@@ -50,7 +50,7 @@ try{
 
 # 4. Rules found by measurement stay in place.
 $cb=Get-Content -Raw (Join-Path $root 'Core\CpuBalance.ps1')
-Assert-That ($cb -match '\$pcCalm=\(\$total -lt \(\$cfg\.SystemPercent-20\)\) -and \(\[uint64\]\$r\.RoomMask -eq 0\)') 'With room made, only the hog calming down may restore it (no flip-flop).'
+Assert-That ($cb -match '\$pcCalm=\(\$total -lt \((\$cfg\.SystemPercent|\$busyAt)-20\)\) -and \(\[uint64\]\$r\.RoomMask -eq 0\)')   # 5.15.2: threshold is $busyAt (50 % while gaming) 'With room made, only the hog calming down may restore it (no flip-flop).'
 Assert-That ($cb -match 'undid room for' -and $cb -match 'FgBefore') 'Making room must be checked and undone if your app got less CPU.'
 Assert-That ($cb -match 'YumForegroundHook' -and $cb -match 'WaitAny') 'App switches must wake CPU care at once.'
 Assert-That ($cb -match '\$gaming=') 'Games must get room right away.'

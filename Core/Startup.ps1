@@ -51,7 +51,14 @@ function Get-YumStartupSuggestion {
     if($Kind -eq 'Security' -or $n -match 'securityhealth|defender|msmpeng|antivirus|vanguard|vgtray|faceit|easyanticheat|battleye'){
         return [pscustomobject]@{Level='Keep';Text='Keep on. Security or anti-cheat software must start with Windows to protect you (or let your games run).';Locked=$true}
     }
-    if($Kind -in @('Drivers','Windows') -or $n -match 'realtek|nvidia|amd|radeon|intel|synaptics|elan|logi|lghub|razer|corsair|steelseries|asus|armoury|msi|dell|hp |lenovo|noisesuppression|audio|hidhide|touchpad'){
+    # 5.15.2: specific well-known programs (VoiceMeeter, ASUS / HP extras...) get their own advice.
+    if(Get-Command Get-YumKnownApp -ErrorAction SilentlyContinue){
+        $k=$null;try{ $k=Get-YumKnownApp -Name ([IO.Path]::GetFileNameWithoutExtension([string]$ExePath)) -Path ([string]$ExePath) -Publisher '' -DisplayName $Name }catch{}
+        if($null -ne $k){
+            if($k.Advice -eq 'YourCall'){ return [pscustomobject]@{Level='Your call';Text=('{0}: {1}' -f $k.Label,$k.What);Locked=$false} }
+            if($k.Advice -eq 'Keep'){ return [pscustomobject]@{Level='Careful';Text=('Keep on. {0}: {1}' -f $k.Label,$k.What);Locked=$false} }
+        }
+    }    if($Kind -in @('Drivers','Windows') -or $n -match 'realtek|nvidia|amd|radeon|intel|synaptics|elan|logi|lghub|razer|corsair|steelseries|asus|armoury|msi|dell|hp |lenovo|noisesuppression|audio|hidhide|touchpad'){
         return [pscustomobject]@{Level='Careful';Text='Probably keep on. It belongs to your hardware (sound, mouse, keyboard, lighting or display); features may stop working until you open it yourself.';Locked=$false}
     }
     if($n -match 'onedrive|dropbox|googledrive|google drive|icloud|backup|vpn|proton|nordvpn|expressvpn|warp|cloudflare'){

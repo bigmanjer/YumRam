@@ -14,7 +14,7 @@ margin (default 10 %); otherwise "same". CPU care "Off" runs identical code in b
 control and show how big run-to-run noise is on this PC.
 Output: <OutDir>\compare.md and compare.json.
 #>
-param([Parameter(Mandatory)][string]$Old,[string]$New='',[string]$OutDir=(Join-Path $env:TEMP 'yum-compare'),[int]$Passes=3,[int]$Seconds=12,[ValidateSet('Full','User','Quick')][string]$Profile='Quick',[double]$Margin=10)
+param([Parameter(Mandatory)][string]$Old,[string]$New='',[string]$OutDir=(Join-Path $env:TEMP 'yum-compare'),[int]$Passes=3,[int]$Seconds=12,[ValidateSet('Full','User','Quick')][string]$Profile='Quick',[double]$Margin=10,[string]$OnlyGame='',[string]$OnlyHog='')
 $ErrorActionPreference='Stop'
 $repo=Split-Path -Parent $PSScriptRoot
 if(-not $New){$New=$repo}
@@ -38,6 +38,7 @@ try{
             $out=Join-Path $OutDir ('{0}-pass{1}' -f $which,$pass)
             $a=@('-NoProfile','-ExecutionPolicy','Bypass','-STA','-File',$bench,'-OutDir',$out,'-Seconds',[string]$Seconds,'-Repeat','1','-Profile',$Profile,'-CodeRoot',$root)
             if($perMs -gt 0){$a+=@('-PerMs',[string]$perMs)}
+            if($OnlyGame){$a+=@('-OnlyGame',$OnlyGame)}; if($OnlyHog){$a+=@('-OnlyHog',$OnlyHog)}
             Write-Host ('pass {0}/{1}: {2} ({3})' -f $pass,$Passes,$which,$root)
             & powershell.exe @a | Out-Null
             $j=Get-Content (Join-Path $out 'cpu-bench.json') -Raw | ConvertFrom-Json
@@ -62,11 +63,13 @@ try{
     $better=@($rows | Where-Object { -not $_.Control -and $_.Verdict -eq 'better' }).Count
     $worse=@($rows | Where-Object { -not $_.Control -and $_.Verdict -eq 'WORSE' }).Count
     $md=New-Object System.Text.StringBuilder
-    [void]$md.AppendLine(('# YUMRAM {0} vs {1} - CPU care game benchmark' -f $newVer,$oldVer)).AppendLine()
+    [void]$md.AppendLine(('# YUMRAM {0} ({2}) vs {1} - CPU care game benchmark' -f $newVer,$oldVer,$(if($New -eq $repo){'this repository'}else{$New}))).AppendLine()
     [void]$md.AppendLine(('{0} passes x {1} s per case, alternating order, same workload. Margin {2} %. Control (CPU care Off, identical code): median difference {3} % = run-to-run noise on this PC.' -f $Passes,$Seconds,$Margin,$noise)).AppendLine()
     [void]$md.AppendLine(('**Result: {0} cases better, {1} worse, {2} the same** (CPU care on).' -f $better,$worse,(@($rows | Where-Object { -not $_.Control }).Count-$better-$worse))).AppendLine()
     [void]$md.AppendLine('| Game | Load | CPU care | Avg FPS old → new | 1 % low old → new | Verdict |').AppendLine('|---|---|---|---|---|---|')
     foreach($r in @($rows | Sort-Object Game,Load,Level)){ [void]$md.AppendLine(('| {0} | {1} | {2}{3} | {4} → {5} ({6:+0;-0;0} %) | {7} → {8} ({9:+0;-0;0} %) | {10} |' -f $r.Game,$r.Load,$r.Level,$(if($r.Control){' (control)'}else{''}),$r.OldAvg,$r.NewAvg,$r.AvgChange,$r.OldLow1,$r.NewLow1,$r.Low1Change,$(if($r.Control){'-'}else{$r.Verdict}))) }
+    [void]$md.AppendLine().AppendLine('## Every pass').AppendLine().AppendLine('| Version | Game | Load | CPU care | Avg FPS | 1 % low |').AppendLine('|---|---|---|---|---:|---:|')
+    foreach($w in 'Old','New'){ foreach($x in @($runs[$w] | Sort-Object Game,Hog,Level)){ [void]$md.AppendLine(('| {0} | {1} | {2} | {3} | {4} | {5} |' -f $w,$x.Game,$x.Hog,$x.Level,$x.AvgFps,$x.Low1Fps)) } }
     Set-Content -LiteralPath (Join-Path $OutDir 'compare.md') -Value $md.ToString() -Encoding UTF8
     [pscustomobject]@{Old=$oldVer;New=$newVer;Passes=$Passes;NoisePercent=$noise;Better=$better;Worse=$worse;Rows=$rows} | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $OutDir 'compare.json') -Encoding UTF8
     Write-Host ('{0} better, {1} worse (noise ~{2} %) -> {3}' -f $better,$worse,$noise,(Join-Path $OutDir 'compare.md'))
