@@ -1,0 +1,16 @@
+name: Benchmark results
+description: Game benchmark results shared from YUMRAM (Settings › Privacy › share my results)
+title: "[Benchmark] "
+labels: ["benchmark"]
+body:
+  - type: markdown
+    attributes:
+      value: "Thank you for helping everyone! YUMRAM filled this in. It contains only your CPU model and layout, laptop/desktop, Windows build, YUMRAM version and the frame rates of YUMRAM's own test game - no program names, files, user or PC names. Press **Create** to share."
+  - type: textarea
+    id: results
+    attributes:
+      label: "Results"
+      description: "Filled in by YUMRAM. Please do not edit."
+      render: json
+    validations:
+      required: true

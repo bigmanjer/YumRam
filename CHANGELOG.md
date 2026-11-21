@@ -13,6 +13,20 @@
   data as whole-PC policies). The exact original value is saved before each change and Undo restores it
   (value **and** type; values that did not exist are deleted again). App scans and removals run off the UI
   thread. Research: Win11Debloat and winutil (both MIT) safety lists and undo model; no code copied.
+- **Game CPU benchmark and learning** (`Tools\Bench-CpuCare.ps1`, Settings › CPU › *Measure games on this PC*).
+  A test game (N job threads, every frame timed: average FPS, 1 % lows, p99 frame time) runs next to test
+  background loads (half the CPU, saturating, bursty) with CPU care Off / Gentle / Balanced / Strong. Results
+  are saved as `cpu-knowledge.json`; while a detected game is in front, CPU care uses the level that gave
+  clearly better (≥ 10 %, medians of repeated runs) 1 % lows for that kind of game and load on **this** PC. No file = no change.
+  CPU care pauses while the benchmark runs. `-Validate` replays the learned cases with adaptation on.
+- **CPU care reacts in time under full load.** The benchmark showed it acting 4–14 s late: each check took
+  0.6–4.3 s because it asked WMI for every busy program's parent (0.24 s idle, **1.7 s** under load) and opened
+  ~250 processes one by one for CPU time (~0.4 s). Now one `NtQuerySystemInformation` call returns CPU time,
+  parent, session, start time and memory of every process (**3.9 ms**), leak sampling runs after the
+  decisions, and the worker warms up at start (the very first check under load took ~10 s).
+- **Make room could fail with an error** in strict mode: records lacked `RoomFailed`/`RoomChecked`/`RoomTicks`/
+  `FgBefore`, so the benchmark recorded zero make-room actions. Records are complete now; measured: medium
+  test game vs a saturating hog, Off 3.9 FPS → Balanced 150 FPS → Strong 176 FPS (1 % low 102, as with no hog).
 - **Audit fixes** (see `Docs/AUDIT-AND-RESEARCH-2026-11.md`): automatic care no longer flushes the modified
   page list (file-cache assist at most every 10 min); automatic care closes listed apps only if you opt in;
   stale-PID guard before trimming; Free RAM busy-state race fixed.

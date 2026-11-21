@@ -96,6 +96,7 @@ Measured on a Ryzen 7 4800H laptop: a simulated 8-thread game next to a 32-threa
 - **Online research** (on by default, Settings › Privacy): only the name, publisher and product of a
   program YUMRAM cannot identify locally is sent to Bing search.
 - **Update check** (once a day, can be turned off): one request to GitHub's public releases API.
+- **Community game results** ([details](Docs/COMMUNITY.md)): sharing your game benchmark results is **off unless you turn it on**, and you see the exact text first (CPU model, laptop/desktop, Windows build, frame rates of YUMRAM's test game - nothing else). Using other people's results for your CPU downloads a public file once a week and sends nothing about you.
 
 ## Requirements
 

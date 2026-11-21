@@ -23,6 +23,8 @@ try{
     $include=@('App','Config','Core','UI')
     foreach($d in $include){ Copy-Item -LiteralPath (Join-Path $root $d) -Destination (Join-Path $stage $d) -Recurse -Force }
     New-Item -ItemType Directory -Path (Join-Path $stage 'Launcher') -Force | Out-Null; Copy-Item -LiteralPath (Join-Path $root 'Launcher\YUMRAM.ico') -Destination (Join-Path $stage 'Launcher')
+    # 5.15: the game benchmark (Settings > CPU > Measure games on this PC) ships with the program.
+    New-Item -ItemType Directory -Path (Join-Path $stage 'Tools') -Force | Out-Null; Copy-Item -LiteralPath (Join-Path $root 'Tools\Bench-CpuCare.ps1') -Destination (Join-Path $stage 'Tools')
     foreach($f in 'README.md','CHANGELOG.md'){ $src=Join-Path $root $f; if(Test-Path -LiteralPath $src){Copy-Item -LiteralPath $src -Destination $stage} }
     [IO.File]::WriteAllText((Join-Path $stage 'VERSION'),$Version+"`r`n")
     $cfg=Join-Path $stage 'Config\default-config.json'

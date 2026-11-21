@@ -98,6 +98,64 @@ public static class YumForegroundHook {
 '@
 }
 
+# 5.15: parent process of every process in ONE Toolhelp snapshot (~1 ms). The game benchmark measured the
+# WMI query used before (Win32_Process.ParentProcessId) at 0.24 s idle and 1.7 s per program under a
+# saturating load - so CPU care acted 4-14 s late exactly when it was needed.
+if(-not ('YumProcTree' -as [type])){
+    Add-Type -TypeDefinition @'
+using System; using System.Collections.Generic; using System.Runtime.InteropServices;
+public static class YumProcTree {
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    struct PROCESSENTRY32W { public uint dwSize, cntUsage, th32ProcessID; public IntPtr th32DefaultHeapID; public uint th32ModuleID, cntThreads, th32ParentProcessID; public int pcPriClassBase; public uint dwFlags; [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 260)] public string szExeFile; }
+    [DllImport("kernel32.dll", SetLastError = true)] static extern IntPtr CreateToolhelp32Snapshot(uint flags, uint pid);
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] static extern bool Process32FirstW(IntPtr snap, ref PROCESSENTRY32W e);
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] static extern bool Process32NextW(IntPtr snap, ref PROCESSENTRY32W e);
+    [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr h);
+    // 5.15: CPU time, parent, session and start time of EVERY process in one NtQuerySystemInformation
+    // (SystemProcessInformation) call - what Task Manager reads. Opening ~250 processes one by one for
+    // TotalProcessorTime took ~0.4 s per check under a saturating load. x64 layout only; returns null otherwise.
+    public sealed class Info { public int Parent; public int Session; public double CpuMs; public long CreateTime; public long PrivateBytes; }
+    [DllImport("ntdll.dll")] static extern int NtQuerySystemInformation(int cls, IntPtr buf, int len, out int needed);
+    public static Dictionary<int,Info> Snapshot() {
+        if (IntPtr.Size != 8) return null;
+        int len = 1 << 20; IntPtr buf = IntPtr.Zero;
+        try {
+            for (int tries = 0; tries < 6; tries++) {
+                buf = Marshal.AllocHGlobal(len); int need;
+                int st = NtQuerySystemInformation(5, buf, len, out need);
+                if (st == unchecked((int)0xC0000004)) { Marshal.FreeHGlobal(buf); buf = IntPtr.Zero; len = Math.Max(len * 2, need + 65536); continue; }
+                if (st != 0) return null;
+                var d = new Dictionary<int,Info>(); int off = 0;
+                while (true) {
+                    IntPtr e = new IntPtr(buf.ToInt64() + off);
+                    int pid = (int)Marshal.ReadIntPtr(e, 0x50).ToInt64();
+                    var i = new Info();
+                    i.CreateTime = Marshal.ReadInt64(e, 0x20);
+                    i.CpuMs = (Marshal.ReadInt64(e, 0x28) + Marshal.ReadInt64(e, 0x30)) / 10000.0;
+                    i.Parent = (int)Marshal.ReadIntPtr(e, 0x58).ToInt64();
+                    i.Session = Marshal.ReadInt32(e, 0x64);
+                    i.PrivateBytes = Marshal.ReadInt64(e, 0xC8);
+                    d[pid] = i;
+                    int next = Marshal.ReadInt32(e, 0); if (next == 0) break; off += next;
+                }
+                return d;
+            }
+            return null;
+        } finally { if (buf != IntPtr.Zero) Marshal.FreeHGlobal(buf); }
+    }
+    public static Dictionary<int,int> Parents() {
+        var d = new Dictionary<int,int>();
+        IntPtr s = CreateToolhelp32Snapshot(2, 0); // TH32CS_SNAPPROCESS
+        if (s == IntPtr.Zero || s == new IntPtr(-1)) return d;
+        try { var e = new PROCESSENTRY32W(); e.dwSize = (uint)Marshal.SizeOf(typeof(PROCESSENTRY32W));
+              if (Process32FirstW(s, ref e)) { do { d[(int)e.th32ProcessID] = (int)e.th32ParentProcessID; } while (Process32NextW(s, ref e)); } }
+        finally { CloseHandle(s); }
+        return d;
+    }
+}
+'@
+}
+
 function Get-YumCpuProfile {
     # Cached: CPU layout + chassis. Power source is read live in the tick.
     if($null -ne $script:Yum['CpuProfile']){return $script:Yum['CpuProfile']}
@@ -255,10 +313,87 @@ function Restore-YumCpuBalanceInterrupted {
     }catch{}
 }
 
+function Get-YumCpuKnowledgePath { return (Join-Path ([string]$script:Yum.ConfigDirectory) 'cpu-knowledge.json') }
+
+function Get-YumCpuKnowledge {
+    # This PC's game benchmark results (Tools\Bench-CpuCare.ps1). Cached; re-read when the file changes.
+    try{
+        $p=Get-YumCpuKnowledgePath
+        if(-not (Test-Path -LiteralPath $p)){ $script:Yum['CpuKnowledge']=$null; return $null }
+        $stamp=(Get-Item -LiteralPath $p).LastWriteTimeUtc.Ticks
+        $c=$script:Yum['CpuKnowledge']
+        if($null -ne $c -and [int64]$c.Stamp -eq [int64]$stamp){ return $c.Data }
+        $d=Get-Content -LiteralPath $p -Raw | ConvertFrom-Json   # PS 5.1: assign first
+        $script:Yum['CpuKnowledge']=@{Stamp=$stamp;Data=$d}
+        return $d
+    }catch{ return $null }
+}
+
+function Get-YumCpuKnowledgeSummary {
+    # One sentence for Settings > CPU.
+    $k=Get-YumCpuKnowledge
+    if($null -eq $k -or @($k.Knowledge).Count -eq 0){ return 'Not measured on this PC yet. "Measure games" runs YUMRAM''s own test game next to test background loads with each CPU care level and remembers which works best here. Until then, your chosen level is always used.' }
+    $learned=@($k.Knowledge | Where-Object { $null -ne $_ -and $null -ne $_.PSObject.Properties['Low1ByLevel'] } | ForEach-Object {
+        $e=$_;$best='';$bv=0.0;foreach($lv in 'Gentle','Balanced','Strong'){ $v=[double]$e.Low1ByLevel.$lv; if($v -gt $bv){$bv=$v;$best=$lv} }
+        '{0} game + {1} load: {2}' -f ([string]$e.GameKey).ToLower(),([string]$e.Hog).ToLower(),$best })
+    $when='';try{$when=([datetime]$k.Created).ToString('d MMM yyyy')}catch{}
+    return ('Measured {0} ({1} situations). Best 1 % lows here - {2}.' -f $when,$learned.Count,($learned -join '; '))
+}
+
+function Start-YumCpuBenchmark {
+    # Settings > CPU > Measure games. Runs Tools\Bench-CpuCare.ps1 in its own window; CPU care pauses meanwhile
+    # (it would otherwise hold back the benchmark's own test load and spoil the measurement).
+    $bench=Join-Path ([string]$script:Yum.Root) 'Tools\Bench-CpuCare.ps1'
+    if(-not (Test-Path -LiteralPath $bench)){ return [pscustomobject]@{Success=$false;Reason='The game benchmark is not part of this copy of YUMRAM.'} }
+    try{ $old=[int]$script:Yum['CpuBenchPid']; if($old -gt 0 -and $null -ne (Get-Process -Id $old -ErrorAction SilentlyContinue)){ return [pscustomobject]@{Success=$false;Reason='The game benchmark is already running in its own window.'} } }catch{}
+    $msg=('Measure games on this PC?{0}{0}For about 15 minutes YUMRAM runs its own test game next to test background loads, with CPU care off, Gentle, Balanced and Strong, and records frame rates. Your programs are not touched, but the PC will be fully busy: close games and heavy apps, and keep a laptop plugged in.{0}{0}CPU care pauses until it is done. The result is used only while you play, and only when one level was clearly better.' -f [Environment]::NewLine)
+    $r=[System.Windows.MessageBox]::Show($script:Yum.Window,$msg,'YUMRAM - Measure games',[System.Windows.MessageBoxButton]::YesNo,[System.Windows.MessageBoxImage]::Question)
+    if($r -ne [System.Windows.MessageBoxResult]::Yes){ return $null }
+    $dir=[string]$script:Yum.ConfigDirectory
+    $ps=Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+    $args2=@('-NoProfile','-ExecutionPolicy','Bypass','-STA','-File',('"{0}"' -f $bench),'-OutDir',('"{0}"' -f (Join-Path $dir 'cpu-bench')),'-KnowledgeDir',('"{0}"' -f $dir),'-Profile','User','-Repeat','2')
+    $p=Start-Process -FilePath $ps -ArgumentList $args2 -PassThru
+    $script:Yum['CpuBenchPid']=$p.Id
+    try{ Restore-YumCpuBalanceAll -Why 'game benchmark started' }catch{}
+    try{Write-YumLog ('CPU care: game benchmark started (PID {0}); CPU care paused until it finishes.' -f $p.Id)}catch{}
+    return [pscustomobject]@{Success=$true;Reason='Measuring games in its own window (about 15 minutes). CPU care is paused until it finishes.'}
+}
+
+function Get-YumGamingAdvice {
+    # Pure decision (unit-tested). Returns @{Level;Reason} when the benchmark on this PC showed another level
+    # clearly better (mean 1 % low >= 5 % higher) than the configured one for this kind of game and load;
+    # $null otherwise. Never returns 'Off'.
+    param($Knowledge,[string]$CurrentLevel,[double]$GameAloneShare,[double]$OtherShare)
+    if($null -eq $Knowledge){return $null}
+    $entries=@($Knowledge.Knowledge | Where-Object { $null -ne $_ -and $null -ne $_.PSObject.Properties['Low1ByLevel'] })
+    if($entries.Count -eq 0){return $null}
+    $gc=if($GameAloneShare -le 0){''}elseif($GameAloneShare -lt 30){'Light'}elseif($GameAloneShare -lt 60){'Medium'}else{'Heavy'}
+    $hk=if($OtherShare -ge 45){'Saturating'}else{'Half'}
+    $pick=@($entries | Where-Object { [string]$_.Hog -eq $hk -and ($gc -eq '' -or [string]$_.GameClass -eq $gc) })
+    if($pick.Count -eq 0 -and $hk -eq 'Half'){ $pick=@($entries | Where-Object { [string]$_.Hog -eq 'Bursty' -and ($gc -eq '' -or [string]$_.GameClass -eq $gc) }) }
+    if($pick.Count -eq 0){ $pick=@($entries | Where-Object { [string]$_.Hog -eq $hk }) }
+    if($pick.Count -eq 0){return $null}
+    $best='';$bestRatio=0.0
+    foreach($lv in 'Gentle','Balanced','Strong'){
+        $ratios=@(); foreach($e in $pick){ $cur=[double]$e.Low1ByLevel.$CurrentLevel; $v=[double]$e.Low1ByLevel.$lv; if($cur -gt 0 -and $v -gt 0){$ratios+=($v/$cur)} }
+        if($ratios.Count -eq 0){continue}
+        $m=($ratios | Measure-Object -Average).Average
+        if($m -gt $bestRatio){$bestRatio=$m;$best=$lv}
+    }
+    # 10 % on medians of repeated runs, and not worse on average FPS (benchmark: single runs swing far more than 5 %).
+    if(-not $best -or $best -eq $CurrentLevel -or $bestRatio -lt 1.10){return $null}
+    try{ $avgR=@(); foreach($e in $pick){ if($null -ne $e.PSObject.Properties['AvgByLevel'] -and $null -ne $e.AvgByLevel){ $c=[double]$e.AvgByLevel.$CurrentLevel; $v=[double]$e.AvgByLevel.$best; if($c -gt 0 -and $v -gt 0){$avgR+=($v/$c)} } }; if($avgR.Count -and (($avgR | Measure-Object -Average).Average) -lt 0.95){return $null} }catch{}
+    $src='measured on this PC'
+    try{ if([string]$Knowledge.Source -eq 'community'){ $src=('shared by {0} people with {1}' -f [int]$Knowledge.Contributors,[string]$Knowledge.How) } }catch{}
+    return [pscustomobject]@{Level=$best;Reason=($src+': with a {0}game and a {1} background load, {2} gave {3:N0} % better 1 % lows than {4}, so {2} is used while you play.' -f $(if($gc){$gc.ToLower()+' '}else{''}),$(if($hk -eq 'Saturating'){'heavy'}else{'partial'}),$best,(($bestRatio-1)*100),$CurrentLevel)}
+}
+
 function Invoke-YumCpuBalanceTick {
     $st=Get-YumCpuBalanceState
     $cfg=Get-YumCpuBalanceSettings
     if(-not $cfg.Enabled){ if($st.Restrained.Count -gt 0){Restore-YumCpuBalanceAll -Why 'CPU balance turned off'}; $st.Active=$false; return }
+    # 5.15: paused while the game benchmark (Settings > CPU) runs, so it can measure every level cleanly.
+    try{ $bp=[int]$script:Yum['CpuBenchPid']; if($bp -gt 0){ if($null -ne (Get-Process -Id $bp -ErrorAction SilentlyContinue)){ if($st.Restrained.Count -gt 0){Restore-YumCpuBalanceAll -Why 'game benchmark running'}; $st.Active=$false; $st.LastAction='paused while the game benchmark runs'; return } else { $script:Yum['CpuBenchPid']=0; $script:Yum['CpuKnowledge']=$null; try{Write-YumLog 'CPU care: game benchmark finished; CPU care resumed with what it learned.'}catch{}; $script:Yum['CommunityPromptPending']=$true } } }catch{}
     $sw=[Diagnostics.Stopwatch]::StartNew()
     # Level is re-read every few seconds (power source can change: laptop unplugged = Strong).
     if($null -eq $st['LevelAt'] -or ([datetime]::UtcNow-[datetime]$st['LevelAt']).TotalSeconds -ge 5){$st['Level']=Get-YumCpuCareLevel;$st['LevelAt']=[datetime]::UtcNow}
@@ -282,8 +417,12 @@ function Invoke-YumCpuBalanceTick {
     $gamePid=0;try{$snap=Get-YumSnapshotCopy;if($snap -and $snap.Game -and $snap.Game.Detected){$gamePid=[int]$snap.Game.ProcessId}}catch{}
     try{ if([int]$script:Yum['CpuCareGameOverride'] -gt 0){$gamePid=[int]$script:Yum['CpuCareGameOverride']} }catch{}             # measurement tests only
     $usage=@{};$byId=@{};$total=0.0;$newLast=@{}
+    $snapAll=$null;try{$snapAll=[YumProcTree]::Snapshot()}catch{}   # 5.15: one call (~4 ms) instead of one per process
+    $st['Snapshot']=$snapAll
     foreach($p in @(Get-Process -ErrorAction SilentlyContinue)){
-        $ms=$null;try{$ms=$p.TotalProcessorTime.TotalMilliseconds}catch{continue}
+        $ms=$null
+        if($null -ne $snapAll -and $snapAll.ContainsKey([int]$p.Id)){ $ms=[double]$snapAll[[int]$p.Id].CpuMs }
+        else{ try{$ms=$p.TotalProcessorTime.TotalMilliseconds}catch{continue} }
         $id=[int]$p.Id;$newLast[$id]=$ms;$byId[$id]=$p
         if($elapsedMs -gt 0 -and $st.Last.ContainsKey($id)){
             $pct=[math]::Max(0.0,($ms-[double]$st.Last[$id])/($elapsedMs*$cores)*100.0)
@@ -291,10 +430,39 @@ function Invoke-YumCpuBalanceTick {
         }
     }
     $st.Last=$newLast
-    try{ Update-YumLeakWatch -ById $byId -State $st }catch{ try{Write-YumLogException -Context 'Leak watch failed' -Exception $_.Exception}catch{} }
-    if($elapsedMs -le 0){return}
+    if($elapsedMs -le 0){ try{ Update-YumLeakWatch -ById $byId -State $st }catch{}; return }
     $total=[math]::Min(100.0,$total);$st.SystemPercent=$total
     $fgName='';if($fgPid -gt 0 -and $byId.ContainsKey($fgPid)){$fgName=[string]$byId[$fgPid].ProcessName}
+
+    # 5.15: adaptive level while gaming, from this PC's own game benchmark (Tools\Bench-CpuCare.ps1 ->
+    # cpu-knowledge.json). Only while a detected game is in front, only when the benchmark showed the other
+    # level clearly better (>= 10 % higher median 1 % lows, not lower average FPS) for this kind of game and background load. No file = no change.
+    $effLevel=$level
+    $gamingNow=($gamePid -gt 0 -and ($fgPid -eq $gamePid -or ($fgName -and $byId.ContainsKey($gamePid) -and [string]$byId[$gamePid].ProcessName -ieq $fgName)))
+    if($gamingNow){
+        $gName=[string]$byId[$gamePid].ProcessName
+        $gUse=0.0;foreach($k in $usage.Keys){if($byId.ContainsKey($k) -and [string]$byId[$k].ProcessName -ieq $gName){$gUse+=[double]$usage[$k]}}
+        if($null -eq $st['GameAlone']){$st['GameAlone']=@{}}
+        if($total -lt $cfg.SystemPercent){ $old=[double]$st['GameAlone'][$gName]; $st['GameAlone'][$gName]=$(if($old -gt 0){0.7*$old+0.3*$gUse}else{$gUse}) }   # how much CPU the game uses on its own
+        $adaptive=$true;try{if($script:Yum.Config.Contains('CpuCareAdaptive')){$adaptive=[bool]$script:Yum.Config['CpuCareAdaptive']}}catch{}
+        if($adaptive){
+            $kn=Get-YumCpuKnowledge
+            if($null -eq $kn){ try{ $cc=$script:Yum['CommunityKnowledge']; if($null -eq $cc -or ([datetime]::UtcNow-[datetime]$cc.At).TotalMinutes -ge 10){ $cc=@{At=[datetime]::UtcNow;Data=(Get-YumCommunityKnowledgeForThisPc)}; $script:Yum['CommunityKnowledge']=$cc }; $kn=$cc.Data }catch{} }
+            $adv=Get-YumGamingAdvice -Knowledge $kn -CurrentLevel $level -GameAloneShare ([double]$st['GameAlone'][$gName]) -OtherShare ([math]::Max(0.0,$total-$gUse))
+            if($null -ne $adv){
+                $effLevel=[string]$adv.Level
+                if([string]$st['AdviceNote'] -ne [string]$adv.Reason){ $st['AdviceNote']=[string]$adv.Reason; try{Write-YumLog ('CPU care (learned): {0}' -f $adv.Reason)}catch{} }
+            }
+        }
+        # Learned "Strong is better here": upgrade programs already held back at Below Normal.
+        if($effLevel -eq 'Strong' -and $level -ne 'Strong'){
+            foreach($r in @($st.Restrained.Values)){
+                if([string]$r.AppliedPriority -ne 'BelowNormal' -or -not $byId.ContainsKey([int]$r.Id)){continue}
+                try{ $p=$byId[[int]$r.Id]; if([string]$p.PriorityClass -ne 'BelowNormal'){continue}; $p.PriorityClass=[System.Diagnostics.ProcessPriorityClass]::Idle; $r.AppliedPriority='Idle'; try{$r.Eco=[YumCpuCareNative]::EcoQoS([int]$r.Id,$true)}catch{}; try{$r.Mem=[YumCpuCareNative]::MemoryPriority([int]$r.Id,2)}catch{}; Save-YumCpuBalanceRestrained }catch{}
+            }
+        }
+    }
+    $st['EffectiveLevel']=$effLevel
 
     # 1) Restore: exited, now foreground/same app, calm, or the PC is no longer busy.
     foreach($r in @($st.Restrained.Values)){
@@ -320,6 +488,7 @@ function Invoke-YumCpuBalanceTick {
         }
     }
     $st.Hot=$hot
+    $parents=$null   # filled once, only if a candidate needs it
     foreach($id in @($hot.Keys | Sort-Object { -[double]$usage[$_] })){
         if($st.Restrained.Count -ge $cfg.MaxRestrained){break}
         if([int]$hot[$id] -lt $cfg.HotSeconds){continue}
@@ -330,17 +499,18 @@ function Invoke-YumCpuBalanceTick {
         $why=Test-YumCpuBalanceEligible -P ([pscustomobject]@{Name=$p.ProcessName;Id=$id;SessionId=$sess;Priority=$prio;Path=$path}) -ForegroundPid $fgPid -ForegroundName $fgName -GamePid $gamePid -Settings $cfg
         if($why){continue}
         # Children of the foreground app (e.g. a game's helper) are part of what you are using.
-        try{ $parent=[int](Get-CimInstance Win32_Process -Filter ("ProcessId={0}" -f $id) -Property ParentProcessId -ErrorAction Stop).ParentProcessId; if($fgPid -gt 0 -and $parent -eq $fgPid){continue} }catch{}
+        if($null -eq $parents){ $parents=@{}; try{ if($null -ne $snapAll){ foreach($kv in $snapAll.GetEnumerator()){ $parents[[int]$kv.Key]=[int]$kv.Value.Parent } } else { $parents=[YumProcTree]::Parents() } }catch{} }
+        try{ if($fgPid -gt 0 -and $parents.ContainsKey($id) -and [int]$parents[$id] -eq $fgPid){continue} }catch{}
         try{
             # Strong = Task Manager's Efficiency mode (Idle priority + EcoQoS) + low memory priority, so
             # Windows also drops this program's cached pages before yours. Gentle/Balanced = Below Normal.
-            $strong=($level -eq 'Strong')
+            $strong=($effLevel -eq 'Strong')
             $p.PriorityClass=if($strong){[System.Diagnostics.ProcessPriorityClass]::Idle}else{[System.Diagnostics.ProcessPriorityClass]::BelowNormal}
             $eco=$false;$mem=$false
             $useEco=$true;try{if($script:Yum.Config.Contains('CpuCareUseEcoQoS')){$useEco=[bool]$script:Yum.Config['CpuCareUseEcoQoS']}}catch{}
             if($strong){ if($useEco){try{$eco=[YumCpuCareNative]::EcoQoS($id,$true)}catch{}}; try{$mem=[YumCpuCareNative]::MemoryPriority($id,2)}catch{} }
             $ticks=0L;try{$ticks=$p.StartTime.Ticks}catch{}
-            $st.Restrained[$id]=@{Id=$id;Name=[string]$p.ProcessName;Since=Get-Date;StartTicks=$ticks;LastPercent=[double]$usage[$id];CalmTicks=0;AppliedPriority=$(if($strong){'Idle'}else{'BelowNormal'});RoomMask=[uint64]0;OriginalAffinity=[uint64]0;Eco=$eco;Mem=$mem;Room=$false}
+            $st.Restrained[$id]=@{Id=$id;Name=[string]$p.ProcessName;Since=Get-Date;StartTicks=$ticks;LastPercent=[double]$usage[$id];CalmTicks=0;AppliedPriority=$(if($strong){'Idle'}else{'BelowNormal'});RoomMask=[uint64]0;OriginalAffinity=[uint64]0;Eco=$eco;Mem=$mem;Room=$false;RoomFailed=$false;RoomChecked=$false;RoomTicks=0;FgBefore=0.0}
             $today=(Get-Date).ToString('yyyy-MM-dd');if($st.Day -ne $today){$st.Day=$today;$st.TodayCount=0}
             $st.TodayCount=[int]$st.TodayCount+1
             $st.LastAction=('{0:T}  held back {1} ({2:N0}% of the CPU while the PC was at {3:N0}%)' -f (Get-Date),$p.ProcessName,[double]$usage[$id],$total)
@@ -379,8 +549,8 @@ function Invoke-YumCpuBalanceTick {
                 try{Write-YumLog ('CPU care: room for {0} kept - {1} gets {2:N0}% CPU (was {3:N0}%).' -f $r.Name,$fgName,[double]$afterAvg,[double]$r.FgBefore)}catch{}
             }
         }
-    if($level -ne 'Gentle' -and [uint64]$prof.HogMask -ne 0 -and $total -ge $(if($gaming){70}else{85})){
-        $after=if($gaming){1}elseif($level -eq 'Strong'){3}else{8}
+    if($effLevel -ne 'Gentle' -and [uint64]$prof.HogMask -ne 0 -and $total -ge $(if($gaming){70}else{85})){
+        $after=if($gaming){1}elseif($effLevel -eq 'Strong'){3}else{8}
         if($fgBusy -ge 3.0 -or $gaming){
             foreach($r in @($st.Restrained.Values)){
                 if([bool]$r.Room -or [bool]$r.RoomFailed -or ((Get-Date)-[datetime]$r.Since).TotalSeconds -lt $after -or [double]$r.LastPercent -lt $cfg.ProcessPercent){continue}
@@ -402,6 +572,8 @@ function Invoke-YumCpuBalanceTick {
     try{ $byName=@{}; foreach($id in $usage.Keys){ if($byId.ContainsKey($id)){ $nm=[string]$byId[$id].ProcessName; if($nm -ieq 'Idle'){continue}; $byName[$nm]=[double]$byName[$nm]+[double]$usage[$id] } }; $st.Top=@($byName.GetEnumerator() | Sort-Object Value -Descending | Select-Object -First 3 | Where-Object { $_.Value -ge 1.0 } | ForEach-Object { '{0} {1:N0}%' -f $_.Key,$_.Value }) }catch{}
     $st.Active=($st.Restrained.Count -gt 0)
     $st.TickMs=[math]::Round($sw.Elapsed.TotalMilliseconds,1)
+    # 5.15: leak sampling (once a minute, ~0.7 s under full load) runs after the decisions, never before them.
+    try{ Update-YumLeakWatch -ById $byId -State $st }catch{ try{Write-YumLogException -Context 'Leak watch failed' -Exception $_.Exception}catch{} }
 }
 
 $script:YumCpuBalanceWorkerScript = {
@@ -414,6 +586,9 @@ $script:YumCpuBalanceWorkerScript = {
     try{ [System.Threading.Thread]::CurrentThread.Priority=[System.Threading.ThreadPriority]::AboveNormal }catch{}
     try{ Write-YumLog 'CPU balance worker started.' }catch{}
     try{ Restore-YumCpuBalanceInterrupted }catch{}
+    # 5.15: warm up while the PC is (usually) calm. Measured under a saturating load: the very first check
+    # took ~10 s (CPU layout via WMI 6.3 s + first-call compilation of every function); afterwards ~0.1 s.
+    try{ $null=Get-YumCpuProfile; $null=Get-YumCpuCareLevel; $null=Get-YumCpuBalanceSettings; $null=[YumProcTree]::Snapshot(); $null=Get-YumForegroundProcessId; Invoke-YumCpuBalanceTick }catch{}
     $handles=[System.Threading.WaitHandle[]]@($StopEvent.WaitHandle,[YumForegroundHook]::Wake)
     # Every second, or at once when you switch apps (foreground hook on the UI thread).
     while([System.Threading.WaitHandle]::WaitAny($handles,1000) -ne 0){
@@ -431,7 +606,7 @@ function Start-YumCpuBalanceWorker {
     $ps=[powershell]::Create();$ps.Runspace=$rs
     [void]$ps.AddScript($script:YumCpuBalanceWorkerScript.ToString())
     [void]$ps.AddArgument($script:Yum);[void]$ps.AddArgument([string]$script:Yum.Root);[void]$ps.AddArgument($stop)
-    [void]$ps.AddArgument([string[]]@('Core\Logging.ps1','Core\Config.ps1','Core\Native.ps1','Core\Telemetry.ps1','Core\CpuBalance.ps1','Core\LeakWatch.ps1'))
+    [void]$ps.AddArgument([string[]]@('Core\Logging.ps1','Core\Config.ps1','Core\Native.ps1','Core\Telemetry.ps1','Core\CpuBalance.ps1','Core\LeakWatch.ps1','Core\Community.ps1'))
     $script:Yum['CpuBalanceStop']=$stop;$script:Yum['CpuBalanceRunspace']=$rs;$script:Yum['CpuBalancePowerShell']=$ps;$script:Yum['CpuBalanceAsync']=$ps.BeginInvoke()
 }
 

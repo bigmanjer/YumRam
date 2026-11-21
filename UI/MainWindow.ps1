@@ -418,6 +418,8 @@ function Invoke-YumInstallUpdate {
 }
 function Update-YumNoticesUi {
     # 5.12: leak alerts (queued by the CPU care worker) and a low-RAM warning, shown as tray notices.
+    # 5.15: after "Measure games" finishes, share (opted in) or ask once.
+    try{ if([bool]$script:Yum['CommunityPromptPending']){ $script:Yum['CommunityPromptPending']=$false; Invoke-YumCommunityAfterBenchmark } }catch{}
     try{
         $st=Get-YumCpuBalanceState
         $q=$st['LeakNotices']
@@ -570,6 +572,7 @@ function Start-YumApplicationUi {
     try{ Update-YumFreedStatsUi }catch{}
     # 5.10: once-a-day GitHub release check in the background (Settings > General to turn off).
     try{ Start-YumUpdateCheck }catch{ Write-YumLogException -Context 'Update check start failed' -Exception $_.Exception }
+    try{ Start-YumCommunityFetch }catch{}   # 5.15: shared game results (weekly, public file, sends nothing about you)
     [System.Windows.Threading.Dispatcher]::PushFrame($script:Yum.MainFrame)   # returns when the window closes
 }
 function Update-YumReclaimButtons {

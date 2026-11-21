@@ -128,6 +128,9 @@
               <StackPanel>
                 <TextBlock Text="THIS PC" Style="{StaticResource StatLabel}"/>
                 <TextBlock x:Name="CpuProfileText" Text="" Style="{StaticResource Caption}" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                <CheckBox x:Name="CpuCareAdaptive" Content="While I play, use the level this PC's game benchmark found best" Margin="0,12,0,0" ToolTip="Only while a detected game is in front, and only when the benchmark showed the other level clearly better (10 % or more on repeated runs) for that kind of game and background load."/>
+                <TextBlock x:Name="CpuKnowledgeText" Text="" Style="{StaticResource Caption}" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                <Button x:Name="CpuBench" Content="Measure games on this PC (about 15 min)" Style="{StaticResource GhostButton}" HorizontalAlignment="Left" Margin="0,8,0,0" ToolTip="Runs YUMRAM's own test game next to test background loads with every CPU care level. Your programs are not touched. Close games and keep the laptop plugged in."/>
               </StackPanel>
             </Border>
             <Grid Style="{StaticResource Row}"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="140"/></Grid.ColumnDefinitions>
@@ -167,6 +170,11 @@
               <StackPanel>
                 <CheckBox x:Name="EnableOnlineResearch" Content="Online research for unidentified programs"/>
                 <TextBlock Text="Sends the program, publisher and product name to Bing search. Nothing else leaves your PC. When off, Intelligence still identifies programs locally (signatures, installed-software records, services, Store packages)." Style="{StaticResource Caption}" Margin="27,2,0,0"/>
+                <CheckBox x:Name="CommunityShareEnabled" Content="Help everyone: share my game benchmark results (opt-in)" Margin="0,14,0,0"/>
+                <TextBlock Text="Off unless you turn it on. After &quot;Measure games&quot; YUMRAM shares your CPU model and layout, laptop or desktop, Windows build, YUMRAM version and the frame rates its own test game reached - nothing else (no program names, files, user or PC names, no ID). You can see the exact text first." Style="{StaticResource Caption}" Margin="27,2,0,0" TextWrapping="Wrap"/>
+                <Button x:Name="CommunityShareNow" Content="See and share my results now…" Style="{StaticResource GhostButton}" HorizontalAlignment="Left" Margin="27,6,0,0"/>
+                <CheckBox x:Name="CommunityUseShared" Content="Use game results shared by other people with the same CPU" Margin="0,14,0,0"/>
+                <TextBlock Text="Once a week YUMRAM downloads a public file of shared results from GitHub (the request carries nothing about you). Used only while you play, only when at least 3 people with your CPU agree, and only until this PC has measured games itself." Style="{StaticResource Caption}" Margin="27,2,0,0" TextWrapping="Wrap"/>
               </StackPanel>
             </GroupBox>
             <GroupBox Header="System inventory scanner" Visibility="Collapsed">

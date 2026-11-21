@@ -1,0 +1,6 @@
+{
+  "Schema": 1,
+  "Updated": "2026-11-21",
+  "Note": "Shared YUMRAM game benchmark results, grouped by CPU. Built by Tools/Build-CommunityKnowledge.ps1 from opt-in submissions. A CPU is used by YUMRAM only with 3 or more contributors.",
+  "Cpus": []
+}

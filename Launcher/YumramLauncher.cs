@@ -29,7 +29,7 @@ static class YumramLauncher
 {
     // Root-level files that belong to the user and are never replaced or removed by an update.
     static readonly string[] UserDataExtensions = { ".json", ".log", ".tmp" };
-    static readonly string[] SkipDirs = { ".previous", ".git", "Runtime" };
+    static readonly string[] SkipDirs = { ".previous", ".git", "Runtime", "cpu-bench" };
 
     [STAThread]
     static int Main(string[] args)
@@ -220,12 +220,13 @@ static class YumramLauncher
     }
 
     // Everything a YUMRAM install contains or creates (release package + runtime data). Nothing else is deleted.
-    static readonly string[] OwnDirs = { "App", "Config", "Core", "UI", "Launcher", "Runtime", ".previous" };
+    static readonly string[] OwnDirs = { "App", "Config", "Core", "UI", "Launcher", "Tools", "Runtime", ".previous", "cpu-bench" };
     static readonly string[] OwnFiles = { "VERSION", "README.md", "CHANGELOG.md", "YUMRAM.exe.old",
         "config.json", "state.json", "stats.json", "history.json", "cpu-balance.json", "reclaim-learning.json", "intelligence-db.json",
         "manual-organizations.json", "research-cache.json", "research-history.json", "research-status.json",
         "research-live-results.json", "research-live-results.tmp", "YUMRAM.log", "Research-Diagnostics.log",
-        "YUMRAM-app-startup.log", "YUMRAM-app-startup-error.log", "YUMRAM-startup.log", "YUMRAM-launcher.log" };
+        "YUMRAM-app-startup.log", "YUMRAM-app-startup-error.log", "YUMRAM-startup.log", "YUMRAM-launcher.log",
+        "cpu-knowledge.json", "cpu-community.json", "windows-bloat-undo.json", "windows-bloat-history.json" };
 
     static string ShortcutTarget(string lnk)
     {
