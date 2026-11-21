@@ -1,6 +1,6 @@
 # Changelog
 
-# YUMRAM 5.15.4 (not released yet) — updates install themselves
+# YUMRAM 5.15.4 — updates install themselves
 
 - **Automatic updates** (user: "whenever an update becomes available it gets updated"). YUMRAM now checks GitHub
   every 6 hours while it runs (was once a day and only at start-up, so a copy living in the tray for days never
