@@ -71,6 +71,8 @@ function Update-YumStartupExplanation {
     $ui.ExplainTitle.Text=[string]$a.Friendly
     $ui.ExplainSub.Text=('{0}  •  {1}' -f $a.Publisher,$(if($a.Enabled){'starts with Windows'}else{'does not start with Windows'}))
     $ui.ExplainAdvice.Text=[string]$a.Advice
+    # 5.15.2: what it is for (which device / feature), so the advice makes sense.
+    try{ $pp=Get-YumPurpose -Name ([string]$a.Name) -Path ([string]$a.ExePath) -Publisher ([string]$a.Publisher) -DisplayName ([string]$a.Friendly); if($pp.Text){ $ui.ExplainAdvice.Text=('{0}{1}{1}{2}' -f $pp.Text,[Environment]::NewLine,[string]$a.Advice) } }catch{}
     $ui.ExplainNow.Text=if($a.Running){('Running and using {0} of RAM ({1} process{2}).' -f $a.MemoryText,$a.ProcessCount,$(if([int]$a.ProcessCount -eq 1){''}else{'es'}))}else{'Not running right now, so it is not using any RAM.'}
     $ui.ExplainEffect.Text=if($a.Enabled){'It will not open by itself next time you sign in, so it will not use RAM in the background. It stays installed - open it from the Start menu whenever you want. It keeps running until then if it is open now.'}else{'It is already off. Turning it back on makes it start by itself next time you sign in.'}
     $ui.ExplainPath.Text=if($a.ExePath){[string]$a.ExePath}else{[string]$a.Command}

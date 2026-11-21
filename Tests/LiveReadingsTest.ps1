@@ -33,7 +33,7 @@ $mw=[IO.File]::ReadAllText((Join-Path $root 'UI\MainWindow.ps1'))
 Assert-That ($mw -match 'Update-YumLiveReadingsUi -Paused') 'Overview refresh calls the live readings.'
 Assert-That ($mw -notmatch 'start monitoring for live CPU') 'No more "start monitoring for live CPU".'
 $x=[IO.File]::ReadAllText((Join-Path $root 'UI\Xaml\MainWindow.xaml'))
-Assert-That ($x -match 'x:Name="GpuVram"' -and $x -match 'GPU busy = how hard') 'GPU card shows VRAM and explains itself.'
+Assert-That ($x -match 'x:Name="GpuVram"' -and $x -match "graphics chip's 3D engine") 'GPU card shows VRAM and explains itself.'
 
 # 5.15.2: disk like Task Manager (busy %, read/write, response, free space) and X keeps YUMRAM running.
 $null=Get-YumLiveDisk; Start-Sleep -Milliseconds 1100
@@ -46,7 +46,7 @@ Assert-That ($diskMs -lt 250) ('Disk reading should be cheap, took {0:N0} ms.' -
 $dl=Format-YumDiskLines $d
 Assert-That ($dl -match 'Disk 0' -and $dl -match 'GB free of') ('Disk text incomplete: "{0}"' -f $dl)
 Assert-That ((Format-YumDiskSpeed 0.5) -match 'KB/s' -and (Format-YumDiskSpeed 12.34) -eq ('{0:N1} MB/s' -f 12.34) -and (Format-YumDiskSpeed $null) -eq '--') 'Disk speed wording.'
-Assert-That ($x -match 'x:Name="DiskBusy"' -and $x -match 'x:Name="DiskSpaceBar"' -and $x -match 'Active time') 'Overview has the disk card and explains it.'
+Assert-That ($x -match 'x:Name="DiskBusy"' -and $x -match 'x:Name="DiskSpaceBar"' -and $x -match 'x:Name="DiskRing"' -and $x -match 'x:Name="GpuRing"' -and $x -match 'Active time') 'Overview has the disk card and explains it.'
 $script:Yum['ExitRequested']=$false; $script:Yum.Config['CloseToBackground']=$true
 Assert-That (Test-YumCloseToBackground) 'X keeps YUMRAM running by default.'
 $script:Yum.Config['CloseToBackground']=$false; Assert-That (-not (Test-YumCloseToBackground)) 'Setting off: X quits.'

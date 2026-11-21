@@ -203,10 +203,38 @@ function Get-YumResearchKey {
     try{return ([BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($text))).Replace('-','')).ToLowerInvariant()}finally{$sha.Dispose()}
 }
 
+$script:YumResearchSignatureCache=@{}
+function Initialize-YumResearchSignatureCache {
+    # 5.15.2: signature checks were ~1 s per item, one at a time (about 5 of the 10 minutes a first scan's research
+    # took). Check every queued file once, 6 at a time, before the queue starts; same result object as below.
+    param([string[]]$Paths)
+    $todo=@($Paths | Where-Object { $_ } | ForEach-Object { Get-YumResearchExecutablePath -Path $_ } | Where-Object { $_ -and -not $script:YumResearchSignatureCache.ContainsKey($_.ToLowerInvariant()) } | Select-Object -Unique)
+    if($todo.Count -eq 0){return}
+    $pool=$null;$jobs=@()
+    try{
+        $pool=[runspacefactory]::CreateRunspacePool(1,6);$pool.Open()
+        $n=[math]::Min(6,$todo.Count)
+        for($k=0;$k -lt $n;$k++){
+            $part=@(for($i=$k;$i -lt $todo.Count;$i+=$n){$todo[$i]})
+            $ps=[powershell]::Create();$ps.RunspacePool=$pool
+            [void]$ps.AddScript({param($files)
+                foreach($f in $files){
+                    $o=$null
+                    try{ $sig=Get-AuthenticodeSignature -FilePath $f -ErrorAction Stop
+                         $o=[pscustomobject]@{Status=[string]$sig.Status;Signer=if($null -ne $sig.SignerCertificate){[string]$sig.SignerCertificate.Subject}else{''};Thumbprint=if($null -ne $sig.SignerCertificate){[string]$sig.SignerCertificate.Thumbprint}else{''}} }catch{}
+                    [pscustomobject]@{Path=$f;Sig=$o}
+                }
+            }).AddArgument($part)
+            $jobs+=@{PS=$ps;Handle=$ps.BeginInvoke()}
+        }
+        foreach($j in $jobs){ try{ foreach($m in @($j.PS.EndInvoke($j.Handle))){ if($null -ne $m){ $script:YumResearchSignatureCache[([string]$m.Path).ToLowerInvariant()]=$m.Sig } } }catch{} finally{ try{$j.PS.Dispose()}catch{} } }
+    }catch{} finally{ if($null -ne $pool){ try{$pool.Close();$pool.Dispose()}catch{} } }
+}
 function Get-YumResearchSignature {
     param([string]$Path)
     $filePath=Get-YumResearchExecutablePath -Path $Path
     if([string]::IsNullOrWhiteSpace($filePath)){return $null}
+    $ck=$filePath.ToLowerInvariant(); if($script:YumResearchSignatureCache.ContainsKey($ck)){ return $script:YumResearchSignatureCache[$ck] }
     try {
         $sig=Get-AuthenticodeSignature -FilePath $filePath -ErrorAction Stop
         return [pscustomobject]@{Status=[string]$sig.Status;Signer=if($null -ne $sig.SignerCertificate){[string]$sig.SignerCertificate.Subject}else{''};Thumbprint=if($null -ne $sig.SignerCertificate){[string]$sig.SignerCertificate.Thumbprint}else{''}}
@@ -280,6 +308,19 @@ function Get-YumResearchTokenOverlap {
     [int][math]::Round(($hits / [double]$a.Count) * 100,0)
 }
 
+function Get-YumResearchTokenSet {
+    # 5.15.2: the token set of an inventory entry, built once per research run instead of once per item.
+    param([AllowNull()][string]$Text)
+    return ,([System.Collections.Generic.HashSet[string]]::new([string[]]@(Convert-YumResearchText $Text)))
+}
+function Get-YumResearchOverlapFast {
+    # Same result as Get-YumResearchTokenOverlap (hits / left tokens, rounded %) with both sides pre-split.
+    param([string[]]$LeftTokens,$RightSet)
+    if($null -eq $LeftTokens -or $LeftTokens.Count -eq 0 -or $null -eq $RightSet -or $RightSet.Count -eq 0){return 0}
+    $hits=0; foreach($t in $LeftTokens){ if($RightSet.Contains($t)){$hits++} }
+    return [int][math]::Round(($hits / [double]$LeftTokens.Count) * 100,0)
+}
+
 function Get-YumResearchExecutablePath {
     param([string]$Path)
     if([string]::IsNullOrWhiteSpace($Path)){return ''}
@@ -311,7 +352,7 @@ function Get-YumResearchParentFolderEvidence {
     param([string]$Path)
     $exe=Get-YumResearchExecutablePath -Path $Path
     if([string]::IsNullOrWhiteSpace($exe)){return $null}
-    try{$item=Get-Item -LiteralPath $exe -ErrorAction Stop;$dir=$item.Directory;$hash='';try{$hash=(Get-FileHash -LiteralPath $exe -Algorithm SHA256 -ErrorAction Stop).Hash.ToLowerInvariant()}catch{};[pscustomobject]@{ExecutablePath=$item.FullName;FolderPath=[string]$dir.FullName;FolderName=[string]$dir.Name;Company=[string]$item.VersionInfo.CompanyName;Product=[string]$item.VersionInfo.ProductName;Version=[string]$item.VersionInfo.ProductVersion;FileHash=$hash}}catch{return $null}
+    try{$item=Get-Item -LiteralPath $exe -ErrorAction Stop;$dir=$item.Directory;$hash=Get-YumResearchFileHashCached $exe;[pscustomobject]@{ExecutablePath=$item.FullName;FolderPath=[string]$dir.FullName;FolderName=[string]$dir.Name;Company=[string]$item.VersionInfo.CompanyName;Product=[string]$item.VersionInfo.ProductName;Version=[string]$item.VersionInfo.ProductVersion;FileHash=$hash}}catch{return $null}
 }
 function Test-YumResearchHasDurableIdentity {
     param([string]$Name,[string]$Path,[string]$Publisher,[string]$Product,[object]$FileEvidence=$null,[object]$SignatureEvidence=$null,[object[]]$ServiceEvidence=@())
@@ -325,6 +366,13 @@ function Test-YumResearchHasDurableIdentity {
     return $false
 }
 
+$script:YumResearchHashCache=@{}
+function Get-YumResearchFileHashCached {
+    param([string]$FilePath)
+    $k=([string]$FilePath).ToLowerInvariant(); if($script:YumResearchHashCache.ContainsKey($k)){ return $script:YumResearchHashCache[$k] }
+    $h=''; try{ $h=(Get-FileHash -LiteralPath $FilePath -Algorithm SHA256 -ErrorAction Stop).Hash.ToLowerInvariant() }catch{}
+    $script:YumResearchHashCache[$k]=$h; return $h
+}
 function Get-YumResearchFileEvidence {
     param([string]$Path)
     $filePath=Get-YumResearchExecutablePath -Path $Path
@@ -333,7 +381,7 @@ function Get-YumResearchFileEvidence {
         $item=Get-Item -LiteralPath $filePath -ErrorAction Stop
         $versionInfo=$item.VersionInfo
         $hash=''
-        try{$hash=(Get-FileHash -LiteralPath $filePath -Algorithm SHA256 -ErrorAction Stop).Hash.ToLowerInvariant()}catch{}
+        $hash=Get-YumResearchFileHashCached $filePath
         [pscustomobject]@{FileVersion=[string]$versionInfo.FileVersion;Product=[string]$versionInfo.ProductName;Company=[string]$versionInfo.CompanyName;Description=[string]$versionInfo.FileDescription;Hash=$hash}
     } catch {return $null}
 }
@@ -350,25 +398,36 @@ function Get-YumInstalledSoftwareResearch {
           'Registry::HKEY_LOCAL_MACHINE\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*',
           'Registry::HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Uninstall\*'
         )
-        foreach($p in $paths){try{foreach($item in @(Get-ItemProperty -Path $p -ErrorAction SilentlyContinue)){
-            $dn=[string]$item.DisplayName;if([string]::IsNullOrWhiteSpace($dn)){continue}
-            [void]$script:YumResearchRegistryInventory.Add([pscustomobject]@{Name=$dn;Version=[string]$item.DisplayVersion;Publisher=[string]$item.Publisher;InstallLocation=[string]$item.InstallLocation;DisplayIcon=[string]$item.DisplayIcon;UninstallString=[string]$item.UninstallString;CandidateExes=@(@([string]$item.InstallLocation,[string]$item.DisplayIcon,[string]$item.UninstallString)|Where-Object{$_}|ForEach-Object{$x=Get-YumResearchExecutablePath -Path $_;if($x){$x.ToLowerInvariant()}else{''}})})  # 5.4: resolved once per run
-        }}catch{}}
+        # 5.15.2 fix: under strict mode a missing value (e.g. no DisplayVersion) threw, and the try around the whole
+        # loop dropped the rest of that hive: this PC had 3 entries instead of ~90, so installed programs such as
+        # WinRAR, Git or the NVIDIA driver could never be confirmed and ended "Unknown". Read each value safely and
+        # keep going per entry.
+        foreach($p in $paths){
+            $items=@(); try{ $items=@(Get-ItemProperty -Path $p -ErrorAction SilentlyContinue) }catch{}
+            foreach($item in $items){ try{
+                $gv={param([string]$n) if($null -ne $item.PSObject.Properties[$n]){[string]$item.$n}else{''}}
+                $dn=& $gv 'DisplayName';if([string]::IsNullOrWhiteSpace($dn)){continue}
+                $loc=& $gv 'InstallLocation';$icon=& $gv 'DisplayIcon';$un=& $gv 'UninstallString'
+                $pubText=& $gv 'Publisher'
+                [void]$script:YumResearchRegistryInventory.Add([pscustomobject]@{NameSet=(Get-YumResearchTokenSet $dn);PubSet=(Get-YumResearchTokenSet $pubText);Name=$dn;Version=(& $gv 'DisplayVersion');Publisher=$pubText;InstallLocation=$loc;DisplayIcon=$icon;UninstallString=$un;CandidateExes=@(@($loc,$icon,$un)|Where-Object{$_}|ForEach-Object{$x=Get-YumResearchExecutablePath -Path $_;if($x){$x.ToLowerInvariant()}else{''}})})  # 5.4: resolved once per run
+            }catch{} }
+        }
     }
     $rows=New-Object System.Collections.Generic.List[object]
     $targetExe=Get-YumResearchExecutablePath -Path $Path
     $targetFull=if($targetExe){$targetExe.ToLowerInvariant()}else{''}
     $targetDir='';if($targetExe){try{$targetDir=(Split-Path -Parent $targetExe).ToLowerInvariant()}catch{}}
     $nameNorm=([string]$Name).Trim();$publisherNorm=([string]$Publisher).Trim()
+    $nameTok=[string[]]@(Convert-YumResearchText $nameNorm);$pubTok=[string[]]@(Convert-YumResearchText $publisherNorm)
     foreach($item in $script:YumResearchRegistryInventory.ToArray()){
         $pathScore=0
         foreach($cNorm in @($item.CandidateExes)){
             if($targetFull -and $cNorm -and $cNorm -eq $targetFull){$pathScore=[math]::Max($pathScore,100)}
             elseif($targetDir -and $item.InstallLocation -and $targetDir.StartsWith(([string]$item.InstallLocation).TrimEnd('\').ToLowerInvariant())){$pathScore=[math]::Max($pathScore,85)}
-            elseif($targetDir -and $cNorm -and (Split-Path -Parent $cNorm) -eq $targetDir){$pathScore=[math]::Max($pathScore,80)}
+            elseif($targetDir -and $cNorm -and [IO.Path]::GetDirectoryName($cNorm) -eq $targetDir){$pathScore=[math]::Max($pathScore,80)}
         }
-        $nScore=if($nameNorm){Get-YumResearchTokenOverlap -Left $nameNorm -Right $item.Name}else{0}
-        $pScore=if($publisherNorm){Get-YumResearchTokenOverlap -Left $publisherNorm -Right $item.Publisher}else{0}
+        $nScore=if($nameNorm){Get-YumResearchOverlapFast $nameTok $item.NameSet}else{0}
+        $pScore=if($publisherNorm){Get-YumResearchOverlapFast $pubTok $item.PubSet}else{0}
         $score=[int][math]::Min(100,$pathScore+($nScore*0.45)+($pScore*0.20)+5)
         if($score -ge 35){[void]$rows.Add([pscustomobject]@{Name=$item.Name;Version=$item.Version;Publisher=$item.Publisher;InstallLocation=$item.InstallLocation;DisplayIcon=$item.DisplayIcon;UninstallString=$item.UninstallString;Score=$score;NameOverlap=$nScore;PublisherOverlap=$pScore;PathMatchScore=$pathScore;Source='Windows Registry';ExactPathMatch=($pathScore -ge 100);ParentFolderMatch=($pathScore -ge 80)})}
     }
@@ -400,7 +459,7 @@ function Get-YumWinGetInventory {
             $cut={param([int]$a,[int]$b) if($l.Length -le $a){''}elseif($l.Length -le $b){$l.Substring($a).Trim()}else{$l.Substring($a,[math]::Max(0,$b-$a)).Trim()}}
             $n=(& $cut 0 $colId) -replace '…$',''
             if([string]::IsNullOrWhiteSpace($n)){continue}
-            [void]$inv.Add([pscustomobject]@{Name=$n;Truncated=((& $cut 0 $colId) -match '…$');Id=(& $cut $colId $colVer);Version=(& $cut $colVer $(if($colSrc -gt 0){$colSrc}else{[int]::MaxValue}));SourceName=$(if($colSrc -gt 0){& $cut $colSrc ([int]::MaxValue)}else{''})})
+            $idText=(& $cut $colId $colVer); [void]$inv.Add([pscustomobject]@{NameSet=(Get-YumResearchTokenSet ($n+' '+$idText));Name=$n;Truncated=((& $cut 0 $colId) -match '…$');Id=(& $cut $colId $colVer);Version=(& $cut $colVer $(if($colSrc -gt 0){$colSrc}else{[int]::MaxValue}));SourceName=$(if($colSrc -gt 0){& $cut $colSrc ([int]::MaxValue)}else{''})})
         }
     } catch {}
     return ,$inv
@@ -414,9 +473,10 @@ function Get-YumWinGetResearch {
         $inv=Get-YumWinGetInventory
         if($inv.Count -eq 0){return $null}
         $best=$null;$bestScore=-1;$exact=$false
+        $nameTok=[string[]]@(Convert-YumResearchText $safeName)
         foreach($e in $inv.ToArray()){
             $isExact=($e.Name -ieq $safeName) -or ($e.Truncated -and $safeName.StartsWith($e.Name,[StringComparison]::OrdinalIgnoreCase))
-            $s=if($isExact){100}else{Get-YumResearchTokenOverlap -Left $safeName -Right ($e.Name+' '+$e.Id)}
+            $s=if($isExact){100}elseif($null -ne $e.PSObject.Properties['NameSet']){Get-YumResearchOverlapFast $nameTok $e.NameSet}else{Get-YumResearchTokenOverlap -Left $safeName -Right ($e.Name+' '+$e.Id)}
             if($isExact){$best=$e;$bestScore=100;$exact=$true;break}  # an exact name always wins over a token overlap of 100
             if($s -gt $bestScore){$best=$e;$bestScore=$s}
         }
@@ -433,13 +493,14 @@ function Get-YumAppxResearch {
     if($null -eq $script:YumResearchAppxInventory){
         $script:YumResearchAppxInventory=New-Object System.Collections.Generic.List[object]
         $pkgs=@();try{$pkgs=@(Get-AppxPackage -AllUsers -ErrorAction Stop)}catch{try{$pkgs=@(Get-AppxPackage -ErrorAction Stop)}catch{}}  # -AllUsers needs admin
-        foreach($pkg in $pkgs){[void]$script:YumResearchAppxInventory.Add([pscustomobject]@{Name=[string]$pkg.Name;PackageFullName=[string]$pkg.PackageFullName;Publisher=[string]$pkg.Publisher;Version=[string]$pkg.Version;InstallLocation=[string]$pkg.InstallLocation;SignatureKind=[string]$pkg.SignatureKind})}
+        foreach($pkg in $pkgs){[void]$script:YumResearchAppxInventory.Add([pscustomobject]@{NameSet=(Get-YumResearchTokenSet ([string]$pkg.Name+' '+[string]$pkg.PackageFullName));PubSet=(Get-YumResearchTokenSet ([string]$pkg.Publisher));Name=[string]$pkg.Name;PackageFullName=[string]$pkg.PackageFullName;Publisher=[string]$pkg.Publisher;Version=[string]$pkg.Version;InstallLocation=[string]$pkg.InstallLocation;SignatureKind=[string]$pkg.SignatureKind})}
     }
     $rows=New-Object System.Collections.Generic.List[object]
     $targetExe=Get-YumResearchExecutablePath -Path $Path;$targetDir='';if($targetExe){try{$targetDir=(Split-Path -Parent $targetExe).ToLowerInvariant()}catch{}}
     $nameNorm=([string]$Name).Trim()
+    $nameTok=[string[]]@(Convert-YumResearchText $nameNorm);$pubTok=[string[]]@(Convert-YumResearchText $Publisher)
     foreach($pkg in $script:YumResearchAppxInventory.ToArray()){
-        $n=if($nameNorm){Get-YumResearchTokenOverlap -Left $nameNorm -Right ($pkg.Name+' '+$pkg.PackageFullName)}else{0};$p=if($Publisher){Get-YumResearchTokenOverlap -Left $Publisher -Right $pkg.Publisher}else{0}
+        $n=if($nameNorm){Get-YumResearchOverlapFast $nameTok $pkg.NameSet}else{0};$p=if($Publisher){Get-YumResearchOverlapFast $pubTok $pkg.PubSet}else{0}
         $pathScore=0;if($targetDir -and $pkg.InstallLocation -and $targetDir.StartsWith($pkg.InstallLocation.TrimEnd('\').ToLowerInvariant())){$pathScore=100}
         # 5.4: an exact package identity in Windows' own package store is definitive (Store packages have
         # no .exe path, so the name/publisher blend alone capped them at ~60 and they stayed Unknown).
@@ -709,14 +770,15 @@ function Get-YumServiceResearch {
     param([string]$Name,[string]$Path='')
     if($null -eq $script:YumResearchServiceInventory){
         $script:YumResearchServiceInventory=New-Object System.Collections.Generic.List[object]
-        try{foreach($svc in @(Get-CimInstance Win32_Service -ErrorAction Stop)){[void]$script:YumResearchServiceInventory.Add([pscustomobject]@{Name=[string]$svc.Name;DisplayName=[string]$svc.DisplayName;PathName=[string]$svc.PathName;StartMode=[string]$svc.StartMode;State=[string]$svc.State;ExePath=(Get-YumResearchExecutablePath -Path ([string]$svc.PathName))})}}catch{}  # 5.4: resolve each service's executable once per run
+        try{foreach($svc in @(Get-CimInstance Win32_Service -ErrorAction Stop)){[void]$script:YumResearchServiceInventory.Add([pscustomobject]@{NameSet=(Get-YumResearchTokenSet ([string]$svc.Name+' '+[string]$svc.DisplayName));Name=[string]$svc.Name;DisplayName=[string]$svc.DisplayName;PathName=[string]$svc.PathName;StartMode=[string]$svc.StartMode;State=[string]$svc.State;ExePath=(Get-YumResearchExecutablePath -Path ([string]$svc.PathName))})}}catch{}  # 5.4: resolve each service's executable once per run
     }
     $rows=New-Object System.Collections.Generic.List[object]
     $targetExe=Get-YumResearchExecutablePath -Path $Path;$targetFull=if($targetExe){$targetExe.ToLowerInvariant()}else{''}
+    $nameTok=[string[]]@(Convert-YumResearchText $Name)
     foreach($svc in $script:YumResearchServiceInventory.ToArray()){
         $exe=[string]$svc.ExePath;$exeNorm=if($exe){$exe.ToLowerInvariant()}else{''}
-        $nameScore=if($Name){Get-YumResearchTokenOverlap -Left $Name -Right ($svc.Name+' '+$svc.DisplayName)}else{0};$pathScore=0
-        if($targetFull -and $exeNorm -and $targetFull -eq $exeNorm){$pathScore=100}elseif($targetFull -and $exeNorm -and (Split-Path -Parent $targetFull) -eq (Split-Path -Parent $exeNorm)){$pathScore=85}elseif($Path -and $svc.PathName -and $svc.PathName -like ('*'+$Name+'*')){$pathScore=45}
+        $nameScore=if($Name){Get-YumResearchOverlapFast $nameTok $svc.NameSet}else{0};$pathScore=0
+        if($targetFull -and $exeNorm -and $targetFull -eq $exeNorm){$pathScore=100}elseif($targetFull -and $exeNorm -and [IO.Path]::GetDirectoryName($targetFull) -eq [IO.Path]::GetDirectoryName($exeNorm)){$pathScore=85}elseif($Path -and $svc.PathName -and $svc.PathName -like ('*'+$Name+'*')){$pathScore=45}
         $score=[int][math]::Max($nameScore,$pathScore)
         if($score -ge 30){$folder=Get-YumResearchParentFolderEvidence -Path $exe;[void]$rows.Add([pscustomobject]@{Name=$svc.Name;DisplayName=$svc.DisplayName;PathName=$svc.PathName;ExecutablePath=$exe;ParentFolder=if($folder){$folder.FolderPath}else{''};ParentFolderName=if($folder){$folder.FolderName}else{''};Company=if($folder){$folder.Company}else{''};Product=if($folder){$folder.Product}else{''};Version=if($folder){$folder.Version}else{''};FileHash=if($folder){$folder.FileHash}else{''};StartMode=$svc.StartMode;State=$svc.State;Score=$score;PathMatchScore=$pathScore;ExactPathMatch=($pathScore -ge 100)})}
     }
@@ -849,6 +911,11 @@ function Get-YumResearchPlacement {
         }
     }
 
+    # 5.15.2: an installed driver package from a hardware maker ("NVIDIA Graphics Driver", "Realtek High Definition
+    # Audio Driver") is hardware, not an ordinary app, however much app-style evidence it has.
+    if($baseName -match '(?i)\bdrivers?\b|chipset|firmware|\bphysx\b' -and $Publisher -match '(?i)nvidia|advanced micro devices|\bamd\b|intel|realtek|qualcomm|mediatek|broadcom|synaptics|elan|asus|dell|hp inc|lenovo|logitech|razer|corsair|dolby|dts|conexant|cirrus|microsoft'){
+        $scores.Drivers=[math]::Max($scores.Drivers,[int]$scores.Application+10);[void]$evidence.Add('Hardware maker''s driver package')
+    }
     $ordered=@($scores.GetEnumerator()|Sort-Object Value -Descending)
     $winner=$ordered[0].Key;$top=[int]$ordered[0].Value;$second=[int]$ordered[1].Value
     $confidence=[math]::Min(99,[math]::Max(0,50+$top-$second))
@@ -1018,6 +1085,7 @@ function Invoke-YumResearch {
     $script:YumResearchAppxInventory=$null
     $script:YumResearchServiceInventory=$null
     $script:YumResearchWinGetInventory=$null
+    $script:YumResearchSignatureCache=@{}; $script:YumResearchHashCache=@{}   # per run: an updated file is re-checked
     # Research is intentionally single-item sequential. This prevents concurrent evidence lookups, UI contention, and network bursts.
     $researchConcurrency=1 # hard safety contract: one research item at a time
     # Normalize null/empty input defensively. Empty research queues are valid no-ops.
@@ -1058,6 +1126,8 @@ function Invoke-YumResearch {
     $queueIndex=0
     Set-YumResearchStatus -Key '' -Name 'Review Research Queue' -Stage 'Started' -Index 0 -Total $totalRecords -Message ('Research queue started with {0} records.' -f $totalRecords)
     Write-YumResearchLiveSnapshot -RunId $RunId -Completed 0 -Total $totalRecords -Records @()
+    try{ Set-YumResearchStatus -Key '' -Name 'Checking digital signatures' -Stage 'Started' -Index 0 -Total $totalRecords -Message 'Checking who signed each program (6 at a time).'; Initialize-YumResearchSignatureCache -Paths @($Records | ForEach-Object { [string]$_.Path }) }catch{}
+    $lastFlush=Get-Date
 
     foreach($r in @($Records)){
         $queueIndex++
@@ -1082,7 +1152,7 @@ function Invoke-YumResearch {
                 $r|Add-Member -NotePropertyName ResearchRunResolved -NotePropertyValue $false -Force
                 $r|Add-Member -NotePropertyName ResearchRunOnline -NotePropertyValue $false -Force
                 [void]$out.Add($r)
-                Write-YumResearchLiveSnapshot -RunId $RunId -Completed $queueIndex -Total $totalRecords -Records $out.ToArray()
+                if(((Get-Date)-$lastFlush).TotalSeconds -ge 2){ Write-YumResearchLiveSnapshot -RunId $RunId -Completed $queueIndex -Total $totalRecords -Records $out.ToArray(); $lastFlush=Get-Date }
                 continue
             }
             $fileEvidenceForKey=Get-YumResearchFileEvidence -Path ([string]$r.Path)
@@ -1460,9 +1530,15 @@ function Invoke-YumResearch {
             if($null -eq $r.PSObject.Properties['ResearchDecision']){$r|Add-Member -NotePropertyName ResearchDecision -NotePropertyValue '' -Force}
         } catch {}
         [void]$out.Add($r)
-        if($changed){[void](Save-YumResearchCache -Cache $cache);$changed=$false}
-        Write-YumResearchLiveSnapshot -RunId $RunId -Completed $queueIndex -Total $totalRecords -Records $out.ToArray()
+        # 5.15.2: the cache (4 MB on a full PC) and the live checkpoint were rewritten after every item - about 1 s of
+        # file writing per item, growing as the list grew. Now at most every 2 s; always at the end (below).
+        if(((Get-Date)-$lastFlush).TotalSeconds -ge 2){
+            if($changed){[void](Save-YumResearchCache -Cache $cache);$changed=$false}
+            Write-YumResearchLiveSnapshot -RunId $RunId -Completed $queueIndex -Total $totalRecords -Records $out.ToArray()
+            $lastFlush=Get-Date
+        }
     }
+    Write-YumResearchLiveSnapshot -RunId $RunId -Completed $queueIndex -Total $totalRecords -Records $out.ToArray()
     if($changed){[void](Save-YumResearchCache -Cache $cache);$changed=$false}
     Write-YumResearchDiagnostic -RunId $RunId -Stage 'QueueComplete' -Message ('Research queue complete: researched={0}; cached={1}; resolved={2}; unknown={3}; errors={4}' -f $researchedCount,$cachedCount,$reviewResolvedCount,$unknownCount,@($out|Where-Object{[string]$_.ResearchStatus -eq 'Research Error'}).Count)
     Set-YumResearchStatus -Key '' -Name 'Review Research Queue' -Stage 'Complete' -Index $totalRecords -Total $totalRecords -Message ('Research queue complete: {0} researched; {1} resolved from Review; {2} unresolved → Unknown; {3} research errors pending retry.' -f $researchedCount,$reviewResolvedCount,$unknownCount,@($out|Where-Object{[string]$_.ResearchStatus -eq 'Research Error'}).Count)

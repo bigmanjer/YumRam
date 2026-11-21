@@ -32,7 +32,9 @@ Only the UI thread touches WPF objects; workers publish data into `$script:Yum` 
 | Knowledge | `Core\Intelligence.ps1`, `Core\Research.ps1`, `Core\Scanner.ps1`, `Core\ProcessGuide.ps1` | identity (path, signer, hash), risk lanes, manual organisation, user-triggered scan (every process/service/app + installed programs, signatures checked once per file in parallel, known-apps catalog, one advice vocabulary) and optional online research |
 | Windows | `Core\Startup.ps1`, `Core\WindowsBloat.ps1`, `Core\Bloatware.ps1`, `Core\Elevation.ps1` | startup items (Run keys, Startup folders, Store startup tasks, sign-in scheduled tasks); Windows bloat apps/settings with exact undo; opt-in closing of listed background apps; admin modes |
 | Distribution | `Core\Updates.ps1`, `Core\Report.ps1`, `Core\Community.ps1` | GitHub release check + SHA-256 verified install; "Report a problem" pre-filled issue; opt-in game-result sharing and weekly shared file |
-| Live readings | `Core\LiveReadings.ps1` | Overview CPU % / speed / GPU busy / VRAM per chip (counters + DXGI), UI thread, every 2 s only while the Overview is visible; works with monitoring off |
+| Live readings | `Core\LiveReadings.ps1` | Overview CPU % / speed / GPU busy / VRAM per chip (counters + DXGI) and disk busy / speed / free space (PhysicalDisk counters), UI thread, every 2 s only while the Overview or mini bar is visible; works with monitoring off |
+| What is it for | `Core\Purpose.ps1` | Plain "what is it / used for which device" text from the catalog, service descriptions and file version info; cached; used by Intelligence, What's running and Startup apps |
+| Mini bar | `UI\MiniBar.ps1` | Small always-on-top floating bar (RAM / CPU / GPU / disk, Free RAM, Open, hide to tray); position saved as MiniBarLeft / MiniBarTop |
 | UI | `UI\Shell.ps1`, `UI\MainWindow.ps1`, `UI\Dialogs.ps1`, `UI\*Page.ps1`, `UI\Tray.ps1`, `UI\Xaml\*` | one window with a sidebar (Ctrl+1..8), tray, global hotkey, toasts |
 
 ## Data files (next to YUMRAM; never in the release package)

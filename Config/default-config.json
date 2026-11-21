@@ -341,6 +341,7 @@
   "ShowTrayIcon": true,
   "MinimizeToTray": true,
   "CloseToBackground": true,
+  "MiniBarOnMinimize": false,
   "GlobalHotkeyEnabled": true,
   "GlobalHotkey": "Ctrl+Alt+R",
   "UpdateCheckEnabled": true,

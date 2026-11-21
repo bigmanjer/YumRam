@@ -71,4 +71,15 @@ Assert-That ($mr -notmatch 'Process working sets reduced' -and $mr -notmatch 'Hi
 $mwp=[IO.File]::ReadAllText((Join-Path $root 'UI\MainWindow.ps1'))
 Assert-That ($mwp -notmatch "'Telemetry: \{0" -and $mwp -notmatch 'Below configured target') 'Status bar / footer in plain words.'
 
+# 7. Research sees every installed program (5.15.2 fix: a strict-mode error dropped whole registry hives - this PC
+#    had 3 of ~265 entries, so WinRAR, Git, GPU-Z and the NVIDIA driver ended "Unknown" on a first scan).
+. (Join-Path $root 'Core\Research.ps1')
+$script:YumResearchRegistryInventory=$null
+$someProg=@($progs | Where-Object { $_.Publisher -and $_.Publisher -ne 'Unknown' } | Select-Object -First 3)
+foreach($pg in $someProg){ $m=@(Get-YumInstalledSoftwareResearch -Name $pg.Name -Publisher $pg.Publisher -Path $pg.Path); Assert-That ($m.Count -ge 1 -and [int]$m[0].Score -ge 60) ('Installed program not matched by research: {0}' -f $pg.Name) }
+Assert-That ($script:YumResearchRegistryInventory.Count -ge [math]::Floor($progs.Count*0.8)) ('Research registry list too short: {0} for {1} programs' -f $script:YumResearchRegistryInventory.Count,$progs.Count)
+Assert-That ((Get-YumResearchOverlapFast ([string[]]@(Convert-YumResearchText 'Google Chrome')) (Get-YumResearchTokenSet 'Chrome browser by Google')) -eq (Get-YumResearchTokenOverlap -Left 'Google Chrome' -Right 'Chrome browser by Google')) 'Fast overlap gives the same score.'
+$drv=Get-YumResearchPlacement -Name 'NVIDIA Graphics Driver 617.42' -Publisher 'NVIDIA Corporation' -Category 'Apps' -Risk 'Review' -RegistryEvidence @([pscustomobject]@{Score=70;Publisher='NVIDIA Corporation'})
+Assert-That ($drv.Placement -eq 'Drivers / Hardware') ('Driver package placed as {0}' -f $drv.Placement)
+
 Write-Host ('IdentifyAndAdviceTest passed. {0} installed programs read.' -f $progs.Count)

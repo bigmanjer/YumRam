@@ -105,6 +105,14 @@ function Get-YumLiveCpu {
     }catch{ return $null }
 }
 
+function Get-YumGpuShortName {
+    # "NVIDIA GeForce RTX 3050 Laptop GPU" -> "RTX 3050"; "AMD Radeon(TM) Graphics" -> "Radeon".
+    param([string]$Name)
+    $short=([string]$Name -replace '^(NVIDIA|AMD|Intel\(R\))\s+','' -replace '^GeForce\s+','' -replace '\(TM\)|\(R\)','' -replace '\s+(Laptop GPU|Graphics)$','').Trim()
+    if([string]::IsNullOrWhiteSpace($short)){$short=[string]$Name}
+    return $short
+}
+
 function Format-YumVram {
     param($Gpu)
     if($null -eq $Gpu -or $null -eq $Gpu.Main){return ''}
@@ -114,8 +122,7 @@ function Format-YumVram {
     #   RTX 3050  0.0 / 3.9 GB
     #   Radeon  0.4 / 0.5 GB
     $lines=foreach($a in @($Gpu.Adapters | Sort-Object VramTotalGB -Descending | Select-Object -First 2)){
-        $short=([string]$a.Name -replace '^(NVIDIA|AMD|Intel\(R\))\s+','' -replace '^GeForce\s+','' -replace '\(TM\)|\(R\)','' -replace '\s+(Laptop GPU|Graphics)$','').Trim()
-        if([string]::IsNullOrWhiteSpace($short)){$short=[string]$a.Name}
+        $short=Get-YumGpuShortName ([string]$a.Name)
         if($null -ne $a.VramUsedGB -and [double]$a.VramTotalGB -gt 0){ '{0}  {1:N1} / {2:N1} GB' -f $short,[double]$a.VramUsedGB,[double]$a.VramTotalGB }
         elseif([double]$a.VramTotalGB -gt 0){ '{0}  {1:N1} GB' -f $short,[double]$a.VramTotalGB }
     }

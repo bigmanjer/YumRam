@@ -28,12 +28,33 @@ Compared with 5.15.1 (measured on the test PC: Ryzen 7 4800H, RTX 3050 Laptop + 
   *Careful* (red, not identified), with a legend on Startup apps and Windows bloat and an "Our advice" badge in
   Intelligence and What's running. Startup shows "Turn off (recommended)", "Keep on (required)",
   "Keep on (device)", "Your call"; Windows bloat "Remove (recommended)" / "Turn off (recommended)" / "Your call".
+- **Overview reorganised** (user: "cluttered, hard to understand"): the top row answers "what is my PC doing
+  right now?" with four matching ring tiles - RAM free, CPU, Graphics (GPU) and Disk. Below: the History graph on
+  the left and everything you can do on the right (Free RAM, automatic care, game, RAM freed, CPU care, goal).
+- **Disk like Task Manager:** busy % (active time) ring, read / write speed, response time, SSD / NVMe / USB,
+  free space on the Windows drive with a warning bar (red above 90 % full); per-disk details on hover (~24 ms
+  per read).
+- **The X button keeps YUMRAM running** in the notification area (or the taskbar when the tray icon is off);
+  "Exit YUMRAM" in the tray menu, installing an update and Windows sign-out still quit. Opening YUMRAM again
+  brings back the hidden window instead of an "already running" box. Settings: "The X button keeps YUMRAM
+  running in the background".
+- **Floating mini bar:** a small always-on-top bar (RAM, CPU, GPU, disk + Free RAM / Open / hide-to-tray) you
+  can drag anywhere; the position is remembered. Open it from the Overview's "Mini bar" button or the tray
+  menu, or make minimize / close use it (Settings). Reads only while visible.
+- **"What is it for?"** for every item in Intelligence, What's running and Startup apps: the Windows service
+  description or the file's own description, the product and maker, and the device or feature it serves
+  ("Used for: sound: your speakers, headphones and microphone", "your touchpad", "the Fn keys", "anti-cheat for
+  online games", ...). 70 % of running items on the test PC get a device / feature answer.
+- **Plain words everywhere:** Intelligence columns "Our advice" (Keep / Turn off is fine / Your call / Careful)
+  and "Checked?" instead of Risk / Status; tiles Identified / Never touched / Not checked yet / Not identified /
+  Already known / Will retry. Reclaim Center: "Free for programs", "Taken from idle apps", "Real gain last
+  time", plain reasons. Status bar "Live readings" instead of telemetry timings; CPU settings without jargon.
 - CPU care while gaming steps in from 50 % whole-PC load (was 70 %): the focused re-test showed games starved
   at 50-55 % total load with nothing held back.
 - Costs / trade-offs: the scan uses up to 6 threads for a few seconds; the Intelligence list is longer (all
   items, not 240). Older saved Intelligence records keep their saved category until the next scan; the advice
   badge already uses the new knowledge.
-- Tests: 63 (new LiveReadingsTest, IdentifyAndAdviceTest); UI probe 69 steps (paused readings, advice badge,
+- Tests: 64 (new LiveReadingsTest, IdentifyAndAdviceTest, PurposeAndMiniBarTest); UI probe 77 steps (paused readings, rings, mini bar, X button, advice badge,
   scan visibility). GitHub Actions workflow is manual-only while the account's billing lock is on.
 # YUMRAM 5.15.1 — CPU load reading fix, readable Store publishers, docs
 

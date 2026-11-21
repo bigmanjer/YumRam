@@ -66,6 +66,9 @@ function Initialize-YumTray {
     $open=$menu.Items.Add('Open YUMRAM');$open.Font=New-Object System.Drawing.Font($open.Font,[System.Drawing.FontStyle]::Bold)
     $free=$menu.Items.Add('Free RAM now')
     $mon=$menu.Items.Add('Start monitoring')
+    $mini=$menu.Items.Add('Show mini bar');$mini.ToolTipText='A small floating bar with RAM, CPU, GPU and disk. Drag it anywhere.'
+    $mini.Add_Click({ try{ $mb=$script:Yum['MiniBar']; if($null -ne $mb -and $mb.Window.IsVisible){ Hide-YumMiniBar }else{ $mb=Initialize-YumMiniBar; $mb.Window.Show() } }catch{ Write-YumLogException -Context 'Tray mini bar failed' -Exception $_.Exception } })
+    $script:Yum['TrayMenuMini']=$mini
     [void]$menu.Items.Add((New-Object System.Windows.Forms.ToolStripSeparator))
     $report=$menu.Items.Add('Report a problem…');$report.ToolTipText='Opens the GitHub bug form in your browser, filled in (no user or PC names). Nothing is posted until you press Create.'
     $report.Add_Click({ [void](Open-YumReportProblem) })
@@ -78,6 +81,7 @@ function Initialize-YumTray {
         try{
             $script:Yum.TrayMenuMonitor.Text=if($null -eq $script:Yum.TelemetryTimer){'Start monitoring'}else{'Stop monitoring'}
             $script:Yum.TrayMenuFreeRam.Enabled=-not (Test-YumReclaimBusy)
+            $mb=$script:Yum['MiniBar']; $script:Yum['TrayMenuMini'].Text=if($null -ne $mb -and $mb.Window.IsVisible){'Hide mini bar'}else{'Show mini bar'}
         }catch{}
     })
     $icon.ContextMenuStrip=$menu
@@ -118,6 +122,7 @@ function Update-YumTray {
 function Show-YumMainWindow {
     $w=$script:Yum.Window
     if($null -eq $w){return}
+    try{ Hide-YumMiniBar }catch{}
     try{
         if(-not $w.IsVisible){$w.Show()}
         if($w.WindowState -eq [System.Windows.WindowState]::Minimized){$w.WindowState=[System.Windows.WindowState]::Normal}
@@ -169,6 +174,7 @@ function Test-YumCloseToBackground {
 function Invoke-YumCloseToBackground {
     # With the tray icon: hide to the notification area. Without it: minimize to the taskbar (never vanish).
     $w=$script:Yum.Window
+    if(Test-YumMiniBarPreferred){ Show-YumMiniBar; try{ Write-YumLog 'Window closed with X: YUMRAM keeps running as the mini bar.' }catch{}; return }
     if($null -ne $script:Yum.TrayIcon){
         $first=-not [bool]$script:Yum['CloseHintShown']; $script:Yum['CloseHintShown']=$true
         $script:Yum.TrayHintShown=$true

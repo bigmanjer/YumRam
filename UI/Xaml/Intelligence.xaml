@@ -160,6 +160,8 @@
               <TextBlock Text="SELECTED ITEM" Style="{StaticResource StatLabel}"/>
               <TextBlock x:Name="SelectedName" Text="Nothing selected" FontSize="18" FontWeight="SemiBold" Foreground="{StaticResource Brand}" TextWrapping="Wrap" Margin="0,4,0,0"/>
               <TextBlock x:Name="SelectedMeta" Text="Select an item in the list to see what it is, the evidence and what YUMRAM will do with it." Style="{StaticResource Caption}" TextWrapping="Wrap" Margin="0,2,0,0"/>
+              <TextBlock Text="WHAT IS IT FOR?" Style="{StaticResource PanelLabel}"/>
+              <TextBlock x:Name="SelectedPurpose" Text="—" TextWrapping="Wrap"/>
               <TextBlock Text="WHAT YUMRAM WILL DO" Style="{StaticResource PanelLabel}"/>
               <TextBlock x:Name="SelectedAction" Text="—" Foreground="{StaticResource Success}" FontWeight="SemiBold" TextWrapping="Wrap"/>
               <!-- 5.15.2: one clear piece of advice (Keep / Your call / Turn off is fine / Careful) + where the file is -->
