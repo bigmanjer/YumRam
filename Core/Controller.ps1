@@ -39,11 +39,11 @@ $script:YumControllerWorkerScript = {
             # Manual Free RAM / Deep Reclaim requests run here, off the UI thread (5.3.1).
             $reclaimMode=$null
             [System.Threading.Monitor]::Enter($script:Yum.RequestLock)
-            try{$reclaimMode=$script:Yum.ReclaimRequest;$script:Yum.ReclaimRequest=$null}finally{[System.Threading.Monitor]::Exit($script:Yum.RequestLock)}
+            try{$reclaimMode=$script:Yum.ReclaimRequest;$script:Yum.ReclaimRequest=$null;if($null -ne $reclaimMode){$script:Yum.ReclaimTaken=$true}}finally{[System.Threading.Monitor]::Exit($script:Yum.RequestLock)}
             if($null -ne $reclaimMode){
                 try{ [void](Invoke-YumMemoryReclaim -Mode $reclaimMode -Force) }
                 catch{ try{Write-YumLogException -Context 'Queued RAM reclaim failed' -Exception $_.Exception}catch{} }
-                finally{ $script:Yum.ReclaimResultVersion++ }
+                finally{ $script:Yum.ReclaimTaken=$false; $script:Yum.ReclaimResultVersion++ }
             }
             if([bool]$script:Yum.MonitoringActive){
                 $snap = Get-YumSnapshotCopy
@@ -72,7 +72,7 @@ function Request-YumMemoryReclaim {
     param([ValidateSet('Quick','Deep')][string]$Mode='Quick')
     [System.Threading.Monitor]::Enter($script:Yum.RequestLock)
     try{
-        if([bool]$script:Yum.ReclaimRunning -or $null -ne $script:Yum.ReclaimRequest){return $false}
+        if([bool]$script:Yum.ReclaimRunning -or [bool]$script:Yum['ReclaimTaken'] -or $null -ne $script:Yum.ReclaimRequest){return $false}
         $script:Yum.ReclaimRequest=$Mode
         $script:Yum.ReclaimRequestedAt=Get-Date
     }finally{[System.Threading.Monitor]::Exit($script:Yum.RequestLock)}
@@ -82,7 +82,7 @@ function Request-YumMemoryReclaim {
 }
 
 function Test-YumReclaimBusy {
-    return ([bool]$script:Yum.ReclaimRunning -or $null -ne $script:Yum.ReclaimRequest)
+    return ([bool]$script:Yum.ReclaimRunning -or [bool]$script:Yum['ReclaimTaken'] -or $null -ne $script:Yum.ReclaimRequest)
 }
 
 function Get-YumControllerWorkerModules {

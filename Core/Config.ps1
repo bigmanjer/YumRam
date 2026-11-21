@@ -32,6 +32,7 @@
         ControllerWakeEvent = (New-Object System.Threading.AutoResetEvent($false))
         ReclaimRequest = $null
         ReclaimRequestedAt = [datetime]::MinValue
+        ReclaimTaken = $false   # 5.15: request taken by the worker, reclaim not yet flagged running (closes a busy-state gap)
         MainFrame = $null
         TrayIcon = $null
         TrayMenu = $null
@@ -223,13 +224,14 @@ function Initialize-YumConfig {
     if(-not $script:Yum.Config.Contains('TargetMaintenanceHysteresisGB')){$script:Yum.Config.TargetMaintenanceHysteresisGB=0.3}
     if(-not $script:Yum.Config.Contains('TargetMaintenanceMinimumIntervalSeconds')){$script:Yum.Config.TargetMaintenanceMinimumIntervalSeconds=15}
     if(-not $script:Yum.Config.Contains('IntelligentServiceCleanupEnabled')){$script:Yum.Config.IntelligentServiceCleanupEnabled=$false}
+    if(-not $script:Yum.Config.Contains('AutoCloseOptionalApps')){$script:Yum.Config.AutoCloseOptionalApps=$false}   # 5.15 audit F2
     if(-not $script:Yum.Config.Contains('IntelligentServiceStopThresholdGB')){$script:Yum.Config.IntelligentServiceStopThresholdGB=0.75}
     if(-not $script:Yum.Config.Contains('IntelligentServiceMaxStopsPerSession')){$script:Yum.Config.IntelligentServiceMaxStopsPerSession=2}
     if(-not $script:Yum.Config.Contains('AutoRestoreSessionStoppedServices')){$script:Yum.Config.AutoRestoreSessionStoppedServices=$true}
     # 5.3.1 migration: raise values that are still at the old (too timid) defaults. Anything the
     # user changed away from the old default is left alone.
     # Each entry: @(new value, old default, older default...). 5.4 raised the per-pass defaults again.
-    $oldDefaults=@{SafeProcessesPerPass=@(6,2,3);BalancedProcessesPerPass=@(10,3,5);AggressiveProcessesPerPass=@(16,5,8);MinimumCleanIntervalSeconds=@(15,30);ReclaimMaxProcessActions=@(8,3);GPUIntervalSeconds=@(5.0,3.0);ResearchInterItemDelayMs=@(50,250)}
+    $oldDefaults=@{AutoMemoryAreaAssistSeconds=@(600,45);SafeProcessesPerPass=@(6,2,3);BalancedProcessesPerPass=@(10,3,5);AggressiveProcessesPerPass=@(16,5,8);MinimumCleanIntervalSeconds=@(15,30);ReclaimMaxProcessActions=@(8,3);GPUIntervalSeconds=@(5.0,3.0);ResearchInterItemDelayMs=@(50,250)}
     foreach($k in $oldDefaults.Keys){
         try{
             if(-not $script:Yum.Config.Contains($k)){continue}

@@ -248,7 +248,10 @@ function Invoke-YumCleanupCore {
         $gameActive=[bool]$snapshot.Game.Detected
         $allowOptional=(-not $gameActive -and -not $SafeOnly)
         $remainingGapMB=[math]::Max(0,([double]$decision.StopTargetGB-$before)*1024.0)
-        if($allowOptional -and $remainingGapMB -gt 0 -and [bool]$script:Yum.Config.EnableOptionalBackgroundCleanup){
+        # 5.15 (audit F2): automatic care closes a listed program only if the user turned on AutoCloseOptionalApps.
+        # Before, it could close Widgets / Steam or Epic web helpers although the app promises "trim, do not close".
+        $autoClose=$false;try{$autoClose=[bool]$script:Yum.Config['AutoCloseOptionalApps']}catch{}
+        if($allowOptional -and $autoClose -and $remainingGapMB -gt 0 -and [bool]$script:Yum.Config.EnableOptionalBackgroundCleanup){
             $optionalApps=@(Get-YumOptionalBackgroundProcessCandidates -ForegroundPid $fg -GamePid $gamePid | Where-Object {[double]$_.WorkingSet/1MB -le $remainingGapMB} | Sort-Object WorkingSet -Descending | Select-Object -First $profile.OptionalApps)
         }else{$optionalApps=@()}
         # Optional services are intentionally excluded from target reclaim; stopping a service has no reliable WorkingSet estimate and can overshoot the target.
@@ -286,6 +289,9 @@ function Invoke-YumCleanupCore {
             if((((Get-Date)-$passStarted).TotalMilliseconds) -ge [double]$profile.MaxPassMilliseconds){break}
             $current=Get-YumSnapshotCopy
             if($current -and $current.Memory.AvailableGB -ge [double]$decision.StopTargetGB){break}
+            # 5.15 (audit F3): act only if this PID is still the process the candidate was built from.
+            $tk=[int64]0;try{if($item.PSObject.Properties['StartTicks']){$tk=[int64]$item.StartTicks}}catch{}
+            if(-not (Test-YumSameProcess -ProcessId ([int]$item.Process.Id) -StartTicks $tk)){ try{Write-YumLog ('Skipped PID {0}: it is no longer the process that was chosen (exited or PID reused).' -f $item.Process.Id)}catch{}; continue }
             $partialMB=0;try{if($item.PSObject.Properties['TrimMB']){$partialMB=[double]$item.TrimMB}}catch{}
             if($partialMB -gt 0){ $r=Invoke-YumReduceWorkingSet -Process $item.Process -ReduceBytes ([int64]($partialMB*1MB)) }
             else{ $r=Invoke-YumEmptyWorkingSet -Process $item.Process }
@@ -419,14 +425,18 @@ function Invoke-YumCleanupToTarget {
     $assistGainGB=0.0
     if($afterAdaptive -lt $target -and -not $safeOnlyRequested -and $null -eq $script:Yum.ReclaimRequest){
         $assistEnabled=$true;try{if($script:Yum.Config.Contains('AutoMemoryAreaAssist')){$assistEnabled=[bool]$script:Yum.Config['AutoMemoryAreaAssist']}}catch{}
-        $assistEvery=45.0;try{if($script:Yum.Config.Contains('AutoMemoryAreaAssistSeconds')){$assistEvery=[math]::Max(15.0,[double]$script:Yum.Config['AutoMemoryAreaAssistSeconds'])}}catch{}
+        $assistEvery=600.0;try{if($script:Yum.Config.Contains('AutoMemoryAreaAssistSeconds')){$assistEvery=[math]::Max(120.0,[double]$script:Yum.Config['AutoMemoryAreaAssistSeconds'])}}catch{}
         $lastAssist=[datetime]::MinValue;try{if($script:Yum.Contains('LastMemoryAreaAssist')){$lastAssist=[datetime]$script:Yum.LastMemoryAreaAssist}}catch{}
         $gameNow=$false;try{$sg=Get-YumSnapshotCopy;$gameNow=[bool]($sg -and $sg.Game -and $sg.Game.Detected)}catch{}
         if($assistEnabled -and -not $gameNow -and ((Get-Date)-$lastAssist).TotalSeconds -ge $assistEvery -and (Test-YumIsElevated)){
             $script:Yum.LastMemoryAreaAssist=Get-Date
             $assistBefore=$afterAdaptive
             $c1=Invoke-YumNativeMemoryCommand -Command TrimSystemFileCache
-            $c2=$null;if([bool]$script:Yum.Config.ReclaimModifiedPageList){$c2=Invoke-YumNativeMemoryCommand -Command FlushModifiedList}
+            # 5.15 (audit F1): automatic care no longer flushes the modified page list. Mem Reduct and WinMemClean
+            # keep that "freeze-prone" step out of automatic cleaning: it forces page-file writes and the pages
+            # then fault back from disk. Deep reclaim (user-pressed) still does it. File-cache trim runs at most
+            # every AutoMemoryAreaAssistSeconds (default 600 s, was 45 s).
+            $c2=$null
             # 5.12: combine identical pages too, at most every 30 min (measured +0.26 GB the first time).
             try{ $lc=[datetime]::MinValue;if($null -ne $script:Yum['LastMemoryCombine']){$lc=[datetime]$script:Yum['LastMemoryCombine']}; $co=$true;if($script:Yum.Config.Contains('ReclaimCombineMemory')){$co=[bool]$script:Yum.Config['ReclaimCombineMemory']}; if($co -and ((Get-Date)-$lc).TotalMinutes -ge 30){$cbr=Invoke-YumCombineMemory;$script:Yum['LastMemoryCombine']=Get-Date;try{Write-YumLog ('Memory-area assist: '+[string]$cbr.Reason)}catch{}} }catch{}
             Start-Sleep -Milliseconds 400
@@ -434,7 +444,7 @@ function Invoke-YumCleanupToTarget {
             if($fresh){Update-YumSnapshotMemory -Memory $fresh;$afterAdaptive=[double]$fresh.AvailableGB}
             $assistGainGB=[math]::Max(0.0,$afterAdaptive-$assistBefore)
             try{Write-YumLog ('Memory-area assist: system file cache {0}, modified list {1}; Available {2:N2} -> {3:N2} GB (+{4:N2} GB).' -f $(if($c1.Success){'trimmed'}else{'skipped'}),$(if($null -ne $c2 -and $c2.Success){'flushed'}else{'skipped'}),$assistBefore,$afterAdaptive,$assistGainGB)}catch{}
-            [void]$allRows.Add([pscustomobject]@{Name='System file cache + modified list';PID='—';Process='Memory areas';Score=0;Action='Memory-area assist';Result=$(if($c1.Success){'Completed'}else{'Skipped'});Reason=$c1.Reason;WorkingSetMB=0;ReducedMB=[math]::Round($assistGainGB*1024,0)})
+            [void]$allRows.Add([pscustomobject]@{Name='System file cache';PID='—';Process='Memory areas';Score=0;Action='Memory-area assist';Result=$(if($c1.Success){'Completed'}else{'Skipped'});Reason=$c1.Reason;WorkingSetMB=0;ReducedMB=[math]::Round($assistGainGB*1024,0)})
             if($afterAdaptive -ge $target){$stopReason='Target reached with memory-area assist.'}
         }
     }

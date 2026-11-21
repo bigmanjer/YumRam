@@ -13,6 +13,15 @@ function Test-YumProtectedProcess {
     return $false
 }
 
+# 5.15 (audit F3): a PID can be reused by a new process once the old one exits. Every candidate carries the
+# start time of the process it was built from; anything that acts on it later checks it is still that process.
+function Get-YumProcessStartTicks { param($Process) try{ return [int64]$Process.StartTime.ToUniversalTime().Ticks }catch{ return [int64]0 } }
+function Test-YumSameProcess {
+    param([int]$ProcessId,[int64]$StartTicks)
+    if($StartTicks -le 0){return $true}   # start time unreadable when the candidate was built: nothing to compare
+    try{ $now=Get-Process -Id $ProcessId -ErrorAction Stop; return ((Get-YumProcessStartTicks $now) -eq $StartTicks) }catch{ return $false }
+}
+
 function Get-YumCandidateProcesses {
     param([int]$ForegroundPid=0,[int]$GamePid=0,[string]$Mode='Balanced')
     $rows=New-Object System.Collections.Generic.List[object]
@@ -22,7 +31,7 @@ function Get-YumCandidateProcesses {
         if([bool]$script:Yum.CleanupRunning -and [string]$script:Yum.CleanupCandidateSnapshotKey -eq $cacheKey -and $cacheAge -le 1.5 -and @($script:Yum.CleanupCandidateSnapshot).Count -gt 0){
             foreach($base in @($script:Yum.CleanupCandidateSnapshot)){
                 try {
-                    $p=Get-Process -Id ([int]$base.PID) -ErrorAction Stop
+                    $p=Get-Process -Id ([int]$base.PID) -ErrorAction Stop;$st0=[int64]0;try{$st0=[int64]$base.StartTicks}catch{};if($st0 -gt 0 -and (Get-YumProcessStartTicks $p) -ne $st0){continue}   # 5.15: PID reused by another process
                     if(Test-YumProtectedProcess -Process $p -ForegroundPid $ForegroundPid -GamePid $GamePid){continue}
                     $ws=[int64]$p.WorkingSet64
                     if($ws -lt 100MB){continue}
@@ -31,7 +40,7 @@ function Get-YumCandidateProcesses {
                     $optionalBonus=[double]$base.OptionalBonus
                     $classificationBonus=[double]$base.ClassificationBonus
                     $score=($ws/1GB)*45.0 + [math]::Max(0,15-[math]::Min(15,$cpu)) + $priorityWeight + $optionalBonus + $classificationBonus
-                    [void]$rows.Add([pscustomobject]@{Process=$p;WorkingSet=$ws;CPU=$cpu;Score=$score;Optional=$optionalBonus -gt 0;Classification=[string]$base.Classification;Risk=[string]$base.Risk;Recommendation=[string]$base.Recommendation;IdentityState=[string]$base.IdentityState;IdentityConfidence=[int]$base.IdentityConfidence;UnknownReason=[string]$base.UnknownReason;AutoResearchEligible=[bool]$base.AutoResearchEligible;PID=[int]$p.Id})
+                    [void]$rows.Add([pscustomobject]@{Process=$p;WorkingSet=$ws;CPU=$cpu;Score=$score;Optional=$optionalBonus -gt 0;Classification=[string]$base.Classification;Risk=[string]$base.Risk;Recommendation=[string]$base.Recommendation;IdentityState=[string]$base.IdentityState;IdentityConfidence=[int]$base.IdentityConfidence;UnknownReason=[string]$base.UnknownReason;AutoResearchEligible=[bool]$base.AutoResearchEligible;PID=[int]$p.Id;StartTicks=(Get-YumProcessStartTicks $p)})
                 } catch {}
             }
             return @($rows | Sort-Object Score -Descending)
@@ -76,11 +85,11 @@ function Get-YumCandidateProcesses {
                 $optionalBonus=if(Test-YumOptionalBackgroundProcess -Name $p.ProcessName){10}else{0}
                 $classificationBonus=switch($classification.Risk){'Safe to Manage'{20};'Candidate'{12};'Review'{3};default{0}}
                 $score=($ws/1GB)*45.0 + [math]::Max(0,15-[math]::Min(15,$cpu)) + $priorityWeight + $optionalBonus + $classificationBonus
-                [void]$rows.Add([pscustomobject]@{Process=$p;PID=[int]$p.Id;WorkingSet=$ws;CPU=$cpu;Score=$score;Optional=$optionalBonus -gt 0;PriorityWeight=$priorityWeight;OptionalBonus=$optionalBonus;ClassificationBonus=$classificationBonus;Classification=$classification.Category;Risk=$classification.Risk;Recommendation=$classification.Recommendation;IdentityState=if($classification.PSObject.Properties['IdentityState']){[string]$classification.IdentityState}else{''};IdentityConfidence=if($classification.PSObject.Properties['Confidence']){[int]$classification.Confidence}else{0};UnknownReason=if($classification.PSObject.Properties['Reason']){[string]$classification.Reason}else{''};AutoResearchEligible=if($classification.PSObject.Properties['AutoResearchEligible']){[bool]$classification.AutoResearchEligible}else{$classification.Risk -eq 'Review'}})
+                [void]$rows.Add([pscustomobject]@{Process=$p;PID=[int]$p.Id;StartTicks=(Get-YumProcessStartTicks $p);WorkingSet=$ws;CPU=$cpu;Score=$score;Optional=$optionalBonus -gt 0;PriorityWeight=$priorityWeight;OptionalBonus=$optionalBonus;ClassificationBonus=$classificationBonus;Classification=$classification.Category;Risk=$classification.Risk;Recommendation=$classification.Recommendation;IdentityState=if($classification.PSObject.Properties['IdentityState']){[string]$classification.IdentityState}else{''};IdentityConfidence=if($classification.PSObject.Properties['Confidence']){[int]$classification.Confidence}else{0};UnknownReason=if($classification.PSObject.Properties['Reason']){[string]$classification.Reason}else{''};AutoResearchEligible=if($classification.PSObject.Properties['AutoResearchEligible']){[bool]$classification.AutoResearchEligible}else{$classification.Risk -eq 'Review'}})
             } catch {}
         }
         if([bool]$script:Yum.CleanupRunning){
-            $script:Yum.CleanupCandidateSnapshot=@($rows | ForEach-Object {[pscustomobject]@{PID=$_.PID;CPU=$_.CPU;PriorityWeight=$_.PriorityWeight;OptionalBonus=$_.OptionalBonus;ClassificationBonus=$_.ClassificationBonus;Classification=$_.Classification;Risk=$_.Risk;Recommendation=$_.Recommendation;IdentityState=$_.IdentityState;IdentityConfidence=$_.IdentityConfidence;UnknownReason=$_.UnknownReason;AutoResearchEligible=$_.AutoResearchEligible}})
+            $script:Yum.CleanupCandidateSnapshot=@($rows | ForEach-Object {[pscustomobject]@{PID=$_.PID;StartTicks=$_.StartTicks;CPU=$_.CPU;PriorityWeight=$_.PriorityWeight;OptionalBonus=$_.OptionalBonus;ClassificationBonus=$_.ClassificationBonus;Classification=$_.Classification;Risk=$_.Risk;Recommendation=$_.Recommendation;IdentityState=$_.IdentityState;IdentityConfidence=$_.IdentityConfidence;UnknownReason=$_.UnknownReason;AutoResearchEligible=$_.AutoResearchEligible}})
             $script:Yum.CleanupCandidateSnapshotKey=$cacheKey
             $script:Yum.CleanupCandidateSnapshotUtc=(Get-Date).ToUniversalTime()
         }

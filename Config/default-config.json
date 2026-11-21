@@ -94,6 +94,7 @@
     "PUBG"
   ],
   "EnableOptionalBackgroundCleanup": true,
+  "AutoCloseOptionalApps": false,
   "EnableOptionalServiceCleanup": false,
   "OptionalBackgroundProcesses": [
     "Widgets",
@@ -423,7 +424,7 @@
   "StartWithWindows": false,
   "LeakSampleSeconds": 60,
   "AutoMemoryAreaAssist": true,
-  "AutoMemoryAreaAssistSeconds": 45,
+  "AutoMemoryAreaAssistSeconds": 600,
   "ReclaimLearningEnabled": true,
   "ReclaimLearningHistoryLimit": 250,
   "ReclaimLearningMinSamples": 2,
