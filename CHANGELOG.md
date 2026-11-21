@@ -1,6 +1,6 @@
 # Changelog
 
-# YUMRAM 5.15.5 (not released yet) — honest disk cleanup numbers
+# YUMRAM 5.15.5 — automatic updates, safer and honest disk cleanup, network speed
 
 - **Real-PC disk cleanup test** (test PC, without administrator, default ticks only): temp files 759 MB, browser
   caches 663 MB, picture previews 141 MB, crash dumps 45 MB, app caches 136 MB - 17,000 files in 35 s. YUMRAM said
@@ -26,7 +26,7 @@
 - **Windows Storage Sense status** in Disk cleanup with a link to its settings: Windows' own long-term cleaner (old
   Recycle Bin items, old Downloads by your choice, OneDrive files made online-only) is shown rather than duplicated.
 
-# YUMRAM 5.15.4 — updates install themselves
+# YUMRAM 5.15.4 — updates install themselves (never published on its own; shipped in 5.15.5)
 
 - **Automatic updates** (user: "whenever an update becomes available it gets updated"). YUMRAM now checks GitHub
   every 6 hours while it runs (was once a day and only at start-up, so a copy living in the tray for days never
