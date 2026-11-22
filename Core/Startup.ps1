@@ -209,7 +209,10 @@ function Get-YumSignInTasks {
             $uid=[string]$t.Principal.UserId
             $mine=($uid -and ($uid -ieq $me -or $uid -ieq ($me -split '\\')[-1]))
             $needsAdmin=(-not $mine) -or ([string]$t.Principal.RunLevel -eq 'Highest')
-            $friendly=[string]$t.TaskName; try{ if($exe -and (Test-Path -LiteralPath $exe -PathType Leaf)){ $d=[string]([Diagnostics.FileVersionInfo]::GetVersionInfo($exe)).FileDescription; if($d){ $friendly=('{0} ({1})' -f $d,$t.TaskName) } } }catch{}
+            # 5.16.3: per-user tasks carry the account's security ID (e.g. GHelper_S-1-5-21-...); shown without it
+            # (an account identifier, and unreadable). The real task name is kept for turning it on/off.
+            $shownName=([string]$t.TaskName -replace '[_ -]?S-1-5-21(-\d+)+','').Trim(); if(-not $shownName){ $shownName=[string]$t.TaskName }
+            $friendly=$shownName; try{ if($exe -and (Test-Path -LiteralPath $exe -PathType Leaf)){ $d=[string]([Diagnostics.FileVersionInfo]::GetVersionInfo($exe)).FileDescription; if($d){ $friendly=$(if($d -ieq $shownName){$d}else{'{0} ({1})' -f $d,$shownName}) } } }catch{}
             [void]$rows.Add((New-YumStartupRow -Name ('{0}{1}' -f $t.TaskPath,$t.TaskName) -Friendly $friendly -Publisher '' -Command $cmd -ExePath $exe -HiveName 'Task' -ApprovedKey 'ScheduledTask' -Scope $(if($mine){'You'}else{'All users'}) -Location ('Task Scheduler {0}' -f $t.TaskPath) -Enabled ([string]$t.State -ne 'Disabled') -NeedsAdmin $needsAdmin -ByPath $ByPath))
         }catch{}
     }

@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <!--
   Disk cleanup (5.15.2). Names used by Show-YumDiskCleanup in UI\DiskCleanupPage.ps1.
   Layout: header -> summary cards -> [junk categories | what's using my disk] | details panel -> footer.
@@ -50,7 +50,7 @@
         <Border Style="{StaticResource Card}" Padding="0">
           <DockPanel>
             <DockPanel DockPanel.Dock="Top" Margin="14,10,10,6">
-              <CheckBox x:Name="PickAll" DockPanel.Dock="Right" Content="Select all" VerticalAlignment="Center" Margin="0,0,14,0" ToolTip="Tick every category that can be cleaned now (click again to untick all). You still confirm the total before anything is removed."/>
+              <CheckBox x:Name="PickAll" DockPanel.Dock="Right" Content="Select all" VerticalAlignment="Center" Margin="16,0,4,0" ToolTip="Tick every category that can be cleaned now (click again to untick all). You still confirm the total before anything is removed."/>
               <Button x:Name="CleanSelected" DockPanel.Dock="Right" Content="Clean selected" Style="{StaticResource PrimaryButton}" Padding="14,4" ToolTip="Removes the ticked categories after you confirm the total."/>
               <TextBlock Text="SAFE TO CLEAN" Style="{StaticResource StatLabel}" VerticalAlignment="Center"/>
             </DockPanel>

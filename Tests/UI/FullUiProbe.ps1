@@ -73,8 +73,17 @@ $script:Steps=@(
  { Click $script:Yum.Ui.DiskCleanup },   # the real sidebar button (5.15.2: it was not registered, clicks did nothing)
  { if((PW 'DiskCleanup') -and (PW 'DiskCleanup').Tag.Busy -and $script:WaitD++ -lt 25){ $script:I-- } },
  { $st=(PW 'DiskCleanup').Tag; Check ($null -ne $st -and -not $st.Busy -and @($st.Rows).Count -ge 8) ("Disk cleanup measured {0} categories ({1}; can free {2})" -f @($st.Rows).Count,$st.Ui.Details.Text,$st.Ui.SumJunk.Text); $st.Ui.Junk.SelectedIndex=0; Check ($st.Ui.ExplainBody.Visibility -eq 'Visible' -and $st.Ui.ExplainEffect.Text.Length -gt 10) "Disk cleanup explains: $($st.Ui.ExplainTitle.Text)"; Start-YumDiskUsage -State $st -Path (Join-Path $script:Yum.Root 'Tests') },
- # 5.16.2: Select all, and ticks survive scrolling (the list re-reads each row's Selected when it redraws).
- { $st=(PW 'DiskCleanup').Tag; $pk=@(Get-YumDiskPickable -State $st); Set-YumDiskPickAll -State $st -On $true; $st.Ui.Junk.Items.Refresh(); Check ($pk.Count -ge 1 -and @($pk | Where-Object { -not $_.Selected }).Count -eq 0 -and $st.Picked.Count -eq $pk.Count -and [bool]$st.Ui.PickAll.IsChecked) ("Disk cleanup Select all ticks {0} categories" -f $pk.Count); Set-YumDiskPickAll -State $st -On $false; $st.Ui.Junk.Items.Refresh(); Check ($st.Picked.Count -eq 0 -and -not [bool]$st.Ui.PickAll.IsChecked -and @($pk | Where-Object { $_.Selected }).Count -eq 0) 'Select all again unticks everything' },
+ # 5.16.2/5.16.3: Select all ticks every unlocked category - checked on the real tick boxes on screen, scrolling through
+ # the list row by row like a user (the list reuses row visuals while scrolling).
+ { $st=(PW 'DiskCleanup').Tag; $lv=$st.Ui.Junk; $st.Ui.PickAll.IsChecked=$true; $st.Ui.PickAll.RaiseEvent((New-Object System.Windows.RoutedEventArgs([System.Windows.Controls.Primitives.ButtonBase]::ClickEvent)))
+   $rows=@($st.Rows); $bad=@(); $seen=0
+   for($r=0;$r -lt $rows.Count;$r++){ $lv.ScrollIntoView($rows[$r]); $lv.UpdateLayout(); $c=$lv.ItemContainerGenerator.ContainerFromIndex($r); if($null -eq $c){continue}
+     $stack=New-Object System.Collections.Generic.Stack[object]; $stack.Push($c); $cb=$null; while($stack.Count -and $null -eq $cb){ $el=$stack.Pop(); if($el -is [System.Windows.Controls.CheckBox]){ $cb=$el; break }; for($k=0;$k -lt [System.Windows.Media.VisualTreeHelper]::GetChildrenCount($el);$k++){ $stack.Push([System.Windows.Media.VisualTreeHelper]::GetChild($el,$k)) } }
+     if($null -eq $cb){continue}; $seen++; $want=-not [bool]$rows[$r].Locked; if([bool]$cb.IsChecked -ne $want){ $bad+=[string]$rows[$r].Name } }
+   Check ($seen -ge 8 -and $bad.Count -eq 0 -and [bool]$st.Ui.PickAll.IsChecked) ("Select all: tick boxes on screen correct for {0} rows while scrolling{1}" -f $seen,$(if($bad.Count){' - wrong: '+($bad -join ', ')}else{''}))
+   $st.Ui.PickAll.IsChecked=$false; $st.Ui.PickAll.RaiseEvent((New-Object System.Windows.RoutedEventArgs([System.Windows.Controls.Primitives.ButtonBase]::ClickEvent)))
+   $on=0; for($r=0;$r -lt $rows.Count;$r++){ $lv.ScrollIntoView($rows[$r]); $lv.UpdateLayout(); $c=$lv.ItemContainerGenerator.ContainerFromIndex($r); if($null -eq $c){continue}; $stack=New-Object System.Collections.Generic.Stack[object]; $stack.Push($c); while($stack.Count){ $el=$stack.Pop(); if($el -is [System.Windows.Controls.CheckBox]){ if([bool]$el.IsChecked){$on++}; break }; for($k=0;$k -lt [System.Windows.Media.VisualTreeHelper]::GetChildrenCount($el);$k++){ $stack.Push([System.Windows.Media.VisualTreeHelper]::GetChild($el,$k)) } } }
+   Check ($on -eq 0 -and $st.Picked.Count -eq 0) "Select all again unticks every box on screen ($on left)" },
  { if((PW 'DiskCleanup').Tag.Busy -and $script:WaitE++ -lt 40){ $script:I-- } },
  { $st=(PW 'DiskCleanup').Tag; Check (@($st.Ui.UsageFolders.ItemsSource).Count -ge 1 -and @($st.Ui.UsageFiles.ItemsSource).Count -ge 1) "What's using my disk: $($st.Ui.Details.Text)"; Shot 'p-disk' },
  { Go 'Intelligence' },

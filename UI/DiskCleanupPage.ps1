@@ -48,14 +48,16 @@ function Update-YumDiskSummary {
 }
 
 function Get-YumDiskPickable {
-    # Rows a tick can apply to: not locked (needs administrator) and something to clean (or Windows' own tools).
+    # Rows a tick can apply to: every category that is not locked (locked = needs administrator).
+    # 5.16.3 (user: "Select all doesn't tick everything"): empty categories are ticked too - cleaning them does nothing.
     param([hashtable]$State)
-    return @(@($State.Rows) | Where-Object { -not [bool]$_.Locked -and ([double]$_.Bytes -gt 0 -or [string]$_.Special) })
+    return @(@($State.Rows) | Where-Object { -not [bool]$_.Locked })
 }
 function Set-YumDiskPickAll {
     param([hashtable]$State,[bool]$On)
     foreach($r in Get-YumDiskPickable -State $State){ $r.Selected=$On; if($On){ $State.Picked[[string]$r.Key]=$true }else{ [void]$State.Picked.Remove([string]$r.Key) } }
-    try{ $State.Ui.Junk.Items.Refresh() }catch{}
+    # Rebuild the list so every tick box shows its row again (a plain refresh did not always redraw them).
+    try{ $sel=$State.Ui.Junk.SelectedIndex; $State.Ui.Junk.ItemsSource=$null; $State.Ui.Junk.ItemsSource=$State.Rows; $State.Ui.Junk.SelectedIndex=$sel }catch{}
     Update-YumDiskPickAll -State $State
 }
 function Update-YumDiskPickAll {

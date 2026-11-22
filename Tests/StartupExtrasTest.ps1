@@ -47,4 +47,6 @@ Assert-That ($src -match 'Disable-ScheduledTask' -and $src -notmatch 'Unregister
 # 3. The page loads them in the background.
 $page=[IO.File]::ReadAllText((Join-Path $root 'UI\StartupPage.ps1'))
 Assert-That ($page -match 'Get-YumStartupApps -SkipExtras' -and $page -match 'Start-YumStartupExtras -State \$state') 'Startup page reads the slow entries off the UI thread.'
+# 5.16.3: names shown never contain the Windows account's security ID (S-1-5-21-...).
+foreach($t in $tasks){ $f=if($t.PSObject.Properties['Friendly']){[string]$t.Friendly}else{''}; if($f -match 'S-1-5-21-\d'){ throw ('A startup task shows an account ID: ' + $f) } }
 Write-Host ('StartupExtrasTest passed ({0} sign-in tasks on this PC).' -f $tasks.Count)

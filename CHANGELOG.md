@@ -1,5 +1,18 @@
 # Changelog
 
+# YUMRAM 5.16.3 — Disk cleanup "Select all" really ticks everything; startup names without account IDs
+
+- **Fix: Disk cleanup "Select all" left some categories unticked** (user: "Select all doesn't tick everything"). It
+  skipped categories with nothing to clean right now (on the test PC: Crash dumps, Graphics driver installer
+  leftovers, Recycle Bin), so it looked broken. It now ticks every category that is not locked (locked = needs
+  administrator), and rebuilds the list so every box shows its tick. The UI test now checks the real tick boxes on
+  screen, scrolling row by row; it fails on 5.16.2's code (naming those three) and passes now.
+- **Startup apps: names no longer show the Windows account's security ID** (e.g. `GHelper_S-1-5-21-...` is shown as
+  `GHelper`) - unreadable and an account identifier that does not belong on screen or in screenshots. The real task
+  name is still used to turn it on or off. Found in the full visual check (user: "double check everything visual and
+  functions"); the startup test checks it.
+- Disk cleanup: more space between "Clean selected" and "Select all". About mentions temperatures.
+- README pictures re-taken (5.16.3: flat labels, temperatures, Select all, clean startup names).
 # YUMRAM 5.16.2 — looks like YUMRAM, not PowerShell; temperatures; flat labels; Disk cleanup Select all
 
 User: "make it not look like a PowerShell program - the top bar and the taskbar". YUMRAM runs inside Windows
