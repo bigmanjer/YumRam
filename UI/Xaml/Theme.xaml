@@ -56,12 +56,13 @@
     <Setter Property="Padding" Value="12"/>
     <Setter Property="CornerRadius" Value="10"/>
   </Style>
+  <!-- 5.16.2 (user: "I don't like the circle/oval bubbles, looks like PowerPoint"): status labels are flat coloured
+       text now - no rounded bubble, no fill, no outline. -->
   <Style x:Key="Pill" TargetType="Border">
-    <Setter Property="Background" Value="{StaticResource AccentSoft}"/>
-    <Setter Property="BorderBrush" Value="{StaticResource LineStrong}"/>
-    <Setter Property="BorderThickness" Value="1"/>
-    <Setter Property="CornerRadius" Value="999"/>
-    <Setter Property="Padding" Value="12,4"/>
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="BorderThickness" Value="0"/>
+    <Setter Property="CornerRadius" Value="0"/>
+    <Setter Property="Padding" Value="0,2"/>
     <Setter Property="VerticalAlignment" Value="Center"/>
   </Style>
   <Style x:Key="AppTitle" TargetType="TextBlock">

@@ -71,7 +71,9 @@ $bad=@($cats | ForEach-Object { @($_.Roots) } | Where-Object { $_ -match '(?i)\\
 Assert-That ($bad.Count -eq 0) ('A category points at personal data: {0}' -f ($bad -join ', '))
 foreach($c in $cats){ Assert-That ([string]$c.Why -and [string]$c.Effect -and $c.Advice -in @('Clean','YourCall')) ('Category {0} needs a plain explanation and advice.' -f $c.Key) }
 Assert-That (@($cats | Where-Object { $_.Auto -and $_.Key -in @('Recycle','Browser','Shaders') }).Count -eq 0) 'The weekly automatic clean never empties the Recycle Bin, browser or game caches.'
-Assert-That (-not [bool]$script:Yum.Config['DiskAutoClean']) 'Automatic clean is off by default.'
+# 5.16.2: checked against the shipped defaults - a developer's local config.json may have it on.
+$dflt=Get-Content (Join-Path $root 'Config\default-config.json') -Raw | ConvertFrom-Json
+Assert-That ($null -eq $dflt.PSObject.Properties['DiskAutoClean'] -or -not [bool]$dflt.DiskAutoClean) 'Automatic clean is off by default.'
 Assert-That (@($cats | Where-Object { @($_.Roots) -match '(?i)spotify' }).Count -eq 0) 'Spotify is left out: its folder can hold downloaded songs.'
 Assert-That ((@($cats | Where-Object Key -eq 'DriverSetup')[0]).Advice -eq 'YourCall') 'Driver installer folders are your call, not ticked by default.'
 Assert-That ((@($cats | Where-Object Key -eq 'UserTemp')[0]).SkipExt -contains '.docx') 'Temp cleaning skips documents.'

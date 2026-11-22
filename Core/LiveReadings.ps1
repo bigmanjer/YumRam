@@ -62,7 +62,7 @@ $script:YumLiveReadingsSource=$PSCommandPath
 # latest values (no waiting). The functions below stay callable directly (tests, the sampler itself).
 function Start-YumLiveSampler {
     if($null -ne $script:Yum['LiveSampler']){return}
-    $shared=[hashtable]::Synchronized(@{Gpu=$null;Cpu=$null;Disk=$null;Adapters=$null;Updated=[datetime]::MinValue;Samples=0;WantedUntil=(Get-Date).AddSeconds(10);Stop=$false;Error='';IntervalMs=2000})
+    $shared=[hashtable]::Synchronized(@{Gpu=$null;Cpu=$null;Disk=$null;Temps=$null;TempsAt=[datetime]::MinValue;Adapters=$null;Updated=[datetime]::MinValue;Samples=0;WantedUntil=(Get-Date).AddSeconds(10);Stop=$false;Error='';IntervalMs=2000})
     $ps=[powershell]::Create()
     [void]$ps.AddScript({
         param($S,$Src)
@@ -77,6 +77,8 @@ function Start-YumLiveSampler {
                     # (5.16.1: CPU and disk first - the GPU adapter list compiles a helper the first time)
                     # Each reading is published as soon as it exists (the first GPU read alone takes ~1.5 s).
                     $S.Cpu=Get-YumLiveCpu; $S.Disk=Get-YumLiveDisk; if($null -eq $S.Adapters){ $S.Adapters=@(Get-YumGpuAdapters) }; $S.Gpu=Get-YumLiveGpu
+                    # 5.16.2: temperatures every ~5 s (disk every 60 s, administrator only).
+                    if(((Get-Date)-[datetime]$S.TempsAt).TotalSeconds -ge 4.5){ $S.TempsAt=Get-Date; try{ $S.Temps=Get-YumLiveTemps -Gpu $S.Gpu -Previous $S.Temps }catch{ $S.Error='temps: '+$_.Exception.Message } }
                     $S.Updated=Get-Date; $S.Samples=[int]$S.Samples+1; $S.Error=''
                 }
             }catch{ $S.Error=$_.Exception.Message }
@@ -94,7 +96,7 @@ function Stop-YumLiveSampler {
 function Get-YumLiveReading {
     # Latest background reading: Kind = Gpu | Cpu | Disk. $null until the first sample (a fraction of a second).
     # Asking keeps the sampler reading for 8 s; nothing is read while nobody asks (window hidden, other page).
-    param([ValidateSet('Gpu','Cpu','Disk')][string]$Kind)
+    param([ValidateSet('Gpu','Cpu','Disk','Temps')][string]$Kind)
     try{
         Start-YumLiveSampler
         $s=$script:Yum['LiveSampler'].Shared
@@ -249,4 +251,100 @@ function Format-YumDiskLines {
     }
     $space=foreach($v in @($Disk.Drives | Where-Object { $_.Letter -ne $SkipDrive })){ ('{0}  {1:N0} GB free of {2:N0} GB' -f $v.Letter,[double]$v.FreeGB,[double]$v.TotalGB) }
     return ((@($lines)+@($space) | Where-Object { $_ }) -join [Environment]::NewLine)
+}
+
+# 5.16.2 (user: "showing temps would be nice"). Only what Windows and the graphics driver give without extra
+# drivers (tools that read CPU sensors directly install kernel drivers - e.g. WinRing0, which Windows now flags):
+#  - CPU area: Windows' "Thermal Zone Information" counter (the hottest zone; on laptops it sits at the CPU).
+#  - NVIDIA graphics: nvml.dll from the NVIDIA driver - read only while the chip is awake (busy or holding VRAM), so
+#    YUMRAM never wakes a sleeping laptop GPU (that costs battery).
+#  - Disks: Windows' drive health data (MSFT_StorageReliabilityCounter), every 60 s, administrator only.
+# Runs in the background sampler (Start-YumLiveSampler).
+function Initialize-YumNvmlType {
+    if('YumNvml' -as [type]){ return $true }
+    if(-not [IO.File]::Exists((Join-Path $env:windir 'System32\nvml.dll'))){ return $false }
+    try{
+        Add-Type -TypeDefinition @'
+using System; using System.Runtime.InteropServices; using System.Text; using System.Collections.Generic;
+public static class YumNvml {
+    [DllImport("nvml.dll", EntryPoint = "nvmlInit_v2")] static extern int Init();
+    [DllImport("nvml.dll", EntryPoint = "nvmlShutdown")] static extern int Shutdown();
+    [DllImport("nvml.dll", EntryPoint = "nvmlDeviceGetCount_v2")] static extern int Count(out uint n);
+    [DllImport("nvml.dll", EntryPoint = "nvmlDeviceGetHandleByIndex_v2")] static extern int Handle(uint i, out IntPtr h);
+    [DllImport("nvml.dll", EntryPoint = "nvmlDeviceGetTemperature")] static extern int Temp(IntPtr h, int sensor, out uint t);
+    [DllImport("nvml.dll", EntryPoint = "nvmlDeviceGetName", CharSet = CharSet.Ansi)] static extern int Name(IntPtr h, StringBuilder name, uint len);
+    // Returns "name|celsius" per NVIDIA GPU; opened and closed each time.
+    public static string[] Read() {
+        var list = new List<string>();
+        try {
+            if (Init() != 0) return list.ToArray();
+            try {
+                uint n; if (Count(out n) != 0) return list.ToArray();
+                for (uint i = 0; i < n; i++) {
+                    IntPtr h; if (Handle(i, out h) != 0) continue;
+                    uint t; if (Temp(h, 0, out t) != 0) continue;
+                    var sb = new StringBuilder(96); Name(h, sb, 96);
+                    list.Add(sb.ToString() + "|" + t);
+                }
+            } finally { Shutdown(); }
+        } catch { }
+        return list.ToArray();
+    }
+}
+'@
+        return $true
+    }catch{ return $false }
+}
+
+function Get-YumLiveTemps {
+    param($Gpu,$Previous)
+    $L=$script:YumLive
+    $out=[ordered]@{CpuC=$null;CpuSource='';GpuC=$null;GpuName='';GpuAsleep=$false;DiskC=$null;DiskName='';DiskAt=[datetime]::MinValue}
+    # CPU area (thermal zones).
+    try{
+        if($null -eq $L['ThermalCategory']){ $L['ThermalCategory']=New-Object System.Diagnostics.PerformanceCounterCategory('Thermal Zone Information') }
+        $all=$L['ThermalCategory'].ReadCategory()
+        $hp=$all['High Precision Temperature']; $lo=$all['Temperature']
+        $best=$null;$bestName=''
+        $useHp=($null -ne $hp -and $hp.Count -gt 0); $src=if($useHp){$hp}else{$lo}
+        foreach($k in @($src.Keys)){
+            $raw=[double]$src[$k].RawValue
+            $c=if($useHp){$raw/10.0-273.15}else{$raw-273.15}
+            if($c -gt 5 -and $c -lt 125 -and ($null -eq $best -or $c -gt $best)){ $best=$c; $bestName=[string]$k }
+        }
+        if($null -ne $best){ $out.CpuC=[math]::Round($best,0); $out.CpuSource=$bestName }
+    }catch{}
+    # NVIDIA graphics - only when the chip is awake.
+    try{
+        $nv=@(@($Gpu.Adapters) | Where-Object { [string]$_.Name -match '(?i)nvidia' })
+        if($nv.Count -gt 0){
+            $awake=@($nv | Where-Object { ([double]$_.VramUsedGB -gt 0.05) -or ([double]$_.ThreeD -gt 0.5) }).Count -gt 0
+            $out.GpuName=[string]$nv[0].Name
+            if(-not $awake){ $out.GpuAsleep=$true }
+            elseif(Initialize-YumNvmlType){
+                foreach($r in [YumNvml]::Read()){ $p=$r.Split('|'); if($p.Count -eq 2){ $t=[double]$p[1]; if($t -gt 0 -and $t -lt 130 -and ($null -eq $out.GpuC -or $t -gt $out.GpuC)){ $out.GpuC=$t } } }
+            }
+        }
+    }catch{}
+    # Disks: every 60 s, administrator only (Windows refuses otherwise).
+    try{
+        $prevAt=[datetime]::MinValue; if($null -ne $Previous){ $prevAt=[datetime]$Previous.DiskAt }
+        if(((Get-Date)-$prevAt).TotalSeconds -lt 60 -and $null -ne $Previous){ $out.DiskC=$Previous.DiskC; $out.DiskName=$Previous.DiskName; $out.DiskAt=$prevAt }
+        elseif(([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)){
+            $out.DiskAt=Get-Date
+            $hot=$null
+            foreach($r in @(Get-CimInstance -Namespace root\Microsoft\Windows\Storage -ClassName MSFT_StorageReliabilityCounter -ErrorAction Stop -OperationTimeoutSec 5)){ $t=[double]$r.Temperature; if($t -gt 0 -and $t -lt 110 -and ($null -eq $hot -or $t -gt $hot)){ $hot=$t } }
+            $out.DiskC=$hot
+        } else { $out.DiskAt=Get-Date }
+    }catch{ $out.DiskAt=Get-Date }
+    return [pscustomobject]$out
+}
+
+function Format-YumTemp {
+    # "84°C" and a colour: green / amber / red at the given warm / hot thresholds.
+    param($Celsius,[double]$Warm,[double]$Hot)
+    if($null -eq $Celsius){ return $null }
+    $c=[double]$Celsius
+    $hex=if($c -ge $Hot){'#F87171'}elseif($c -ge $Warm){'#FBBF24'}else{'#86EFAC'}
+    return [pscustomobject]@{Text=('{0:N0}°C' -f $c);Hex=$hex}
 }

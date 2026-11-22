@@ -77,7 +77,7 @@
             </GridViewColumn>
             <GridViewColumn Header="Type" Width="108">
               <GridViewColumn.CellTemplate><DataTemplate>
-                <Border CornerRadius="9" Padding="8,1" Background="{StaticResource Surface2}" HorizontalAlignment="Left">
+                <Border CornerRadius="3" Padding="8,1" Background="{StaticResource Surface2}" HorizontalAlignment="Left">
                   <TextBlock x:Name="KindText" Text="{Binding Kind}" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource TextMuted}"/>
                 </Border>
                 <DataTemplate.Triggers>
@@ -115,7 +115,7 @@
                 <Button x:Name="GpuSaverUndo" Content="Undo" Style="{StaticResource GhostButton}" Padding="10,3" Visibility="Collapsed"/>
               </WrapPanel>
               <TextBlock Text="OUR ADVICE" Style="{StaticResource Question}"/>
-              <Border x:Name="ExplainAdviceBadge" CornerRadius="9" Padding="10,3" HorizontalAlignment="Left" Background="{StaticResource Surface2}" BorderThickness="1"><TextBlock x:Name="ExplainAdviceLabel" Text="—" FontWeight="Bold" FontSize="13"/></Border>
+              <Border x:Name="ExplainAdviceBadge" CornerRadius="3" Padding="10,3" HorizontalAlignment="Left" Background="{StaticResource Surface2}" BorderThickness="1"><TextBlock x:Name="ExplainAdviceLabel" Text="—" FontWeight="Bold" FontSize="13"/></Border>
               <TextBlock Text="CAN I CLOSE IT?" Style="{StaticResource Question}"/>
               <TextBlock x:Name="ExplainSafe" Style="{StaticResource Answer}"/>
               <TextBlock Text="WHAT DOES YUMRAM DO WITH IT?" Style="{StaticResource Question}"/>

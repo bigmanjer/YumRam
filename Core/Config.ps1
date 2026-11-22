@@ -64,6 +64,7 @@
         VramSampler = $null
         LiveSampler = $null
         LastCpuBalanceUi = [datetime]::MinValue
+        WindowLookRegistered = $false
         LastVramWatch = [datetime]::MinValue
         VramWarnedPid = 0
         LastAutoUpdateTick = [datetime]::MinValue

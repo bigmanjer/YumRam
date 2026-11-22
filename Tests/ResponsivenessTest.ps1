@@ -135,6 +135,14 @@ foreach($case in @(@('{"CpuBalanceExclusions":{},"ProtectedProcesses":["System",
 }
 $script:Root=$savedRoot; $script:Yum=$savedYum
 
+# 10. 5.16.2: YUMRAM looks like YUMRAM, not PowerShell (title bar icon + colours, taskbar identity).
+Assert-That ($null -ne ('YumWindowChrome' -as [type])) 'Window look helper is available.'
+Assert-That ((Get-YumColorRef '#1B1224') -eq 0x24121B) 'Title bar colour converts to Windows COLORREF (0x00BBGGRR).'
+$wi=Get-YumWindowIcon; Assert-That ($null -ne $wi -and $wi.PixelWidth -ge 32) 'YUMRAM.ico is used as the window icon.'
+Assert-That ($mw -match 'Set-YumProcessIdentity' -and $mw -match 'Set-YumWindowLook -Window \$script:Yum.Window -Main') 'Main window gets the taskbar identity and look before it shows.'
+$tw=New-Object System.Windows.Window; $tw.WindowStyle='None'; $tw.ShowInTaskbar=$false; $tw.Width=10; $tw.Height=10; $tw.Left=-2000; $tw.Show(); Set-YumWindowLook -Window $tw -Main
+Assert-That ($null -ne $tw.Icon) 'A YUMRAM window gets YUMRAM''s icon.'; $tw.Close()
+
 # 5. Record checks reuse one defaults table and give the same result.
 $r=[pscustomobject]@{Name='x';Risk=$null}; $null=Ensure-YumIntelligenceRecordSchema -Record $r
 Assert-That (@($r.PSObject.Properties).Count -eq 42 -and $r.Risk -eq 'Review' -and $r.ResearchSources -is [array]) 'Schema check fills the 42 fields and replaces nulls.'

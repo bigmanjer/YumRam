@@ -1,5 +1,28 @@
 # Changelog
 
+# YUMRAM 5.16.2 — looks like YUMRAM, not PowerShell; temperatures; flat labels; Disk cleanup Select all
+
+User: "make it not look like a PowerShell program - the top bar and the taskbar". YUMRAM runs inside Windows
+PowerShell, so Windows showed PowerShell's blue icon in the title bar and on the taskbar, grouped YUMRAM with other
+PowerShell windows, and "Pin to taskbar" pinned PowerShell. Seen on the test PC's screen, then fixed:
+- **YUMRAM's icon** in the title bar and on the taskbar (every YUMRAM window, dialogs included).
+- **Its own taskbar identity** (AppUserModelID `YUMRAM.App`): its own taskbar button, and pinning it pins
+  `YUMRAM.exe` with YUMRAM's name and icon.
+- **A dark title bar in YUMRAM's colours** (dark purple bar, light text, purple border) instead of the Windows accent
+  colour (orange on the test PC). Windows 11; Windows 10 gets Windows' dark title bar.
+- New `UI\WindowChrome.ps1`; the responsiveness test checks the icon, colours and identity are applied.
+- **Temperatures** (user: "showing temps would be nice"), top-right on the CPU, GPU and Disk cards, green / amber /
+  red: CPU area from Windows' thermal zone counter, NVIDIA graphics from the NVIDIA driver (`nvml.dll`) - read only
+  while the chip is awake (busy or holding memory) so a sleeping laptop GPU is never woken (shows "asleep"), disks
+  from Windows' drive health data (administrator; some drives do not report it). No extra drivers: tools that read
+  CPU sensors directly install kernel drivers (e.g. WinRing0, which Windows now flags). Read in the background
+  sampler every ~5 s (disks every 60 s); test PC: CPU 84-93 °C under load, GPU 73-76 °C.
+- **Flat status labels** (user: "no circle/oval bubbles, looks like PowerPoint"): "On target", "Watching", "ACTIVE",
+  sidebar mode and monitoring state are plain coloured text; advice tags in lists are small rectangles.
+- **Disk cleanup: Select all** (ticks every category that can be cleaned; click again to untick) and **fix: a tick
+  disappeared when the list was scrolled** (the list re-reads each row when it redraws; ticks were not stored on the
+  row - the clean itself used the right list). The UI test checks both.
+
 # YUMRAM 5.16.1 — Overview graph fixed; overclock/undervolt tools left alone; pages open faster; new screenshots
 
 - **Fix: the Overview graph stayed empty in 5.16.0.** When the graph code was sped up, one line was lost; the graph

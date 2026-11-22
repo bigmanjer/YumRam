@@ -45,7 +45,7 @@
           <ListView.View><GridView>
             <GridViewColumn Header="Starts" Width="78">
               <GridViewColumn.CellTemplate><DataTemplate>
-                <Border x:Name="StatePill" CornerRadius="9" Padding="10,1" Background="{StaticResource Surface2}" HorizontalAlignment="Left">
+                <Border x:Name="StatePill" CornerRadius="3" Padding="10,1" Background="{StaticResource Surface2}" HorizontalAlignment="Left">
                   <TextBlock x:Name="StateText" Text="{Binding StateText}" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource TextMuted}"/>
                 </Border>
                 <DataTemplate.Triggers>
@@ -68,7 +68,7 @@
             </GridViewColumn>
             <GridViewColumn Header="Our advice" Width="175">
               <GridViewColumn.CellTemplate><DataTemplate>
-                <Border CornerRadius="9" Padding="8,1" Background="{StaticResource Surface2}" HorizontalAlignment="Left">
+                <Border CornerRadius="3" Padding="8,1" Background="{StaticResource Surface2}" HorizontalAlignment="Left">
                   <TextBlock x:Name="AdviceText" Text="{Binding AdviceLabel}" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource TextMuted}"/>
                 </Border>
                 <DataTemplate.Triggers>

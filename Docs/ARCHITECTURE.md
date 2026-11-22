@@ -44,7 +44,7 @@ info, large JSON) runs on the UI thread; it runs in a background reader and the 
 | GPU memory & network | `Core\Vram.ps1` | VRAM per program ('GPU Process Memory' counters) and network speed, sampled in a background runspace; optional watch that tells you which app holds VRAM; per-app "use the fast GPU" preference (`UserGpuPreferences`) with exact undo. No API frees another program's VRAM - Windows (WDDM) owns it |
 | Mini bar | `UI\MiniBar.ps1` | Small always-on-top floating bar (RAM / CPU / GPU / disk, Free RAM, Open, hide to tray); position saved as MiniBarLeft / MiniBarTop |
 | Disk cleanup | `Core\DiskCleanup.ps1`, `UI\DiskCleanupPage.ps1` | Cache / leftover categories measured then cleaned by a compiled walker (`YumDiskWalk`: never follows reparse points, skips files in use, minimum file age); Windows' own tools for system areas (DISM StartComponentCleanup, cleanmgr `/sagerun`); a list of every deleted file (`disk-cleanup-last.txt`); folder / biggest-file analysis; opt-in weekly auto clean from the UI timer (checked every 30 min, work in a background runspace) |
-| UI | `UI\Shell.ps1`, `UI\MainWindow.ps1`, `UI\Dialogs.ps1`, `UI\*Page.ps1`, `UI\Tray.ps1`, `UI\Xaml\*` | one window with a sidebar (Ctrl+1..8), tray, global hotkey, toasts |
+| UI | `UI\Shell.ps1`, `UI\MainWindow.ps1`, `UI\Dialogs.ps1`, `UI\*Page.ps1`, `UI\Tray.ps1`, `UI\WindowChrome.ps1`, `UI\Xaml\*` | one window with a sidebar (Ctrl+1..8), tray, global hotkey, toasts; YUMRAM's own icon, taskbar identity (AppUserModelID `YUMRAM.App`, pin = YUMRAM.exe) and dark title bar (DWM) instead of PowerShell's |
 
 ## Data files (next to YUMRAM; never in the release package)
 

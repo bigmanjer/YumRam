@@ -47,12 +47,29 @@ function Update-YumDiskSummary {
     $ui.AutoLast.Text=if($last){'last clean '+([datetime]$last).ToString('d MMM HH:mm')}else{'never cleaned yet'}
 }
 
+function Get-YumDiskPickable {
+    # Rows a tick can apply to: not locked (needs administrator) and something to clean (or Windows' own tools).
+    param([hashtable]$State)
+    return @(@($State.Rows) | Where-Object { -not [bool]$_.Locked -and ([double]$_.Bytes -gt 0 -or [string]$_.Special) })
+}
+function Set-YumDiskPickAll {
+    param([hashtable]$State,[bool]$On)
+    foreach($r in Get-YumDiskPickable -State $State){ $r.Selected=$On; if($On){ $State.Picked[[string]$r.Key]=$true }else{ [void]$State.Picked.Remove([string]$r.Key) } }
+    try{ $State.Ui.Junk.Items.Refresh() }catch{}
+    Update-YumDiskPickAll -State $State
+}
+function Update-YumDiskPickAll {
+    param([hashtable]$State)
+    try{ $p=@(Get-YumDiskPickable -State $State); $State.Ui.PickAll.IsChecked=($p.Count -gt 0 -and @($p | Where-Object { -not [bool]$_.Selected }).Count -eq 0) }catch{}
+}
+
 function Set-YumDiskRows {
     param([hashtable]$State,$Rows)
     $State.Rows=@($Rows | Where-Object { $null -ne $_ })
     $State.Picked=@{}; foreach($r in $State.Rows){ if([bool]$r.Selected){ $State.Picked[$r.Key]=$true } }
     $State.Ui.Junk.ItemsSource=$null
     $State.Ui.Junk.ItemsSource=$State.Rows
+    Update-YumDiskPickAll -State $State
     Update-YumDiskSummary -State $State
 }
 
@@ -102,7 +119,7 @@ function Show-YumDiskCleanup {
         [xml]$xaml=Read-YumXamlText -Path (Join-Path $script:Yum.Root 'UI\Xaml\DiskCleanup.xaml')
         $window=[Windows.Markup.XamlReader]::Load((New-Object System.Xml.XmlNodeReader $xaml))
         $ui=@{}
-        foreach($n in 'Junk','Reload','AdminPill','AdminText','RestartAdmin','SumJunk','SumDrive','SumDriveBar','SumFreed','AutoClean','AutoLast','CleanSelected','UsagePath','UsageScan','UsageUp','UsageOpen','UsageTabs','UsageFolders','UsageFiles','ExplainTitle','ExplainSub','ExplainWhy','ExplainBody','ExplainEffect','ExplainUndo','LastResult','OpenFolder','SeeDeleted','StorageSense','Close','Details'){$ui[$n]=$window.FindName($n);if($null -eq $ui[$n]){throw "Disk cleanup page control missing: $n"}}
+        foreach($n in 'PickAll','Junk','Reload','AdminPill','AdminText','RestartAdmin','SumJunk','SumDrive','SumDriveBar','SumFreed','AutoClean','AutoLast','CleanSelected','UsagePath','UsageScan','UsageUp','UsageOpen','UsageTabs','UsageFolders','UsageFiles','ExplainTitle','ExplainSub','ExplainWhy','ExplainBody','ExplainEffect','ExplainUndo','LastResult','OpenFolder','SeeDeleted','StorageSense','Close','Details'){$ui[$n]=$window.FindName($n);if($null -eq $ui[$n]){throw "Disk cleanup page control missing: $n"}}
         $state=@{Window=$window;Ui=$ui;Rows=@();Picked=@{};Busy=$false}
         $window.Tag=$state
         foreach($c in 'Junk','Reload','AutoClean','CleanSelected','UsageScan','UsageUp','UsageOpen','UsageFolders','UsageFiles','Close'){$ui[$c].Tag=$state}
@@ -111,7 +128,14 @@ function Show-YumDiskCleanup {
         $ui.UsagePath.Text=($env:SystemDrive+'\')
         # Tick boxes live in the list rows; one handler for all of them.
         $ui.Junk.AddHandler([System.Windows.Controls.Primitives.ButtonBase]::ClickEvent,[System.Windows.RoutedEventHandler]{param($s,$e)
-            try{ $cb=$e.OriginalSource; if($cb -is [System.Windows.Controls.CheckBox]){ $st=$s.Tag; $k=[string]$cb.Tag; if([bool]$cb.IsChecked){$st.Picked[$k]=$true}else{[void]$st.Picked.Remove($k)} } }catch{} })
+            try{ $cb=$e.OriginalSource; if($cb -is [System.Windows.Controls.CheckBox]){ $st=$s.Tag; $k=[string]$cb.Tag; if([bool]$cb.IsChecked){$st.Picked[$k]=$true}else{[void]$st.Picked.Remove($k)}
+                # 5.16.2 (user: "when I tick one and scroll, it unticks"): the list reuses row visuals while scrolling and
+                # re-reads Selected from the row, so the row itself must remember the tick.
+                foreach($r in @($st.Rows)){ if([string]$r.Key -eq $k){ $r.Selected=[bool]$cb.IsChecked } }
+                Update-YumDiskPickAll -State $st } }catch{} })
+        # 5.16.2 (user request): Select all / none.
+        $ui.PickAll.Tag=$state
+        $ui.PickAll.Add_Click({param($s,$e) try{ Set-YumDiskPickAll -State $s.Tag -On ([bool]$s.IsChecked) }catch{} })
         $ui.Junk.Add_SelectionChanged({param($s,$e)try{ Update-YumDiskExplanation -State $s.Tag }catch{}})
         $ui.Reload.Add_Click({param($s,$e) Start-YumDiskMeasure -State $s.Tag })
         $ui.AutoClean.Add_Click({param($s,$e) try{ Update-YumConfigValue -Name DiskAutoClean -Value ([bool]$s.IsChecked); Show-YumToast -Text $(if([bool]$s.IsChecked){'Automatic weekly clean on: only the safest leftovers.'}else{'Automatic weekly clean off.'}) }catch{} })

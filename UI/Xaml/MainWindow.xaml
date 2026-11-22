@@ -78,7 +78,7 @@
           <Border x:Name="SideStatusPanel" Background="{StaticResource Bg}" CornerRadius="8" Padding="12,10" Margin="0,0,0,10">
             <StackPanel>
               <WrapPanel Margin="0,0,0,8">
-                <Border Style="{StaticResource Pill}" Margin="0,0,6,4" ToolTip="Current memory mode">
+                <Border Style="{StaticResource Pill}" Margin="0,0,14,4" ToolTip="Current memory mode">
                   <TextBlock x:Name="Mode" Text="BALANCED" FontSize="10.5" FontWeight="SemiBold" Foreground="{StaticResource Pink}"/>
                 </Border>
                 <Border Style="{StaticResource Pill}" Margin="0,0,0,4" ToolTip="Automatic monitoring state">
@@ -221,14 +221,12 @@
               </Grid>
               <StackPanel Grid.Column="1" VerticalAlignment="Center">
                 <DockPanel>
-                  <Border DockPanel.Dock="Right" Style="{StaticResource Pill}" VerticalAlignment="Top" ToolTip="What CPU care is doing (Settings › CPU)">
-                    <TextBlock x:Name="CpuCareStatus" Text="--" FontSize="10.5" FontWeight="SemiBold" Foreground="{StaticResource Success}"/>
-                  </Border>
+                  <TextBlock x:Name="CpuTemp" DockPanel.Dock="Right" Text="" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Top" Foreground="{StaticResource TextMuted}" ToolTip="Temperature, read from Windows (no extra drivers). Green = cool, amber = warm, red = hot."/>
                   <TextBlock Text="CPU" Style="{StaticResource StatLabel}"/>
                 </DockPanel>
                 <TextBlock x:Name="CpuSpeed" Text="-- GHz" Style="{StaticResource HeroValue}" FontSize="30" Foreground="{StaticResource Text}" Margin="0,2,0,0" ToolTip="Current speed of the processor (all cores), from Windows' processor performance counter"/>
                 <TextBlock x:Name="CpuDetails" Text="-- processes • -- threads" Style="{StaticResource Caption}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"/>
-                <TextBlock x:Name="CpuBusiest" Text="" Style="{StaticResource Caption}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"/>
+                <DockPanel><TextBlock x:Name="CpuCareStatus" DockPanel.Dock="Left" Text="--" FontSize="11" FontWeight="SemiBold" Margin="0,0,6,0" Foreground="{StaticResource Success}" ToolTip="What CPU care is doing (Settings › CPU)"/><TextBlock x:Name="CpuBusiest" Text="" Style="{StaticResource Caption}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"/></DockPanel>
               </StackPanel>
             </Grid>
           </Border>
@@ -248,7 +246,7 @@
                 </StackPanel>
               </Grid>
               <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                <TextBlock Text="GRAPHICS (GPU)" Style="{StaticResource StatLabel}"/>
+                <DockPanel><TextBlock x:Name="GpuTemp" DockPanel.Dock="Right" Text="" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Top" Foreground="{StaticResource TextMuted}" ToolTip="Temperature, read from Windows (no extra drivers). Green = cool, amber = warm, red = hot."/><TextBlock Text="GRAPHICS (GPU)" Style="{StaticResource StatLabel}"/></DockPanel>
                 <TextBlock x:Name="GpuName" Text="--" Style="{StaticResource HeroValue}" FontSize="24" Foreground="{StaticResource Text}" Margin="0,2,0,2" TextTrimming="CharacterEllipsis"/>
                 <TextBlock x:Name="GpuVram" Text="" Style="{StaticResource Caption}" TextWrapping="Wrap"/>
               </StackPanel>
@@ -270,7 +268,7 @@
                 </StackPanel>
               </Grid>
               <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                <TextBlock Text="DISK" Style="{StaticResource StatLabel}"/>
+                <DockPanel><TextBlock x:Name="DiskTemp" DockPanel.Dock="Right" Text="" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Top" Foreground="{StaticResource TextMuted}" ToolTip="Temperature, read from Windows (no extra drivers). Green = cool, amber = warm, red = hot."/><TextBlock Text="DISK" Style="{StaticResource StatLabel}"/></DockPanel>
                 <TextBlock x:Name="DiskFree" Text="-- GB" Style="{StaticResource HeroValue}" FontSize="24" Foreground="{StaticResource Text}" Margin="0,2,0,0" TextTrimming="CharacterEllipsis"/>
                 <TextBlock x:Name="DiskSpaceText" Text="" Style="{StaticResource Caption}" Margin="0,0,0,4" TextWrapping="Wrap"/>
                 <ProgressBar x:Name="DiskSpaceBar" Height="6" Minimum="0" Maximum="100" Value="0" Foreground="#7DD3FC"/>

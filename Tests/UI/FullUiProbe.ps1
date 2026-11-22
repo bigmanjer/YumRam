@@ -73,6 +73,8 @@ $script:Steps=@(
  { Click $script:Yum.Ui.DiskCleanup },   # the real sidebar button (5.15.2: it was not registered, clicks did nothing)
  { if((PW 'DiskCleanup') -and (PW 'DiskCleanup').Tag.Busy -and $script:WaitD++ -lt 25){ $script:I-- } },
  { $st=(PW 'DiskCleanup').Tag; Check ($null -ne $st -and -not $st.Busy -and @($st.Rows).Count -ge 8) ("Disk cleanup measured {0} categories ({1}; can free {2})" -f @($st.Rows).Count,$st.Ui.Details.Text,$st.Ui.SumJunk.Text); $st.Ui.Junk.SelectedIndex=0; Check ($st.Ui.ExplainBody.Visibility -eq 'Visible' -and $st.Ui.ExplainEffect.Text.Length -gt 10) "Disk cleanup explains: $($st.Ui.ExplainTitle.Text)"; Start-YumDiskUsage -State $st -Path (Join-Path $script:Yum.Root 'Tests') },
+ # 5.16.2: Select all, and ticks survive scrolling (the list re-reads each row's Selected when it redraws).
+ { $st=(PW 'DiskCleanup').Tag; $pk=@(Get-YumDiskPickable -State $st); Set-YumDiskPickAll -State $st -On $true; $st.Ui.Junk.Items.Refresh(); Check ($pk.Count -ge 1 -and @($pk | Where-Object { -not $_.Selected }).Count -eq 0 -and $st.Picked.Count -eq $pk.Count -and [bool]$st.Ui.PickAll.IsChecked) ("Disk cleanup Select all ticks {0} categories" -f $pk.Count); Set-YumDiskPickAll -State $st -On $false; $st.Ui.Junk.Items.Refresh(); Check ($st.Picked.Count -eq 0 -and -not [bool]$st.Ui.PickAll.IsChecked -and @($pk | Where-Object { $_.Selected }).Count -eq 0) 'Select all again unticks everything' },
  { if((PW 'DiskCleanup').Tag.Busy -and $script:WaitE++ -lt 40){ $script:I-- } },
  { $st=(PW 'DiskCleanup').Tag; Check (@($st.Ui.UsageFolders.ItemsSource).Count -ge 1 -and @($st.Ui.UsageFiles.ItemsSource).Count -ge 1) "What's using my disk: $($st.Ui.Details.Text)"; Shot 'p-disk' },
  { Go 'Intelligence' },
