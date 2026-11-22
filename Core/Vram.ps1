@@ -175,7 +175,7 @@ function Invoke-YumVramWatch {
         $s=$script:Yum.Snapshot; if($null -eq $s -or $null -eq $s.Game -or -not [bool]$s.Game.Detected){return}
         $gamePid=[int]$s.Game.ProcessId
         if([int]$script:Yum['VramWarnedPid'] -eq $gamePid){return}
-        $g=Get-YumLiveGpu; if($null -eq $g -or $null -eq $g.Main -or $null -eq $g.Main.VramUsedGB -or [double]$g.Main.VramTotalGB -le 0){return}
+        $g=Get-YumLiveReading -Kind Gpu; if($null -eq $g -or $null -eq $g.Main -or $null -eq $g.Main.VramUsedGB -or [double]$g.Main.VramTotalGB -le 0){return}
         $pct=100*[double]$g.Main.VramUsedGB/[double]$g.Main.VramTotalGB
         $users=@(Get-YumVramUsers | Where-Object { $_.OnMainGpu -and $_.Pid -ne $gamePid -and $_.Name -notin @('dwm','csrss','System','Idle','') -and $_.MB -ge 100 } | Select-Object -First 4)
         if($pct -lt 90 -or $users.Count -eq 0){return}

@@ -1,7 +1,7 @@
 ﻿#requires -Version 5.1
 # 5.15.2: live CPU / GPU / VRAM readings that work whether or not monitoring is on (user report: CPU speed showed
 # "-- GHz" and GPU did not move while monitoring was off; GPU "3D" was unexplained and VRAM was missing).
-# All counters are opened once and then read with NextValue / one ReadCategory (a few ms). UI thread only.
+# Counters are opened once, then read with NextValue / one ReadCategory. Since 5.15.9 the app reads them in a background runspace (Start-YumLiveSampler).
 
 function Initialize-YumGpuInfoType {
   # compiled on first use, not at start-up (only Overview's GPU card needs it)
@@ -53,9 +53,61 @@ public static class YumGpuInfo {
 }
 
 $script:YumLive=@{Adapters=$null;VramCounters=@{};GpuCategory=$null;GpuPrev=@{};CpuTime=$null;CpuPerf=$null;BaseMHz=0.0}
+$script:YumLiveReadingsSource=$PSCommandPath
+
+# 5.15.9 (user: "program lagging, not responding at first, then responded"; "minimal lag to no lag"). Measured on
+# the test PC with real data: the first Overview refresh blocked the window 3.0 s while Windows opened the GPU
+# (1.5 s), CPU (1.1 s) and disk counters on the UI thread. The readings are now taken by a background runspace
+# (same functions, loaded from this file) every ~2 s while the Overview or mini bar asks; the UI only copies the
+# latest values (no waiting). The functions below stay callable directly (tests, the sampler itself).
+function Start-YumLiveSampler {
+    if($null -ne $script:Yum['LiveSampler']){return}
+    $shared=[hashtable]::Synchronized(@{Gpu=$null;Cpu=$null;Disk=$null;Adapters=$null;Updated=[datetime]::MinValue;Samples=0;WantedUntil=(Get-Date).AddSeconds(10);Stop=$false;Error='';IntervalMs=2000})
+    $ps=[powershell]::Create()
+    [void]$ps.AddScript({
+        param($S,$Src)
+        . ([scriptblock]::Create($Src))
+        $last=[datetime]::MinValue
+        while(-not $S.Stop){
+            try{
+                # Second sample after 0.5 s so busy % (a difference of two samples) is real right away.
+                $gap=if([int]$S.Samples -lt 2){500}else{[int]$S.IntervalMs-150}
+                if((Get-Date) -lt $S.WantedUntil -and ((Get-Date)-$last).TotalMilliseconds -ge $gap){
+                    $last=Get-Date
+                    if($null -eq $S.Adapters){ $S.Adapters=@(Get-YumGpuAdapters) }
+                    # Each reading is published as soon as it exists (the first GPU read alone takes ~1.5 s).
+                    $S.Cpu=Get-YumLiveCpu; $S.Disk=Get-YumLiveDisk; $S.Gpu=Get-YumLiveGpu
+                    $S.Updated=Get-Date; $S.Samples=[int]$S.Samples+1; $S.Error=''
+                }
+            }catch{ $S.Error=$_.Exception.Message }
+            Start-Sleep -Milliseconds 150
+        }
+    }).AddArgument($shared).AddArgument([IO.File]::ReadAllText($script:YumLiveReadingsSource))
+    $h=$ps.BeginInvoke()
+    $script:Yum['LiveSampler']=@{Shared=$shared;Ps=$ps;Handle=$h}
+}
+
+function Stop-YumLiveSampler {
+    try{ $v=$script:Yum['LiveSampler']; if($null -ne $v){ $v.Shared.Stop=$true; try{$v.Ps.Stop()}catch{}; try{$v.Ps.Dispose()}catch{}; $script:Yum['LiveSampler']=$null } }catch{}
+}
+
+function Get-YumLiveReading {
+    # Latest background reading: Kind = Gpu | Cpu | Disk. $null until the first sample (a fraction of a second).
+    # Asking keeps the sampler reading for 8 s; nothing is read while nobody asks (window hidden, other page).
+    param([ValidateSet('Gpu','Cpu','Disk')][string]$Kind)
+    try{
+        Start-YumLiveSampler
+        $s=$script:Yum['LiveSampler'].Shared
+        $s.WantedUntil=(Get-Date).AddSeconds(8)
+        return $s[$Kind]
+    }catch{ return $null }
+}
 
 function Get-YumGpuAdapters {
     if($null -eq $script:YumLive.Adapters){
+        # In the app: take the list the background sampler made instead of compiling DXGI code on the UI thread.
+        $smp=$null; try{ if($null -ne (Get-Variable -Name Yum -Scope Script -ErrorAction SilentlyContinue) -and $script:Yum -is [System.Collections.IDictionary]){ $smp=$script:Yum['LiveSampler'] } }catch{}
+        if($null -ne $smp){ $pub=$smp.Shared.Adapters; if($null -eq $pub){ return @() }; $script:YumLive.Adapters=@($pub); return @($pub) }
         $a=@(); try{ Initialize-YumGpuInfoType; $a=@([YumGpuInfo]::Adapters() | Where-Object { -not $_.Software -and $_.VendorId -ne 0x1414 }) }catch{}   # 0x1414 = Microsoft Basic Render
         $script:YumLive.Adapters=$a
     }

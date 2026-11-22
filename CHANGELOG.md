@@ -1,5 +1,32 @@
 # Changelog
 
+# YUMRAM 5.15.9 — no more "Not responding" after start, much less lag
+
+User report: "program lagging, at first it said not responding, then responded" - "should run with minimal lag to no
+lag". Measured with a new freeze meter (a watcher asks the window for an empty job every 50 ms at input priority and
+records every wait over 200 ms) on a copy of the test PC's real data, every page opened in turn:
+
+| Moment | 5.15.8 | 5.15.9 |
+|---|---|---|
+| ~2 s after the window appears (the "Not responding") | 4,742 ms | **232 ms** |
+| Every What's running refresh (every 2 s) | up to 716 ms | **under 200 ms** |
+| Opening What's running | 1,769 ms | 805 ms |
+| Opening Intelligence | 1,408 ms | 1,095 ms |
+| Reclaim Center / Settings / Disk cleanup / About | up to 605 ms | under 200 ms |
+
+- **Live readings (CPU, GPU, VRAM, disk) are taken in the background.** Windows opens these counters slowly the first
+  time (GPU 1.5 s, CPU 1.1 s, disk/adapters 0.65 s) and that happened on the window thread. A background sampler now
+  reads them every ~2 s while the Overview or mini bar is on screen; the window only copies the latest numbers.
+- **CPU details (name, laptop/desktop) come from a one-off background query** instead of WMI on the window thread
+  (~1 s, asked from two places on the Overview).
+- **The Intelligence database is preloaded in the background** shortly after start (0.6-0.7 s with 521 records) and
+  is no longer reloaded when Intelligence opens; a preload never replaces a database the window already has.
+- **What's running:** CPU time of every process in one system call and main windows in one window walk (was one call
+  per process, ~226 here) - the 2-second refresh no longer stutters.
+- **Intelligence list:** the record check reuses one defaults table (2x faster, same result) and manual decisions
+  are not re-checked on disk ~200 times in a row.
+- New **ResponsivenessTest** keeps this work off the window thread (67 tests).
+
 # YUMRAM 5.15.8 — more disk space found, repository brought up to date
 
 - **Disk cleanup 15 -> 18 categories** (researched against BleachBit, CCleaner and Storage Sense; every location

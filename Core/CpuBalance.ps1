@@ -161,8 +161,12 @@ function Get-YumCpuProfile {
     if($null -ne $script:Yum['CpuProfile']){return $script:Yum['CpuProfile']}
     $cores=@();$l3=@();$name='';$laptop=$false
     try{[YumCpuCareNative]::Detect();$cores=@([YumCpuCareNative]::Cores);$l3=@([YumCpuCareNative]::L3)}catch{}
-    try{$name=([string](Get-CimInstance Win32_Processor -ErrorAction Stop | Select-Object -First 1).Name).Trim()}catch{}
-    try{$laptop=(@(Get-CimInstance Win32_Battery -ErrorAction Stop).Count -gt 0)}catch{}
+    $cim=$script:Yum['CpuCimInfo']
+    if($null -ne $cim){ $name=[string]$cim.Name; $laptop=[bool]$cim.Laptop }
+    else{
+        try{$name=([string](Get-CimInstance Win32_Processor -ErrorAction Stop | Select-Object -First 1).Name).Trim()}catch{}
+        try{$laptop=(@(Get-CimInstance Win32_Battery -ErrorAction Stop).Count -gt 0)}catch{}
+    }
     $logical=[Environment]::ProcessorCount
     $all=[uint64]0;foreach($c in $cores){$all=$all -bor [uint64]$c.Mask}
     $classes=@($cores | ForEach-Object { [int]$_.EfficiencyClass } | Sort-Object -Unique)
@@ -192,6 +196,26 @@ function Get-YumCpuProfile {
         Summary=('{0}: {1} cores / {2} threads{3}{4}{5}, {6}' -f $(if($name){$name}else{'CPU'}),$cores.Count,$logical,'',$(if($hybrid){', performance + efficiency cores'}else{''}),'',$(if($laptop){'laptop'}else{'desktop'}))}
     $script:Yum['CpuProfile']=$prof
     return $prof
+}
+
+function Test-YumCpuProfileReady {
+    # 5.15.9: the two WMI questions behind Get-YumCpuProfile (CPU name, battery) took ~1 s on the UI thread the first
+    # time the Overview drew its CPU card. The UI asks this instead: $true once the answers exist (from the CPU care
+    # worker or from a one-off background query started here), so Get-YumCpuProfile is instant on the UI thread.
+    if($null -ne $script:Yum['CpuProfile'] -or $null -ne $script:Yum['CpuCimInfo']){ return $true }
+    if($null -eq $script:Yum['CpuCimQuery']){
+        try{
+            $ps=[powershell]::Create()
+            [void]$ps.AddScript({ param($Y)
+                $n='';$l=$false
+                try{$n=([string](Get-CimInstance Win32_Processor -ErrorAction Stop | Select-Object -First 1).Name).Trim()}catch{}
+                try{$l=(@(Get-CimInstance Win32_Battery -ErrorAction Stop).Count -gt 0)}catch{}
+                $Y['CpuCimInfo']=[pscustomobject]@{Name=$n;Laptop=$l}
+            }).AddArgument($script:Yum)
+            $script:Yum['CpuCimQuery']=@{Ps=$ps;Handle=$ps.BeginInvoke()}
+        }catch{ $script:Yum['CpuCimInfo']=[pscustomobject]@{Name='';Laptop=$false} }
+    }
+    return $false
 }
 
 function Get-YumOnBattery {

@@ -510,19 +510,22 @@ function Update-YumLiveReadingsUi {
     # Cheap: opened counters + one GPU-engine read (~10-25 ms measured), nothing while hidden or on another page.
     param([switch]$Paused)
     try{
-        if(((Get-Date)-[datetime]$script:Yum['LastLiveReadingsRead']).TotalSeconds -lt 2){return}
+        # Every 2 s; while a background reading is still missing (first seconds) every tick.
+        $haveAll=($null -ne $script:Yum['LiveSampler'] -and $null -ne $script:Yum['LiveSampler'].Shared.Gpu -and $null -ne $script:Yum['LiveSampler'].Shared.Disk)
+        if($haveAll -and ((Get-Date)-[datetime]$script:Yum['LastLiveReadingsRead']).TotalSeconds -lt 2){return}
         $script:Yum['LastLiveReadingsRead']=Get-Date
         $ui=$script:Yum.Ui
-        $g=Get-YumLiveGpu
-        if($null -ne $ui['GpuVram']){
+        # 5.15.9: latest background reading (no waiting); $null for a moment right after start.
+        $g=Get-YumLiveReading -Kind Gpu
+        if($null -ne $ui['GpuVram'] -and $null -ne $g){
             $ui.GpuVram.Text=Format-YumVram $g
             $ui.GpuVram.ToolTip=((@($g.Adapters) | ForEach-Object { if($null -ne $_.VramUsedGB){'{0}: {1:N0} % busy, VRAM {2:N2} / {3:N1} GB' -f $_.Name,$_.ThreeD,$_.VramUsedGB,$_.VramTotalGB}else{'{0}: {1:N0} % busy, {2:N1} GB VRAM' -f $_.Name,$_.ThreeD,$_.VramTotalGB} }) -join [Environment]::NewLine)
             if($null -ne $ui['GpuName'] -and $null -ne $g.Main){ $ui.GpuName.Text=Get-YumGpuShortName ([string]$g.Main.Name); $ui.GpuName.ToolTip=[string]$g.Main.Name }
             # 5.15.2: who holds graphics memory (read in the background; see Core\Vram.ps1).
             try{ $vu=@(Get-YumVramUsers | Select-Object -First 6); if($vu.Count){ $ui.GpuVram.ToolTip=[string]$ui.GpuVram.ToolTip+[Environment]::NewLine+[Environment]::NewLine+'Biggest users of graphics memory:'+[Environment]::NewLine+(($vu | ForEach-Object { '  {0}  {1:N0} MB on {2}' -f $_.Name,$_.MB,$_.Adapter }) -join [Environment]::NewLine)+[Environment]::NewLine+'Click a program in What''s running to see how to free it.' } }catch{}
         }
-        if($null -ne $ui['DiskBusy']){
-            $d=Get-YumLiveDisk
+        $d=Get-YumLiveReading -Kind Disk
+        if($null -ne $ui['DiskBusy'] -and $null -ne $d){
             $ui.DiskBusy.Text=if($null -ne $d.Busiest){'{0:N0}%' -f $d.Busiest}else{'--%'}
             if($null -ne $d.Busiest -and $null -ne $ui['DiskRing']){ Update-YumRing -Ring $ui.DiskRing -Label $null -StateLabel $ui.DiskRingState -Track $ui.DiskRingTrack -Percent ([double]$d.Busiest) -NormalHex '#7DD3FC' -Warn 60 -Danger 90 -Words @('calm','busy','maxed out') }
             $ui.DiskSpeed.Text=('Read {0} · Write {1}' -f (Format-YumDiskSpeed $d.ReadMBs),(Format-YumDiskSpeed $d.WriteMBs))
@@ -537,10 +540,13 @@ function Update-YumLiveReadingsUi {
                 $ui.DiskSpaceText.ToolTip=$(if($usedPct -ge 90){'The Windows drive is over 90 % full. Windows needs free space for updates and its page file; delete or move large files (Settings > System > Storage).'}else{$null}) }
         }
         if(-not $Paused){ $script:Yum['LiveCpu']=$null; return }
-        $c=Get-YumLiveCpu
-        $script:Yum['LiveCpu']=$c;$script:Yum['LiveGpuBusy']=[double]$g.Busiest
-        $ui.GPU.Text='{0:N0}%' -f [double]$g.Busiest
-        Update-YumGpuRing -Percent ([double]$g.Busiest)
+        $c=Get-YumLiveReading -Kind Cpu
+        $script:Yum['LiveCpu']=$c
+        if($null -ne $g){
+            $script:Yum['LiveGpuBusy']=[double]$g.Busiest
+            $ui.GPU.Text='{0:N0}%' -f [double]$g.Busiest
+            Update-YumGpuRing -Percent ([double]$g.Busiest)
+        }
         if($null -ne $c){
             $ui.CPU.Text='{0:N1}%' -f [double]$c.Percent
             Update-YumRing -Ring $ui.CpuRing -Label $ui.CpuRingText -StateLabel $ui.CpuRingState -Track $ui.CpuRingTrack -Percent ([double]$c.Percent) -NormalHex '#FF9ECD' -Warn 70 -Danger 90 -Words @('calm','busy','maxed out')
@@ -561,7 +567,8 @@ function Update-YumCpuCardUi {
         if($paused -and $null -ne $live){ $mhz=[double]$live.MHz; if([double]$live.BaseMHz -gt 0){$base=[double]$live.BaseMHz} }
         if($mhz -le 0){$ui.CpuSpeed.Text='-- GHz'}else{$ui.CpuSpeed.Text=('{0:N2} GHz' -f ($mhz/1000.0))}
         $ui.CpuSpeed.ToolTip=if($base -gt 0){'Current effective speed across all cores. Base speed {0:N2} GHz; above it = boost, below it = saving power or held back by heat.' -f ($base/1000.0)}else{'Current effective speed across all cores.'}
-        $pr=Get-YumCpuProfile
+        # 5.15.9: never wait for WMI here; for the first second show what .NET knows.
+        $pr=if(Test-YumCpuProfileReady){Get-YumCpuProfile}else{[pscustomobject]@{Cores='…';Logical=[Environment]::ProcessorCount;Summary='Reading CPU details…'}}
         $procs=0;$threads=0;try{$procs=[int]$c['Processes'];$threads=[int]$c['Threads']}catch{}
         $ui.CpuDetails.Text=if($paused -or $procs -le 0){'{0} cores • {1} threads' -f $pr.Cores,$pr.Logical}else{'{0:N0} processes • {1:N0} threads • {2} cores / {3} logical' -f $procs,$threads,$pr.Cores,$pr.Logical}
         $ui.CpuDetails.ToolTip=$pr.Summary
@@ -583,7 +590,7 @@ function Update-YumCpuBalanceUi {
         $ui.CpuBalanceText.Text=[string]$s.Text
         $ui.CpuBalanceCount.Text=if(-not $s.Count){''}elseif([string]$s.Count -match '^0 '){'Has not needed to step in today.'}else{'Stepped in '+[string]$s.Count+'.'}
         $ui.CpuBalancePill.Visibility=if($s.Active){'Visible'}else{'Collapsed'}
-        try{$cst=Get-YumCpuBalanceState;$lv=[string]$cst['Level'];if(-not $lv){$lv=Get-YumCpuCareLevel};$ui.CpuCareTitle.Text=('CPU CARE · {0}{1}' -f $lv.ToUpperInvariant(),$(if([bool]$cst['Gaming']){' · GAMING'}else{''}));$ui.CpuCareTitle.ToolTip=(Get-YumCpuProfile).Summary}catch{}
+        try{$cst=Get-YumCpuBalanceState;$lv=[string]$cst['Level'];if(-not $lv){$lv=Get-YumCpuCareLevel};$ui.CpuCareTitle.Text=('CPU CARE · {0}{1}' -f $lv.ToUpperInvariant(),$(if([bool]$cst['Gaming']){' · GAMING'}else{''}));if(Test-YumCpuProfileReady){$ui.CpuCareTitle.ToolTip=(Get-YumCpuProfile).Summary}}catch{}
     }catch{}
 }
 function Start-YumMonitoring {
@@ -605,6 +612,8 @@ function Test-YumSingleInstance {try{$mutex=New-Object System.Threading.Mutex($f
 function Stop-YumSingleInstance {try{if($script:Yum.SingleInstanceOwned -and $script:Yum.SingleInstanceMutex){try{$script:Yum.SingleInstanceMutex.ReleaseMutex()}catch{};$script:Yum.SingleInstanceMutex.Dispose()}}catch{}finally{$script:Yum.SingleInstanceMutex=$null;$script:Yum.SingleInstanceOwned=$false}}
 function Start-YumApplicationUi {
     $path=Join-Path $script:Yum.Root 'UI\Xaml\MainWindow.xaml';if(-not(Test-Path -LiteralPath $path)){throw "Missing main window XAML: $path"};[xml]$xaml=Read-YumXamlText -Path $path;$reader=New-Object System.Xml.XmlNodeReader $xaml;$script:Yum.Window=[Windows.Markup.XamlReader]::Load($reader);$script:Yum.Ui=[ordered]@{};foreach($n in @('Intelligence','TelemetryStatus','QuickMonitorStatus','QuickMonitorTelemetry','ModeHelp','Mode','Status','Available','Memory','CPU','GPU','GpuVram','MiniBarButton','GpuName','GpuRing','GpuRingTrack','GpuRingState','DiskCard','DiskRing','DiskRingTrack','DiskRingState','DiskFree','DiskBusy','DiskSpeed','DiskDetail','DiskSpaceBar','DiskSpaceText','SideScanPanel','SideScanText','SideScanBar','Game','Usage','MemoryBar','Target','TargetStatus','TargetBar','Graph','FreeRam','DeepReclaim','ReclaimCenter','ReclaimStatus','Monitor','ModeBox','TargetBox','Apply','AutoGame','ProtectGame','AutoClean','PriorityBox','Processes','Settings','About','Footer','VersionStatus','MemoryRing','MemoryRingText','MemoryRingTrack','MemoryRingState','CpuRing','CpuRingText','CpuRingTrack','CpuRingState','CpuSpeed','CpuDetails','CpuBusiest','CpuCareStatus','Range30s','Range5m','Range1h','Range12h','GraphCaption','NavOverview','Startup','WindowsBloat','DiskCleanup','PageHost','OverviewPage','Sidebar','SidebarToggle','SideBrand','SideVersion','SideStatusPanel','SideRamText','SideRamBar','SideRamCompact','HotkeyHint','FreedToday','FreedTodayRuns','FreedTotal','FreedTotalRuns','CpuBalanceToggle','CpuBalanceText','CpuBalanceCount','CpuBalancePill','CpuCareTitle','UpdateBanner','UpdateNotes','UpdateInstall','UpdateTitle','UpdateText')){$script:Yum.Ui[$n]=$script:Yum.Window.FindName($n)};Apply-YumUiConfig;if($null -ne $script:Yum.Ui.VersionStatus){$script:Yum.Ui.VersionStatus.Text=('YUMRAM V{0}' -f [string]$script:Yum.Config.Version)};if($null -ne $script:Yum.Ui.SideVersion){$script:Yum.Ui.SideVersion.Text=('version {0} beta' -f [string]$script:Yum.Config.Version)}
+    # 5.15.9: start the background live readings now so the Overview has numbers when it first draws.
+    try{ Start-YumLiveSampler }catch{}
     # 5.6: one window - the sidebar opens every tool as a page (UI\Shell.ps1).
     Initialize-YumShell
     try{ $script:Yum.Ui.SideScanPanel.Add_MouseLeftButtonUp({ try{ Open-YumPage -Key 'Intelligence' }catch{} }) }catch{}
@@ -658,7 +667,7 @@ function Start-YumApplicationUi {
     # 5.4: the main window runs with Show() + a DispatcherFrame instead of ShowDialog(), because hiding a
     # ShowDialog window (minimize to tray) ends the dialog and would quit YUMRAM.
     $script:Yum.MainFrame=New-Object System.Windows.Threading.DispatcherFrame
-    $script:Yum.Window.Add_Closed({try{Save-YumHistory}catch{};try{if($null -ne $script:Yum.PageFrame){$script:Yum.PageFrame.Continue=$false}}catch{};try{if($null -ne $script:Yum.Hotkey){$script:Yum.Hotkey.Dispose();$script:Yum.Hotkey=$null}}catch{};try{Remove-YumTray}catch{};try{Close-YumMiniBar}catch{};try{Stop-YumVramSampler}catch{};$script:Yum.StopRequested=$true;Stop-YumMonitoring;try{Stop-YumControllerWorker}catch{};try{[YumForegroundHook]::Stop()}catch{};try{Stop-YumCpuBalanceWorker}catch{};try{if($null -ne $script:Yum.UiTimer){$script:Yum.UiTimer.Stop()}}catch{};Restart-YumOptionalServices;Write-YumLog 'YUMRAM closed.';Stop-YumSingleInstance;try{$script:Yum.MainFrame.Continue=$false}catch{}})
+    $script:Yum.Window.Add_Closed({try{Save-YumHistory}catch{};try{if($null -ne $script:Yum.PageFrame){$script:Yum.PageFrame.Continue=$false}}catch{};try{if($null -ne $script:Yum.Hotkey){$script:Yum.Hotkey.Dispose();$script:Yum.Hotkey=$null}}catch{};try{Remove-YumTray}catch{};try{Close-YumMiniBar}catch{};try{Stop-YumVramSampler}catch{};try{Stop-YumLiveSampler}catch{};$script:Yum.StopRequested=$true;Stop-YumMonitoring;try{Stop-YumControllerWorker}catch{};try{[YumForegroundHook]::Stop()}catch{};try{Stop-YumCpuBalanceWorker}catch{};try{if($null -ne $script:Yum.UiTimer){$script:Yum.UiTimer.Stop()}}catch{};Restart-YumOptionalServices;Write-YumLog 'YUMRAM closed.';Stop-YumSingleInstance;try{$script:Yum.MainFrame.Continue=$false}catch{}})
     # 5.15.2: X keeps YUMRAM running in the background; Windows signing out / shutting down still quits cleanly.
     $script:Yum.Window.Add_Closing({ param($s,$e) try{ if(Test-YumCloseToBackground){ $e.Cancel=$true; Invoke-YumCloseToBackground } }catch{} })
     try{
@@ -676,7 +685,7 @@ function Start-YumApplicationUi {
         }catch{}
     })
     if([bool]$script:Yum.Config['ShowTrayIcon']){ try{ Initialize-YumTray }catch{ Write-YumLogException -Context 'Tray icon failed; continuing without it' -Exception $_.Exception } }
-    $timer=New-Object System.Windows.Threading.DispatcherTimer;$timer.Interval=[TimeSpan]::FromSeconds([double]$script:Yum.Config.UIRefreshIntervalSeconds);$timer.Add_Tick({param($tm,$te)try{$want=if($script:Yum.Window.IsVisible){[TimeSpan]::FromSeconds([double]$script:Yum.Config.UIRefreshIntervalSeconds)}else{[TimeSpan]::FromSeconds(1)};if($tm.Interval -ne $want){$tm.Interval=$want}}catch{};try{ $sig=$script:Yum['ShowSignal']; if($null -ne $sig -and $sig.WaitOne(0)){ Show-YumMainWindow } }catch{};Update-YumUiFromSnapshot;Update-YumCpuBalanceUi;Update-YumUpdateUi;Update-YumNoticesUi;Update-YumSideScanUi;Invoke-YumDiskAutoCleanIfDue;Invoke-YumVramWatch;Update-YumAutoUpdate;Update-YumCleanupResultUI;try{[void](Update-YumReclaimVerification)}catch{};Update-YumReclaimResultUI});$script:Yum.UiTimer=$timer;$timer.Start()
+    $timer=New-Object System.Windows.Threading.DispatcherTimer;$timer.Interval=[TimeSpan]::FromSeconds([double]$script:Yum.Config.UIRefreshIntervalSeconds);$timer.Add_Tick({param($tm,$te)try{$want=if($script:Yum.Window.IsVisible){[TimeSpan]::FromSeconds([double]$script:Yum.Config.UIRefreshIntervalSeconds)}else{[TimeSpan]::FromSeconds(1)};if($tm.Interval -ne $want){$tm.Interval=$want}}catch{};try{ $sig=$script:Yum['ShowSignal']; if($null -ne $sig -and $sig.WaitOne(0)){ Show-YumMainWindow } }catch{};Update-YumUiFromSnapshot;Update-YumCpuBalanceUi;Update-YumUpdateUi;Update-YumNoticesUi;Update-YumSideScanUi;Invoke-YumDiskAutoCleanIfDue;Invoke-YumVramWatch;Update-YumAutoUpdate;try{Start-YumIntelligenceDbPreload}catch{};Update-YumCleanupResultUI;try{[void](Update-YumReclaimVerification)}catch{};Update-YumReclaimResultUI});$script:Yum.UiTimer=$timer;$timer.Start()
     try{$initialMemory=Get-YumMemoryTelemetry;if($null -ne $initialMemory){Update-YumSnapshot -Changes @{Memory=$initialMemory;CPU=0.0;GPU3D=0.0;ForegroundProcessId=0;Game=[pscustomobject]@{ProcessId=0;ProcessName=$null;Detected=$false}} -CoreTelemetry}}catch{Write-YumLogException -Context 'Initial memory telemetry failed' -Exception $_.Exception}
     # 5.10: the first snapshot does not bump the version counter; ask for one full draw (paused start showed '--').
     $script:Yum.UiNeedsFullRefresh=$true

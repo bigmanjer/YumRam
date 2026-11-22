@@ -73,10 +73,10 @@ function Update-YumMiniBar {
     try{
         $m=Get-YumMemoryTelemetry
         if($null -ne $m){ Set-YumMiniStat $mb.Ram ([double]$m.UsedPercent) ('{0:N0}%' -f [double]$m.UsedPercent) 70 85; $mb.Ram.Panel.ToolTip=('{0:N1} GB free for programs' -f [double]$m.AvailableGB) }
-        $c=Get-YumLiveCpu; if($null -ne $c){ Set-YumMiniStat $mb.Cpu ([double]$c.Percent) ('{0:N0}%' -f [double]$c.Percent) }
-        $g=Get-YumLiveGpu; if($null -ne $g){ Set-YumMiniStat $mb.Gpu ([double]$g.Busiest) ('{0:N0}%' -f [double]$g.Busiest) 70 95 }
+        $c=Get-YumLiveReading -Kind Cpu; if($null -ne $c){ Set-YumMiniStat $mb.Cpu ([double]$c.Percent) ('{0:N0}%' -f [double]$c.Percent) }
+        $g=Get-YumLiveReading -Kind Gpu; if($null -ne $g){ Set-YumMiniStat $mb.Gpu ([double]$g.Busiest) ('{0:N0}%' -f [double]$g.Busiest) 70 95 }
         $n=Get-YumLiveNetwork; if($null -ne $n){ $mb.Net.Value.Text=('↓{0} ↑{1}' -f (Format-YumNetSpeed $n.Down),(Format-YumNetSpeed $n.Up)) } else { $mb.Net.Value.Text='…' }
-        $d=Get-YumLiveDisk; if($null -ne $d -and $null -ne $d.Busiest){ Set-YumMiniStat $mb.Disk ([double]$d.Busiest) ('{0:N0}%' -f [double]$d.Busiest) 60 90 }
+        $d=Get-YumLiveReading -Kind Disk; if($null -ne $d -and $null -ne $d.Busiest){ Set-YumMiniStat $mb.Disk ([double]$d.Busiest) ('{0:N0}%' -f [double]$d.Busiest) 60 90 }
         $mb.Window.FindName('MiniHide').IsEnabled=($null -ne $script:Yum.TrayIcon)
         $free=$mb.Window.FindName('MiniFree'); if([string]$free.Content -ne 'Free RAM' -and -not (Test-YumReclaimBusy)){ $free.Content='Free RAM' }
     }catch{}

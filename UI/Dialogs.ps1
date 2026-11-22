@@ -422,6 +422,27 @@ public class YumProcRow2 : INotifyPropertyChanged {
 '@
 }
 
+# 5.15.9 (lag work): What's running refreshed every 2 s in 0.2-0.6 s on the UI thread. Process.MainWindowHandle
+# walks every desktop window for each process it is asked about (226 processes = 226 walks); this walks them once.
+# Same rule .NET uses for a main window: visible and not owned by another window.
+if (-not ('YumWindowPids' -as [type])) {
+    Add-Type @'
+using System; using System.Collections.Generic; using System.Runtime.InteropServices;
+public static class YumWindowPids {
+    delegate bool EnumProc(IntPtr h, IntPtr p);
+    [DllImport("user32.dll")] static extern bool EnumWindows(EnumProc cb, IntPtr p);
+    [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr h);
+    [DllImport("user32.dll")] static extern IntPtr GetWindow(IntPtr h, uint cmd);
+    [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+    public static HashSet<int> WithMainWindow() {
+        var set = new HashSet<int>();
+        EnumWindows((h, p) => { if (IsWindowVisible(h) && GetWindow(h, 4) == IntPtr.Zero) { uint pid; GetWindowThreadProcessId(h, out pid); set.Add((int)pid); } return true; }, IntPtr.Zero);
+        return set;
+    }
+}
+'@
+}
+
 function Get-YumProcessMeta {
     # Path / description / company for a process name, cached for the life of the window.
     param($State,[System.Diagnostics.Process]$Process)
@@ -449,13 +470,16 @@ function Update-YumProcessRows {
     if(-not $State.ContainsKey('CpuLast')){$State.CpuLast=@{};$State.CpuLastAt=$null}
     $cpuNow=[datetime]::UtcNow;$cpuElapsed=if($null -eq $State.CpuLastAt){0.0}else{($cpuNow-[datetime]$State.CpuLastAt).TotalMilliseconds};$State.CpuLastAt=$cpuNow
     $cores=[math]::Max(1,[Environment]::ProcessorCount);$cpuNext=@{};$groupCpu=@{};$cpuTotal=0.0
+    # 5.15.9: CPU time of every process in one call and main windows in one walk (was one OS call per process).
+    $snapCpu=$null;try{$snapCpu=[YumProcTree]::Snapshot()}catch{}
+    $winPids=$null;try{$winPids=[YumWindowPids]::WithMainWindow()}catch{}
     foreach($p in @(Get-Process -ErrorAction SilentlyContinue)){
         if($p.Id -eq 0){continue}
         $k=$p.ProcessName.ToLowerInvariant()
         if(-not $groups.ContainsKey($k)){$groups[$k]=New-Object System.Collections.Generic.List[System.Diagnostics.Process]}
         $groups[$k].Add($p)
         try{
-            $ms=$p.TotalProcessorTime.TotalMilliseconds;$cpuNext[$p.Id]=$ms
+            $ms=if($null -ne $snapCpu -and $snapCpu.ContainsKey($p.Id)){[double]$snapCpu[$p.Id].CpuMs}else{$p.TotalProcessorTime.TotalMilliseconds};$cpuNext[$p.Id]=$ms
             if($cpuElapsed -gt 0 -and $State.CpuLast.ContainsKey($p.Id)){$pct=[math]::Max(0.0,($ms-[double]$State.CpuLast[$p.Id])/($cpuElapsed*$cores)*100.0);$groupCpu[$k]=[double]$groupCpu[$k]+$pct;$cpuTotal+=$pct}
         }catch{}
     }
@@ -471,7 +495,7 @@ function Update-YumProcessRows {
         foreach($p in $list){
             $total+=[int64]$p.WorkingSet64
             if($null -eq $main -or $p.WorkingSet64 -gt $main.WorkingSet64){$main=$p}
-            try{if($null -eq $withWindow -and $p.MainWindowHandle -ne [IntPtr]::Zero){$withWindow=$p}}catch{}
+            if($null -eq $withWindow){ if($null -ne $winPids){ if($winPids.Contains($p.Id)){$withWindow=$p} } else { try{if($p.MainWindowHandle -ne [IntPtr]::Zero){$withWindow=$p}}catch{} } }
             if($gamePid -gt 0 -and $p.Id -eq $gamePid){$isGame=$true}
         }
         $mb=$total/1MB
@@ -625,7 +649,7 @@ function Show-YumTopProcesses {
         # Intelligence knowledge by program name (used for kinds and explanations).
         $intel=@{}
         try{
-            if($null -eq $script:Yum.IntelligenceDb -and (Get-Command Load-YumIntelligenceDb -ErrorAction SilentlyContinue)){$script:Yum.IntelligenceDb=Load-YumIntelligenceDb}
+            Wait-YumIntelligenceDbPreload; if($null -eq $script:Yum.IntelligenceDb -and (Get-Command Load-YumIntelligenceDb -ErrorAction SilentlyContinue)){$script:Yum.IntelligenceDb=Load-YumIntelligenceDb}
             if($null -ne $script:Yum.IntelligenceDb){foreach($rec in @($script:Yum.IntelligenceDb.Values)){try{$n=([string]$rec.Name).ToLowerInvariant();if($n -and -not $intel.ContainsKey($n)){$intel[$n]=$rec}}catch{}}}
         }catch{}
         $state=@{Window=$window;Ui=$ui;Rows=$rows;Meta=@{};ProtectedCache=@{};IntelByName=$intel;TotalRamGB=0.0;Paused=$false}
@@ -1153,7 +1177,7 @@ function Get-YumIntelligenceMergedRecords {
     $byIdentity=@{}
     $order=New-Object System.Collections.Generic.List[string]
     try {
-        if($null -eq $script:Yum.IntelligenceDb -or -not ($script:Yum.IntelligenceDb -is [hashtable])){ [void](Load-YumIntelligenceDb) }
+        Wait-YumIntelligenceDbPreload; if($null -eq $script:Yum.IntelligenceDb -or -not ($script:Yum.IntelligenceDb -is [hashtable])){ [void](Load-YumIntelligenceDb) }
     } catch { Write-YumLogException -Context 'Intelligence database load during view refresh failed' -Exception $_ }
     if($null -eq $script:Yum.IntelligenceDb -or -not ($script:Yum.IntelligenceDb -is [hashtable])){ $script:Yum.IntelligenceDb=@{} }
 
@@ -1312,7 +1336,8 @@ function Show-YumIntelligence {
             OverviewMessage=$window.FindName('OverviewMessage'); DatabaseStatus=$window.FindName('DatabaseStatus'); DatabaseCount=$window.FindName('DatabaseCount'); ResearchProgress=$window.FindName('ResearchProgress'); ActivityStatus=$window.FindName('ActivityStatus'); ActivityDetail=$window.FindName('ActivityDetail'); ActivityProgress=$window.FindName('ActivityProgress'); ActivityCard=$window.FindName('ActivityCard'); ActivityPercent=$window.FindName('ActivityPercent'); SelectedResearch=$window.FindName('SelectedResearch'); SelectedAction=$window.FindName('SelectedAction'); SelectedAdvice=$window.FindName('SelectedAdvice'); SelectedAdviceBadge=$window.FindName('SelectedAdviceBadge'); SelectedAdviceWhy=$window.FindName('SelectedAdviceWhy'); SelectedPurpose=$window.FindName('SelectedPurpose'); OpenLocation=$window.FindName('OpenLocation'); SearchOnline=$window.FindName('SearchOnline')
         }
         try {
-            [void](Load-YumIntelligenceDb)
+            # 5.15.9: the in-memory database is authoritative (only Save-/Load-YumIntelligenceDb touch the file); reloading it here cost 0.6 s.
+            Wait-YumIntelligenceDbPreload; if($null -eq $script:Yum.IntelligenceDb -or -not ($script:Yum.IntelligenceDb -is [hashtable])){ [void](Load-YumIntelligenceDb) }
             if($null -eq $script:Yum.IntelligenceDb -or -not ($script:Yum.IntelligenceDb -is [hashtable])){$script:Yum.IntelligenceDb=@{}}
             $initial=[pscustomobject]@{Records=@();Timestamp=Get-Date;ProcessCount=0;ServiceCount=0;AppCount=0;Errors=@();SavedCount=[int]$script:Yum.IntelligenceDb.Count;DatabaseCount=[int]$script:Yum.IntelligenceDb.Count;Status='Completed';DurationMs=0}
             $state.Data=$initial

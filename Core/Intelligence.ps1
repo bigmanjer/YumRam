@@ -112,6 +112,12 @@ function Load-YumManualOrganizations {
     param([switch]$Force)
     try {
         $path=Get-YumManualOrganizationPath
+        # 5.15.9 (lag work): building the Intelligence list asked ~200 times in a row and each call checked the file
+        # on disk (~2.6 ms). Within 2 s the cache is returned as is; saves from YUMRAM update the cache themselves.
+        try{
+            if(-not $Force -and $null -ne $script:Yum.ManualOrganizationsCache -and [string]$script:Yum.ManualOrganizationsCachePath -eq [string]$path -and ((Get-Date)-[datetime]$script:Yum.ManualOrganizationsCheckedAt).TotalSeconds -lt 2){return $script:Yum.ManualOrganizationsCache}
+            $script:Yum.ManualOrganizationsCheckedAt=Get-Date
+        }catch{}
         $stamp=[datetime]::MinValue
         if(Test-Path -LiteralPath $path){$stamp=(Get-Item -LiteralPath $path -ErrorAction Stop).LastWriteTimeUtc}
         if(-not $Force -and $null -ne $script:Yum.ManualOrganizationsCache -and [string]$script:Yum.ManualOrganizationsCachePath -eq [string]$path -and $script:Yum.ManualOrganizationsCacheStampUtc -eq $stamp){return $script:Yum.ManualOrganizationsCache}
@@ -198,9 +204,12 @@ function Apply-YumManualOrganizationToRecord {
     foreach($pair in @(@('Category',[string]$org.Category),@('Placement',[string]$org.Placement),@('ActionLane',[string]$org.ActionLane),@('Risk',[string]$org.Risk),@('ManualOverride',$true),@('ManualOrganizationUpdated',[string]$org.Updated),@('Recommendation',[string]$org.ActionLane))){try{if($null -eq $Record.PSObject.Properties[$pair[0]]){$Record|Add-Member -NotePropertyName $pair[0] -NotePropertyValue $pair[1]}else{$Record.($pair[0])=$pair[1]}}catch{}}
     return $Record
 }
+$script:YumIntelligenceRecordDefaults=$null
 function Ensure-YumIntelligenceRecordSchema {
     param([Parameter(Mandatory=$true)]$Record)
-    $defaults=[ordered]@{
+    # 5.15.9 (lag work): the defaults table is built once (this ran ~1,200 times when Intelligence opened). Defaults
+    # are plain values or empty arrays; PowerShell arrays are replaced, never changed in place, so sharing is safe.
+    if($null -eq $script:YumIntelligenceRecordDefaults){ $script:YumIntelligenceRecordDefaults=[ordered]@{
         Key=''
         StableIdentityKey=''
         Name=''
@@ -243,10 +252,12 @@ function Ensure-YumIntelligenceRecordSchema {
         Source='Process'
         LastSeen=''
         Live=$true
-    }
+    } }
+    $defaults=$script:YumIntelligenceRecordDefaults
+    $props=$Record.PSObject.Properties
     foreach($name in $defaults.Keys){
         try {
-            $prop=$Record.PSObject.Properties[$name]
+            $prop=$props[$name]
             if($null -eq $prop){$Record|Add-Member -NotePropertyName $name -NotePropertyValue $defaults[$name] -Force}
             elseif($null -eq $prop.Value){$prop.Value=$defaults[$name]}
         } catch {}
@@ -264,6 +275,34 @@ function Apply-YumManualOrganizations {
 function Get-YumIntelligenceDbPath {
     if($null -ne $script:Yum -and $null -ne $script:Yum.IntelligenceDbFile){return [string]$script:Yum.IntelligenceDbFile}
     return (Join-Path $script:Yum.Root 'intelligence-db.json')
+}
+
+function Start-YumIntelligenceDbPreload {
+    # 5.15.9 (lag work): loading the Intelligence database took 0.6-0.7 s on the UI thread (test PC: 1.7 MB, 521
+    # records; 430 ms of it is per-record checks) the first time What's running or Intelligence opened. Shortly after
+    # start-up it is now loaded by a background runspace into a private copy and handed over only if the window has
+    # not loaded it meanwhile (so a newer in-memory database is never replaced).
+    if($null -ne $script:Yum.IntelligenceDb -or $null -ne $script:Yum['IntelligencePreload']){return}
+    try{
+        $ps=[powershell]::Create()
+        [void]$ps.AddScript({
+            param($Y,$Root)
+            $mine=[ordered]@{}; foreach($k in @($Y.Keys)){ $mine[$k]=$Y[$k] }; $mine['IntelligenceDb']=$null
+            foreach($f in 'Core\Logging.ps1','Core\Config.ps1','Core\Intelligence.ps1'){ . (Join-Path $Root $f) }
+            $script:Yum=$mine
+            $h=Load-YumIntelligenceDb
+            if($null -eq $Y['IntelligenceDb'] -and $h -is [hashtable]){ $Y['IntelligenceDb']=$h; return 'used' }
+            return 'skipped'
+        }).AddArgument($script:Yum).AddArgument([string]$script:Yum.Root)
+        $script:Yum['IntelligencePreload']=@{Ps=$ps;Handle=$ps.BeginInvoke()}
+    }catch{ try{Write-YumLogException -Context 'Intelligence database preload could not start' -Exception $_.Exception}catch{} }
+}
+
+function Wait-YumIntelligenceDbPreload {
+    # Called before the UI would load the database itself: if the background load is still running, wait for it
+    # (it is already part-way done) instead of starting a second load.
+    param([int]$TimeoutMs=5000)
+    try{ $p=$script:Yum['IntelligencePreload']; if($null -ne $p -and -not $p.Handle.IsCompleted){ [void]$p.Handle.AsyncWaitHandle.WaitOne($TimeoutMs) } }catch{}
 }
 
 function Load-YumIntelligenceDb {

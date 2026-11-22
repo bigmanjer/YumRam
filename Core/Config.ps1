@@ -11,6 +11,7 @@
         ManualOrganizationsCache = $null
         ManualOrganizationsCachePath = ''
         ManualOrganizationsCacheStampUtc = [datetime]::MinValue
+        ManualOrganizationsCheckedAt = [datetime]::MinValue
         Config = $null
         Window = $null
         Ui = $null
@@ -61,6 +62,7 @@
         LastSideScanRead = [datetime]::MinValue
         LastDiskAutoCheck = [datetime]::MinValue
         VramSampler = $null
+        LiveSampler = $null
         LastVramWatch = [datetime]::MinValue
         VramWarnedPid = 0
         LastAutoUpdateTick = [datetime]::MinValue
@@ -166,6 +168,9 @@
         CpuBalanceRunspace = $null
         CpuBalanceStop = $null
         CpuProfile = $null
+        CpuCimInfo = $null
+        CpuCimQuery = $null
+        IntelligencePreload = $null
         CpuKnowledge = $null
         CpuBenchPid = 0
         CpuBenchStart = [int64]0
