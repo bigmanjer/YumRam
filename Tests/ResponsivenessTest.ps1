@@ -65,6 +65,30 @@ $explorer=@(Get-Process explorer -ErrorAction SilentlyContinue | Where-Object { 
 foreach($e in $explorer){ Assert-That ($pids.Contains($e.Id)) ('Explorer (PID {0}) has a main window in both methods.' -f $e.Id) }
 Assert-That ($dl -match '\[YumProcTree\]::Snapshot\(\)' -and $dl -match '\[YumWindowPids\]::WithMainWindow\(\)') 'What''s running uses the one-call snapshot and window walk.'
 
+# 6. Compiled helpers are cached (start-up measured 3.7-4.2 s -> 1.4-1.5 s from the second start).
+$cacheDir=Get-YumTypeCacheDirectory
+Assert-That ($cacheDir -like '*\Runtime\TypeCache') ('Cache lives in YUMRAM''s Runtime folder ({0}).' -f $cacheDir)
+$tag=[guid]::NewGuid().ToString('N').Substring(0,8)
+$n1="YumCacheProbeA$tag"; Add-YumCompiledType -TypeName $n1 -Source ("public static class $n1 { public static int V(){ return 1; } }")
+Assert-That (($n1 -as [type]) -and ((Invoke-Expression "[$n1]::V()") -eq 1)) 'A helper compiled through the cache works.'
+$files=@([IO.Directory]::GetFiles($cacheDir,"$n1-*.dll")); Assert-That ($files.Count -eq 1) 'The compiled helper is kept as one DLL.'
+# A changed source gets a new file (new hash) instead of reusing the old build.
+$n2="YumCacheProbeB$tag"; $src2a="public static class $n2 { public static int V(){ return 2; } }"; $src2b="public static class $n2 { public static int V(){ return 3; } }"
+$sha=[System.Security.Cryptography.SHA256]::Create(); $h=@($src2a,$src2b | ForEach-Object { (($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($_+'||'+[Environment]::Version.ToString()+'|'+[IntPtr]::Size)) | Select-Object -First 8 | ForEach-Object { $_.ToString('x2') }) -join '') }); $sha.Dispose()
+Assert-That ($h[0] -ne $h[1]) 'Different source, different cache name.'
+# A damaged cache file falls back to a normal compile.
+$n3="YumCacheProbeC$tag"; $src3="public static class $n3 { public static int V(){ return 4; } }"
+Add-YumCompiledType -TypeName "YumCacheProbeD$tag" -Source ("public static class YumCacheProbeD$tag { }")
+$fake=Join-Path $cacheDir ("$n3-{0}.dll" -f ((([System.Security.Cryptography.SHA256]::Create()).ComputeHash([Text.Encoding]::UTF8.GetBytes($src3+'||'+[Environment]::Version.ToString()+'|'+[IntPtr]::Size)) | Select-Object -First 8 | ForEach-Object { $_.ToString('x2') }) -join ''))
+[IO.File]::WriteAllText($fake,'not a dll')
+Add-YumCompiledType -TypeName $n3 -Source $src3
+Assert-That (($n3 -as [type]) -and ((Invoke-Expression "[$n3]::V()") -eq 4)) 'A damaged cache file never breaks YUMRAM.'
+foreach($f in @([IO.Directory]::GetFiles($cacheDir,"YumCacheProbe*$tag*"))){ try{ [IO.File]::Delete($f) }catch{} }
+foreach($t in 'YumRamNative','YumProcTree','YumProcRow2','YumGraphGeo','YumTrayNative','YumRamHotkey'){ Assert-That ($null -ne ($t -as [type])) ("Helper $t is available after start-up.") }
+$cached=@([AppDomain]::CurrentDomain.GetAssemblies() | Where-Object { try{ $_.Location -like '*\Runtime\TypeCache\*' }catch{ $false } }).Count
+Assert-That ($cached -ge 8) ('Start-up helpers load from the cache ({0}).' -f $cached)
+Assert-That (-not ([IO.File]::ReadAllText((Join-Path $root 'Tools\Build-Release.ps1')) -match "'Runtime'")) 'The cache folder is never packaged.'
+
 # 5. Record checks reuse one defaults table and give the same result.
 $r=[pscustomobject]@{Name='x';Risk=$null}; $null=Ensure-YumIntelligenceRecordSchema -Record $r
 Assert-That (@($r.PSObject.Properties).Count -eq 42 -and $r.Risk -eq 'Review' -and $r.ResearchSources -is [array]) 'Schema check fills the 42 fields and replaces nulls.'

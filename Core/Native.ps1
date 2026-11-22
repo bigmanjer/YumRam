@@ -1,10 +1,11 @@
 ﻿#requires -Version 5.1
+if(-not (Get-Command Add-YumCompiledType -ErrorAction SilentlyContinue)){ . (Join-Path $PSScriptRoot 'TypeCache.ps1') }   # 5.15.9: compiled-helper cache
 Add-Type -AssemblyName PresentationFramework
 Add-Type -AssemblyName PresentationCore
 Add-Type -AssemblyName WindowsBase
 
 if (-not ('YumRamNative' -as [type])) {
-    Add-Type @'
+    Add-YumCompiledType -TypeName 'YumRamNative' -Source @'
 using System;
 using System.ComponentModel;
 using System.Runtime.InteropServices;
@@ -147,7 +148,7 @@ function Invoke-YumCombineMemory {
 }
 
 if (-not ('YumRamCacheNative' -as [type])) {
-    Add-Type @'
+    Add-YumCompiledType -TypeName 'YumRamCacheNative' -Source @'
 using System;
 using System.Runtime.InteropServices;
 public static class YumRamCacheNative {
@@ -186,7 +187,7 @@ function Get-YumForegroundProcessId {
 }
 
 if (-not ('YumRamWorkingSet' -as [type])) {
-    Add-Type @'
+    Add-YumCompiledType -TypeName 'YumRamWorkingSet' -Source @'
 using System;
 using System.Runtime.InteropServices;
 public static class YumRamWorkingSet

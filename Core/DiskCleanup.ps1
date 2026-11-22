@@ -1,4 +1,5 @@
 ﻿#requires -Version 5.1
+if(-not (Get-Command Add-YumCompiledType -ErrorAction SilentlyContinue)){ . (Join-Path $PSScriptRoot 'TypeCache.ps1') }   # 5.15.9: compiled-helper cache
 # 5.15.2 (user request: "automatic disk clean up like BleachBit / CCleaner, and WinDirStat"). Two tools:
 #  1. Junk cleanup: only well-known cache / temp folders that programs and Windows rebuild by themselves. Never
 #     cookies, passwords, history, documents, downloads or anything a person made. Every category shows its size
@@ -9,7 +10,7 @@
 
 function Initialize-YumDiskWalkType {
     if('YumDiskWalk' -as [type]){return}
-    Add-Type -TypeDefinition @'
+    Add-YumCompiledType -TypeName 'YumDiskWalk' -Source @'
 using System; using System.IO; using System.Collections.Generic;
 public static class YumDiskWalk {
     public sealed class Result { public long Bytes; public long Files; public long Skipped; public long Deleted; public long Freed; public List<string> DeletedPaths = new List<string>(); }

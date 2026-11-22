@@ -1,4 +1,5 @@
 ﻿#requires -Version 5.1
+if(-not (Get-Command Add-YumCompiledType -ErrorAction SilentlyContinue)){ . (Join-Path $PSScriptRoot '..\Core\TypeCache.ps1') }   # 5.15.9: compiled-helper cache
 
 
 function Initialize-YumTheme {
@@ -80,10 +81,34 @@ function New-YumGraphText {
     $t=New-Object System.Windows.Controls.TextBlock;$t.Text=$Text;$t.FontSize=$Size;$t.Foreground=Get-YumBrush $Hex
     [System.Windows.Controls.Canvas]::SetLeft($t,$X);[System.Windows.Controls.Canvas]::SetTop($t,$Y);return $t
 }
+# 5.15.9 (CPU use measured: the Overview graph took ~38 ms per redraw, twice a second): the line geometry is
+# built in compiled code from two number arrays instead of a PowerShell object per point.
+if(-not ('YumGraphGeo' -as [type])){
+    Add-YumCompiledType -TypeName 'YumGraphGeo' -ReferencedAssemblies PresentationCore,WindowsBase -Source @'
+using System; using System.Windows; using System.Windows.Media;
+public static class YumGraphGeo {
+    public static StreamGeometry Build(double[] xs, double[] vs, double top, double height, double maxGap) {
+        var g = new StreamGeometry();
+        using (var c = g.Open()) {
+            bool started = false; double prevX = 0;
+            for (int i = 0; i < xs.Length && i < vs.Length; i++) {
+                double v = Math.Max(0, Math.Min(100, vs[i]));
+                var pt = new Point(xs[i], top + height - (v / 100.0) * height);
+                if (!started || xs[i] - prevX > maxGap) { c.BeginFigure(pt, false, false); started = true; } else { c.LineTo(pt, true, true); }
+                prevX = xs[i];
+            }
+        }
+        g.Freeze();
+        return g;
+    }
+}
+'@
+}
 function Set-YumGraphPath {
     # Draws one series as a line in a lane; a gap in the data (missing buckets) breaks the line instead of
-    # being bridged by a long straight segment.
-    param($Path,[object[]]$Points,[double]$Top,[double]$Height,[double]$MaxGapX)
+    # being bridged by a long straight segment. -X/-V (number arrays) use the compiled builder.
+    param($Path,[object[]]$Points,[double]$Top,[double]$Height,[double]$MaxGapX,[double[]]$X,[double[]]$V)
+    if($null -ne $X -and $null -ne $V){ $Path.Data=[YumGraphGeo]::Build($X,$V,$Top,$Height,$MaxGapX); return }
     $geo=New-Object System.Windows.Media.StreamGeometry
     $ctx=$geo.Open()
     try{
@@ -143,26 +168,26 @@ function Update-YumGraph {
             }else{$L.Goal.Visibility='Collapsed';$L.GoalText.Visibility='Collapsed'}
         }catch{}
         $range=[string]$script:Yum['GraphRange']
-        $sets=@{Avail=(New-Object System.Collections.Generic.List[object]);Cpu=(New-Object System.Collections.Generic.List[object]);Gpu=(New-Object System.Collections.Generic.List[object])}
+        $xs=@{Avail=(New-Object System.Collections.Generic.List[double]);Cpu=(New-Object System.Collections.Generic.List[double]);Gpu=(New-Object System.Collections.Generic.List[double])}
         if($range -and $range -ne '30s'){
             $win=switch($range){'5m'{300.0};'1h'{3600.0};default{43200.0}}
             $nb=$(if($range -eq '5m'){60}else{180})
             foreach($b in (Get-YumHistorySeries -WindowSeconds $win -Buckets $nb)){
                 $x=$L.X0+[double]$b.X*$L.PlotW
-                foreach($k in 'Avail','Cpu','Gpu'){ $v=[double]$b.$k; if(-not [double]::IsNaN($v)){ $sets[$k].Add([pscustomobject]@{X=$x;V=$v}) } }
+                foreach($k in 'Avail','Cpu','Gpu'){ $v=[double]$b.$k; if(-not [double]::IsNaN($v)){ $xs[$k].Add($x); $vs[$k].Add($v) } }
             }
             $maxGap=($L.PlotW/$nb)*2.5
         } else {
             $limit=[math]::Max(2,[int]$script:Yum.GraphPointsLimit);$step=$L.PlotW/($limit-1)
             foreach($pair in @(@('Avail',$script:Yum.GraphMemoryAvailable),@('Cpu',$script:Yum.GraphCPU),@('Gpu',$script:Yum.GraphGPU))){
                 $vals=$pair[1];if($null -eq $vals){continue};$offset=($limit-$vals.Count)*$step   # new data enters from the right
-                for($i=0;$i -lt $vals.Count;$i++){ $sets[$pair[0]].Add([pscustomobject]@{X=($L.X0+$offset+$i*$step);V=[double]$vals[$i]}) }
+                $kx=$xs[$pair[0]];$kv=$vs[$pair[0]];$x0=$L.X0+$offset; for($i=0;$i -lt $vals.Count;$i++){ $kx.Add($x0+$i*$step); $kv.Add([double]$vals[$i]) }
             }
             $maxGap=$step*2.5
         }
-        Set-YumGraphPath -Path $L.Avail -Points $sets.Avail.ToArray() -Top $L.MemTop -Height $L.MemH -MaxGapX $maxGap
-        Set-YumGraphPath -Path $L.Cpu -Points $sets.Cpu.ToArray() -Top $L.CpuTop -Height $L.CpuH -MaxGapX $maxGap
-        Set-YumGraphPath -Path $L.Gpu -Points $sets.Gpu.ToArray() -Top $L.CpuTop -Height $L.CpuH -MaxGapX $maxGap
+        Set-YumGraphPath -Path $L.Avail -X $xs.Avail.ToArray() -V $vs.Avail.ToArray() -Top $L.MemTop -Height $L.MemH -MaxGapX $maxGap
+        Set-YumGraphPath -Path $L.Cpu -X $xs.Cpu.ToArray() -V $vs.Cpu.ToArray() -Top $L.CpuTop -Height $L.CpuH -MaxGapX $maxGap
+        Set-YumGraphPath -Path $L.Gpu -X $xs.Gpu.ToArray() -V $vs.Gpu.ToArray() -Top $L.CpuTop -Height $L.CpuH -MaxGapX $maxGap
     }catch{Write-YumLogException -Context 'Graph update failed' -Exception $_.Exception}
 }
 function Get-YumUiSnapshot {return Get-YumSnapshotCopy}
@@ -234,6 +259,11 @@ function Update-YumRing {
         if($null -eq $Ring){return}
         $p=[math]::Min(99.99,[math]::Max(0.0,$Percent))
         if($null -ne $Label){$Label.Text=('{0:N0}%' -f $Percent)}
+        # 5.15.9: same value (0.1 %) and colour as last time = nothing to redraw (rings were rebuilt ~7 times a second).
+        $hex=if($Percent -ge $Danger){'#F87171'}elseif($Percent -ge $Warn){'#FBBF24'}else{$NormalHex}
+        $sig=('{0:F1}|{1}' -f $p,$hex)
+        if([string]$Ring.Tag -eq $sig -and $null -ne $Ring.Data){ if($null -ne $StateLabel){$StateLabel.Text=if($Percent -ge $Danger){$Words[2]}elseif($Percent -ge $Warn){$Words[1]}else{$Words[0]}}; return }
+        $Ring.Tag=$sig
         $size=[double]$Ring.Parent.Width;if($size -le 0 -or [double]::IsNaN($size)){$size=92.0};$thick=[double]$Ring.StrokeThickness;$r=($size-$thick)/2.0;$c=$size/2.0
         $angle=($p/100.0)*2*[math]::PI
         $fig=New-Object System.Windows.Media.PathFigure;$fig.StartPoint=(New-Object System.Windows.Point($c,($c-$r)));$fig.IsClosed=$false
@@ -583,6 +613,18 @@ function Update-YumCpuCardUi {
     }catch{}
 }
 function Update-YumCpuBalanceUi {
+    param([switch]$Force)
+    # 5.15.9 (CPU use measured: the window thread used ~21% of a core on the Overview): the CPU cards only change
+    # when the CPU care worker ticks (1/s), so they are drawn at most once a second and not while hidden.
+    # -Force (the on/off switch) draws right away.
+    try{
+        if(-not $Force){
+            $shown=[bool]$script:Yum.Window.IsVisible -and $script:Yum.Window.WindowState -ne [System.Windows.WindowState]::Minimized
+            if(-not $shown){return}
+            if(((Get-Date)-[datetime]$script:Yum['LastCpuBalanceUi']).TotalMilliseconds -lt 950){return}
+        }
+        $script:Yum['LastCpuBalanceUi']=Get-Date
+    }catch{}
     try{ Update-YumCpuCardUi }catch{}
     try{
         $ui=$script:Yum.Ui;if($null -eq $ui -or $null -eq $ui['CpuBalanceText']){return}
@@ -661,7 +703,7 @@ function Start-YumApplicationUi {
     $script:Yum.Ui.UpdateInstall.Add_Click({Invoke-YumInstallUpdate})
     if($null -ne $script:Yum.Ui['MiniBarButton']){ $script:Yum.Ui.MiniBarButton.Add_Click({ Show-YumMiniBar }) }
     $script:Yum.Ui.UpdateNotes.Add_Click({try{$i=$script:Yum['UpdateInfo'];if($i -and $i.PageUrl -match '^https://github\.com/'){Start-Process ([string]$i.PageUrl)}}catch{}})
-    $script:Yum.Ui.CpuBalanceToggle.Add_Click({if(-not $script:Yum.SuppressUiEvents){Update-YumConfigValue -Name CpuBalanceEnabled -Value ([bool]$script:Yum.Ui.CpuBalanceToggle.IsChecked);Update-YumCpuBalanceUi;Set-YumFooter $(if([bool]$script:Yum.Ui.CpuBalanceToggle.IsChecked){'CPU balance on 💜'}else{'CPU balance off - anything YUMRAM held back is put back now.'})}})
+    $script:Yum.Ui.CpuBalanceToggle.Add_Click({if(-not $script:Yum.SuppressUiEvents){Update-YumConfigValue -Name CpuBalanceEnabled -Value ([bool]$script:Yum.Ui.CpuBalanceToggle.IsChecked);Update-YumCpuBalanceUi -Force;Set-YumFooter $(if([bool]$script:Yum.Ui.CpuBalanceToggle.IsChecked){'CPU balance on 💜'}else{'CPU balance off - anything YUMRAM held back is put back now.'})}})
     $script:Yum.Ui.AutoClean.Add_Click({if(-not $script:Yum.SuppressUiEvents){Update-YumConfigValue -Name AutoCleanOnGameStart -Value ([bool]$script:Yum.Ui.AutoClean.IsChecked)}})
     $script:Yum.Window.Add_SizeChanged({Update-YumGraph})
     # 5.4: the main window runs with Show() + a DispatcherFrame instead of ShowDialog(), because hiding a

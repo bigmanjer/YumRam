@@ -1,4 +1,5 @@
-﻿
+﻿if(-not (Get-Command Add-YumCompiledType -ErrorAction SilentlyContinue)){ . (Join-Path $PSScriptRoot '..\Core\TypeCache.ps1') }   # 5.15.9: compiled-helper cache
+
 function Show-YumMessage {
     param(
         [Parameter(Mandatory = $true)][string]$Message,
@@ -388,7 +389,7 @@ function Update-YumSystemScanList {
 }
 
 if (-not ('YumProcRow2' -as [type])) {
-    Add-Type @'
+    Add-YumCompiledType -TypeName 'YumProcRow2' -Source @'
 using System.ComponentModel;
 public class YumProcRow2 : INotifyPropertyChanged {
     public event PropertyChangedEventHandler PropertyChanged;
@@ -426,7 +427,7 @@ public class YumProcRow2 : INotifyPropertyChanged {
 # walks every desktop window for each process it is asked about (226 processes = 226 walks); this walks them once.
 # Same rule .NET uses for a main window: visible and not owned by another window.
 if (-not ('YumWindowPids' -as [type])) {
-    Add-Type @'
+    Add-YumCompiledType -TypeName 'YumWindowPids' -Source @'
 using System; using System.Collections.Generic; using System.Runtime.InteropServices;
 public static class YumWindowPids {
     delegate bool EnumProc(IntPtr h, IntPtr p);

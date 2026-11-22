@@ -1,4 +1,5 @@
 ﻿#requires -Version 5.1
+if(-not (Get-Command Add-YumCompiledType -ErrorAction SilentlyContinue)){ . (Join-Path $PSScriptRoot '..\Core\TypeCache.ps1') }   # 5.15.9: compiled-helper cache
 # 5.6: one-window shell.
 # Every tool (What's using RAM, Reclaim Center, Intelligence, Settings, About) opens as a page inside the
 # main window, selected from a left sidebar - the Windows 11 Task Manager / Fluent NavigationView pattern -
@@ -252,7 +253,7 @@ function Initialize-YumShell {
 
 # ---------------------------------------------------------------- global hotkey (Mem Reduct parity)
 if(-not ('YumRamHotkey' -as [type])){
-    Add-Type -ReferencedAssemblies PresentationCore,WindowsBase,PresentationFramework -TypeDefinition @'
+    Add-YumCompiledType -TypeName 'YumRamHotkey' -ReferencedAssemblies PresentationCore,WindowsBase,PresentationFramework -Source @'
 using System;
 using System.Runtime.InteropServices;
 using System.Windows.Interop;

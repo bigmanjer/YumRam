@@ -1,4 +1,5 @@
 ﻿#requires -Version 5.1
+if(-not (Get-Command Add-YumCompiledType -ErrorAction SilentlyContinue)){ . (Join-Path $PSScriptRoot '..\Core\TypeCache.ps1') }   # 5.15.9: compiled-helper cache
 <#
 YUMRAM notification-area (tray) icon (5.4).
 
@@ -15,7 +16,7 @@ with ShowDialog(), hiding the window would end the application.
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 if (-not ('YumTrayNative' -as [type])) {
-    Add-Type @'
+    Add-YumCompiledType -TypeName 'YumTrayNative' -Source @'
 using System;
 using System.Runtime.InteropServices;
 public static class YumTrayNative {

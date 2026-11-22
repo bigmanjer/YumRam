@@ -1,4 +1,5 @@
 ﻿#requires -Version 5.1
+if(-not (Get-Command Add-YumCompiledType -ErrorAction SilentlyContinue)){ . (Join-Path $PSScriptRoot 'TypeCache.ps1') }   # 5.15.9: compiled-helper cache
 # 5.8: CPU balance (Process Lasso "ProBalance" parity).
 #
 # Windows lets a CPU-bound program at Normal priority take every cycle, so the program you are using
@@ -24,7 +25,7 @@ $script:YumCpuBalanceCoreNames=@('idle','system','registry','smss','csrss','wini
 # while the hog kept ~60% of its work. EcoQoS changed nothing measurable on that (Zen 2) chip; Microsoft
 # tuned it first for Intel 10th/11th gen mobile, Ryzen 5000 mobile and Qualcomm, later broader silicon.
 if(-not ('YumCpuCareNative' -as [type])){
-    Add-Type -TypeDefinition @'
+    Add-YumCompiledType -TypeName 'YumCpuCareNative' -Source @'
 using System; using System.Runtime.InteropServices; using System.Collections.Generic;
 public static class YumCpuCareNative {
     [DllImport("kernel32.dll", SetLastError=true)] static extern bool GetLogicalProcessorInformationEx(int rel, IntPtr buf, ref uint len);
@@ -79,7 +80,7 @@ public static class YumCpuCareNative {
 # switch to on the Windows foreground event instead of polling): the UI thread hooks EVENT_SYSTEM_FOREGROUND
 # and wakes the CPU care worker, so a held-back program you click on is restored within milliseconds.
 if(-not ('YumForegroundHook' -as [type])){
-    Add-Type -TypeDefinition @'
+    Add-YumCompiledType -TypeName 'YumForegroundHook' -Source @'
 using System; using System.Runtime.InteropServices; using System.Threading;
 public static class YumForegroundHook {
     delegate void WinEventProc(IntPtr hook, uint ev, IntPtr hwnd, int idObject, int idChild, uint thread, uint time);
@@ -102,7 +103,7 @@ public static class YumForegroundHook {
 # WMI query used before (Win32_Process.ParentProcessId) at 0.24 s idle and 1.7 s per program under a
 # saturating load - so CPU care acted 4-14 s late exactly when it was needed.
 if(-not ('YumProcTree' -as [type])){
-    Add-Type -TypeDefinition @'
+    Add-YumCompiledType -TypeName 'YumProcTree' -Source @'
 using System; using System.Collections.Generic; using System.Runtime.InteropServices;
 public static class YumProcTree {
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]

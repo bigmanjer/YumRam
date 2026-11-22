@@ -63,6 +63,7 @@
         LastDiskAutoCheck = [datetime]::MinValue
         VramSampler = $null
         LiveSampler = $null
+        LastCpuBalanceUi = [datetime]::MinValue
         LastVramWatch = [datetime]::MinValue
         VramWarnedPid = 0
         LastAutoUpdateTick = [datetime]::MinValue

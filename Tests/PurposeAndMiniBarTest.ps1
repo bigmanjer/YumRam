@@ -42,7 +42,7 @@ $mb=Initialize-YumMiniBar
 Assert-That ($null -ne $mb.Window -and $mb.Window.Topmost -and -not $mb.Window.ShowInTaskbar) 'Mini bar is a small always-on-top window without a taskbar button.'
 foreach($n in 'MiniFree','MiniOpen','MiniHide'){ Assert-That ($null -ne $mb.Window.FindName($n)) "Mini bar is missing $n" }
 # 5.15.9: readings come from the background sampler (a few seconds for the first one); the bar never waits for them.
-$sw=[Diagnostics.Stopwatch]::StartNew(); $mb.Window.Show(); Update-YumMiniBar; $firstMs=$sw.ElapsedMilliseconds
+$mb.Window.Show(); $sw=[Diagnostics.Stopwatch]::StartNew(); Update-YumMiniBar; $firstMs=$sw.ElapsedMilliseconds
 Assert-That ($firstMs -lt 500) ('The mini bar must not wait for Windows counters ({0} ms).' -f $firstMs)
 $deadline=(Get-Date).AddSeconds(15); while($null -eq (Get-YumLiveReading -Kind Cpu) -and (Get-Date) -lt $deadline){ Start-Sleep -Milliseconds 200 }
 Update-YumMiniBar

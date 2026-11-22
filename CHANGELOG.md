@@ -1,5 +1,27 @@
 # Changelog
 
+# YUMRAM 5.15.10 — starts 2.5 s faster, uses less CPU in the background
+
+Measured on the test PC against 5.15.9 (same machine, same data):
+
+| | 5.15.9 | 5.15.10 |
+|---|---|---|
+| Loading the program (every start after the first) | 3.7-4.2 s | **1.4-1.5 s** |
+| Overview graph, per redraw (twice a second) | 38 ms | **4 ms** |
+| Window thread while the Overview is open | 17 % of a core | **11 %** |
+| Whole YUMRAM, Overview open, monitoring on | 26-34 % of a core | **21 %** (1.3 % of the whole CPU) |
+| Whole YUMRAM, hidden in the tray, monitoring on | 13 % of a core | **~10 %** (0.6 % of the whole CPU) |
+
+- **Compiled helpers are cached.** Every start compiled the same 11 small C# helpers (each start of the C# compiler
+  took 220-430 ms - ~3 s per start). They are now compiled once into `Runtime\TypeCache` inside YUMRAM's folder
+  and loaded from there (~10-20 ms each). The name carries a hash of the code, so an update compiles changed helpers
+  once; a missing or damaged file falls back to the old compile. Never packaged, kept across updates.
+- **The Overview graph** builds its lines in compiled code from number arrays (was a PowerShell object per point).
+- **Rings** are only redrawn when their value (0.1 %) or colour changes.
+- **CPU cards** are drawn at most once a second (CPU care ticks once a second) and not while YUMRAM is hidden.
+- Found while measuring: the first ~40 s after start YUMRAM's background start-up work (workers, caches, preload)
+  uses about a third of a core; steady state is the numbers above.
+
 # YUMRAM 5.15.9 — no more "Not responding" after start, much less lag
 
 User report: "program lagging, at first it said not responding, then responded" - "should run with minimal lag to no
