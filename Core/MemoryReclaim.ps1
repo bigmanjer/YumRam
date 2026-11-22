@@ -248,7 +248,7 @@ function Get-YumFastReclaimCandidates {
         [int]$MinimumWorkingSetMB=128
     )
     $rows=New-Object System.Collections.Generic.List[object]
-    $protectedNames=@($script:Yum.Config.ProtectedProcesses | ForEach-Object {([string]$_ -replace '\.exe$','').ToLowerInvariant()})
+    $protectedNames=@($script:Yum.Config.ProtectedProcesses | ForEach-Object {([string]$_ -replace '\.exe$','').ToLowerInvariant()})+@($script:YumTuningToolNames)   # 5.16.1: + overclock / undervolt tools
     $optionalNames=@($script:Yum.Config.OptionalBackgroundProcesses | ForEach-Object {([string]$_ -replace '\.exe$','').ToLowerInvariant()})
     $coreNames=@('system','registry','smss','csrss','wininit','services','lsass','winlogon','svchost','dwm','explorer','fontdrvhost','wmiPrvSE','spoolsv','dllhost','conhost','audiodg','taskhostw','runtimebroker','searchhost','startmenuexperiencehost','shellexperiencehost')
     try {

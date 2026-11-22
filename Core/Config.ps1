@@ -172,6 +172,8 @@
         CpuCimInfo = $null
         CpuCimQuery = $null
         IntelligencePreload = $null
+        ProcessMetaCache = $null
+        ProcessMetaWarmup = $null
         CpuKnowledge = $null
         CpuBenchPid = 0
         CpuBenchStart = [int64]0
@@ -199,7 +201,9 @@ function ConvertTo-YumHashtable {
     if ($Object -is [System.Collections.IEnumerable] -and -not ($Object -is [string])) {
         $list = New-Object System.Collections.ArrayList
         foreach ($item in $Object) { [void]$list.Add((ConvertTo-YumHashtable $item)) }
-        return $list.ToArray()
+        # 5.16.1: the comma keeps the list a list (PowerShell otherwise turns [] into nothing and a one-item list into
+        # a bare value - that is how a name list could end up saved as {} and shown as a .NET type name).
+        return ,$list.ToArray()
     }
     return $Object
 }
@@ -239,6 +243,25 @@ function Save-YumConfig {
     }
 }
 
+# 5.16.1 (user: "I may have undervolted my GPU and overclocked my CPU - it won't mess with it?"). YUMRAM never
+# changes clocks, voltages, power limits, fan curves or power plans. On top of that, the tools that apply and keep
+# those settings are never trimmed (RAM care / Free RAM) and never held back (CPU care) - whatever config says.
+# Names are process names without .exe, lower case.
+$script:YumTuningToolNames=@(
+    'msiafterburner','rtss','rtsshooksloader','rtsshooksloader64','encoderserver','encoderserver64',
+    'amd ryzen master','amdryzenmaster','ryzenmaster','throttlestop','xtuservice','xtu3service','perftune','xtucli',
+    'gputweak','gputweakii','gputweakiii','precisionx_x64','precision x1','precisionx1','nvidiainspector','nvidiaprofileinspector',
+    'radeonsoftware','amdrsserv','amdrssrcext','amdow','nvcontainer','nvidia app','nvidia overlay',
+    'armourycrate.service','armourycrate.usersessionhelper','asus_framework','lenovolegiontoolkit','legiontoolkit',
+    'omencommandcenterbackground','omencommandcenter','awcc','alienware command center','msi.centralserver','msi_central_service',
+    'dragon center','gcc','fancontrol','hwinfo64','hwinfo32','undervolt'
+)
+function Test-YumTuningTool {
+    param([string]$Name)
+    if([string]::IsNullOrWhiteSpace($Name)){return $false}
+    return ($script:YumTuningToolNames -contains (([string]$Name) -replace '\.exe$','').Trim().ToLowerInvariant())
+}
+
 function Initialize-YumConfig {
     $script:Yum = New-YumRamRuntime
     $script:Yum.ConfigFile = Join-Path $script:Yum.ConfigDirectory 'config.json'
@@ -256,6 +279,14 @@ function Initialize-YumConfig {
         }
     }
     $script:Yum.Config = $defaults
+    # 5.16.1 repair: name lists must hold names. A list once saved as {} was shown in Settings as
+    # 'system.collections.specialized.ordereddictionary' and saved back as an entry. Objects and such type names are dropped.
+    foreach($lk in 'CpuBalanceExclusions','ProtectedProcesses','KnownGames','OptionalBackgroundProcesses'){
+        if(-not $script:Yum.Config.Contains($lk)){continue}
+        $lv=$script:Yum.Config[$lk]
+        $bad=($lv -is [System.Collections.IDictionary]) -or (@(@($lv) | Where-Object { -not ($_ -is [string]) -or [string]$_ -match '^(?i)system\.(collections|management)\.' }).Count -gt 0)
+        if($bad){ $script:Yum.Config[$lk]=[string[]]@(@($lv) | Where-Object { $_ -is [string] -and $_.Trim() -and $_ -notmatch '^(?i)system\.(collections|management)\.' }) }
+    }
     # Release migration: keep one canonical RAM target and one version source.
     if($script:Yum.Config.Contains('SmartScanRefreshSeconds')){$legacyRefresh=[double]$script:Yum.Config.SmartScanRefreshSeconds;if($script:Yum.Config.Contains('IntelligenceRefreshSeconds') -and [double]$script:Yum.Config.IntelligenceRefreshSeconds -eq 20.0){$script:Yum.Config.IntelligenceRefreshSeconds=$legacyRefresh};$script:Yum.Config.Remove('SmartScanRefreshSeconds')}
     # 20 seconds was the historical Intelligence default. Migrate only that old default so custom user values remain untouched.

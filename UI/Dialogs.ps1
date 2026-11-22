@@ -449,6 +449,10 @@ function Get-YumProcessMeta {
     param($State,[System.Diagnostics.Process]$Process)
     $key=$Process.ProcessName.ToLowerInvariant()
     if($State.Meta.ContainsKey($key)){return $State.Meta[$key]}
+    # 5.16.1: details live for the whole session (filled in the background after start - Start-YumProcessMetaWarmup),
+    # so opening What's running again does not read ~100 program files again.
+    $shared=$script:Yum['ProcessMetaCache']
+    if($null -ne $shared -and $shared.ContainsKey($key)){ $m=$shared[$key]; $State.Meta[$key]=$m; return $m }
     $path='';$desc='';$company=''
     try{$path=[string]$Process.Path}catch{}
     if(-not [string]::IsNullOrWhiteSpace($path)){
@@ -456,7 +460,32 @@ function Get-YumProcessMeta {
     }
     $meta=[pscustomobject]@{Path=$path;Description=$desc.Trim();Company=$company.Trim()}
     $State.Meta[$key]=$meta
+    try{ if($null -ne $shared){ $shared[$key]=$meta } }catch{}
     return $meta
+}
+
+function Start-YumProcessMetaWarmup {
+    # 5.16.1 (first open of What's running measured ~0.8-1.1 s): reads path / description / company of every running
+    # program once in a background runspace shortly after start. Plain .NET only; the UI copies finished entries.
+    if($null -ne $script:Yum['ProcessMetaCache']){return}
+    $cache=[hashtable]::Synchronized(@{})
+    $script:Yum['ProcessMetaCache']=$cache
+    try{
+        $ps=[powershell]::Create()
+        [void]$ps.AddScript({
+            param($C)
+            foreach($p in [System.Diagnostics.Process]::GetProcesses()){
+                try{
+                    $k=$p.ProcessName.ToLowerInvariant(); if($C.ContainsKey($k)){continue}
+                    $path='';$desc='';$company=''
+                    try{$path=[string]$p.MainModule.FileName}catch{}
+                    if($path){ try{$vi=[System.Diagnostics.FileVersionInfo]::GetVersionInfo($path);$desc=[string]$vi.FileDescription;$company=[string]$vi.CompanyName}catch{} }
+                    if($path){ $C[$k]=[pscustomobject]@{Path=$path;Description=$desc.Trim();Company=$company.Trim()} }
+                }catch{}
+            }
+        }).AddArgument($cache)
+        $script:Yum['ProcessMetaWarmup']=@{Ps=$ps;Handle=$ps.BeginInvoke()}
+    }catch{}
 }
 
 function Update-YumProcessRows {
@@ -1203,6 +1232,9 @@ function Get-YumIntelligenceMergedRecords {
     }
 
     $final=New-Object System.Collections.Generic.List[object]
+    # 5.16.1: with no saved manual decisions the per-record lookup can only answer "none" - do only what
+    # Apply-YumManualOrganizationToRecord does in that case (clear an old 'Review Queue' override).
+    $noManual=$false;try{$mo=Load-YumManualOrganizations;$noManual=($null -eq $mo -or $mo.Count -eq 0)}catch{}
     foreach($identityKey in $order){
         $record=$byIdentity[$identityKey]
         if($null -eq $record){continue}
@@ -1212,7 +1244,8 @@ function Get-YumIntelligenceMergedRecords {
                 if([string]::IsNullOrWhiteSpace([string]$record.Reason)){$record.Reason='Saved classification; not present in current live scan.'}
                 $record.Memory='—';$record.CPU='—';$record.PID='—'
             } else { $record.StateText='LIVE' }
-            [void](Apply-YumManualOrganizationToRecord -Record $record)
+            if($noManual){ try{if($null -ne $record.PSObject.Properties['ManualOverride'] -and [bool]$record.ManualOverride -and [string]$record.Category -eq 'Review Queue'){$record.ManualOverride=$false}}catch{} }
+            else{ [void](Apply-YumManualOrganizationToRecord -Record $record) }
             [void]$final.Add($record)
         }catch{Write-YumLogException -Context 'Intelligence view record finalize failed' -Exception $_.Exception}
     }

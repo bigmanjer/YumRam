@@ -77,7 +77,8 @@ function Get-YumIntelligenceClassification {
 
 
 function Get-YumManualOrganizationPath {
-    if($null -ne $script:Yum -and $null -ne $script:Yum.ConfigDirectory){return (Join-Path $script:Yum.ConfigDirectory 'manual-organizations.json')}
+    # 5.16.1: [IO.Path]::Combine instead of Join-Path (a provider cmdlet, ~0.2 ms) - this runs once per record per refresh.
+    if($null -ne $script:Yum -and $null -ne $script:Yum.ConfigDirectory){return [IO.Path]::Combine([string]$script:Yum.ConfigDirectory,'manual-organizations.json')}
     return (Join-Path $script:Yum.Root 'manual-organizations.json')
 }
 function Get-YumRecordIdentityFields {
@@ -87,11 +88,18 @@ function Get-YumRecordIdentityFields {
     try {if($null -ne $Item.PSObject.Properties['SignerThumbprint']){$signerThumbprint=[string]$Item.SignerThumbprint}} catch {}
     return [pscustomobject]@{FileHash=$fileHash;SignerThumbprint=$signerThumbprint}
 }
+$script:YumManualKeyMemo=New-Object 'System.Collections.Generic.Dictionary[string,string]'
 function Get-YumManualOrganizationKey {
     param([string]$Name,[string]$Path,[string]$Publisher,[string]$FileHash='', [string]$SignerThumbprint='')
     $identityPath=([string]$Path).Trim().ToLowerInvariant();$hash=([string]$FileHash).Trim().ToLowerInvariant();$signer=([string]$SignerThumbprint).Trim().ToLowerInvariant();$nameText=([string]$Name).Trim().ToLowerInvariant();$publisherText=([string]$Publisher).Trim().ToLowerInvariant()
     if(-not [string]::IsNullOrWhiteSpace($hash) -or -not [string]::IsNullOrWhiteSpace($signer)){$norm=('exe|{0}|{1}|{2}|{3}' -f $identityPath,$hash,$signer,$nameText)}else{$norm=('legacy|{0}|{1}|{2}' -f $nameText,$identityPath,$publisherText)}
-    $sha=[System.Security.Cryptography.SHA256]::Create();try{return ([System.BitConverter]::ToString($sha.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($norm))).Replace('-','')).ToLowerInvariant()}finally{$sha.Dispose()}
+    # 5.16.1 (Intelligence first open measured: 1.15 ms per record, ~600 ms): the same identity always gives the same key,
+    # so computed keys are remembered instead of creating a SHA-256 object twice per record on every refresh.
+    if($script:YumManualKeyMemo.ContainsKey($norm)){return $script:YumManualKeyMemo[$norm]}
+    if($script:YumManualKeyMemo.Count -gt 20000){$script:YumManualKeyMemo.Clear()}
+    $sha=[System.Security.Cryptography.SHA256]::Create();try{$k=([System.BitConverter]::ToString($sha.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($norm))).Replace('-','')).ToLowerInvariant()}finally{$sha.Dispose()}
+    $script:YumManualKeyMemo[$norm]=$k
+    return $k
 }
 function Get-YumManualOrganizationsFromObject {
     param($Object)
@@ -165,7 +173,10 @@ function Set-YumManualOrganization {
 }
 function Get-YumManualOrganization {
     param([Parameter(Mandatory)]$Item)
-    $orgs=Load-YumManualOrganizations;$identity=Get-YumRecordIdentityFields -Item $Item;$key=Get-YumManualOrganizationKey -Name ([string]$Item.Name) -Path ([string]$Item.Path) -Publisher ([string]$Item.Publisher) -FileHash $identity.FileHash -SignerThumbprint $identity.SignerThumbprint
+    $orgs=Load-YumManualOrganizations
+    # 5.16.1: no saved decisions = nothing to find (skips ~1 ms of key work per record on every Intelligence refresh).
+    if($null -eq $orgs -or $orgs.Count -eq 0){return $null}
+    $identity=Get-YumRecordIdentityFields -Item $Item;$key=Get-YumManualOrganizationKey -Name ([string]$Item.Name) -Path ([string]$Item.Path) -Publisher ([string]$Item.Publisher) -FileHash $identity.FileHash -SignerThumbprint $identity.SignerThumbprint
     if($orgs.ContainsKey($key)){return $orgs[$key]}
     # Migrate a legacy name/path/publisher override when a stronger executable identity is now available.
     $legacyKey=Get-YumManualOrganizationKey -Name ([string]$Item.Name) -Path ([string]$Item.Path) -Publisher ([string]$Item.Publisher)

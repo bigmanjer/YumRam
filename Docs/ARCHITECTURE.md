@@ -1,4 +1,4 @@
-# YUMRAM architecture (5.15)
+# YUMRAM architecture (5.16)
 
 YUMRAM is a Windows PowerShell 5.1 + WPF desktop app with a small C# launcher and installer. It runs as one
 process with one UI thread and four background runspaces that share one state object.
@@ -18,21 +18,28 @@ shared state: $script:Yum (ordered dictionary; every key a worker writes exists 
  (UI\Shell.ps1)                  visible), game, foreground     - reachable-RAM estimate       room, EcoQoS, learned level)
                                                                                              - leak watch (1/min)
  short-lived runspaces: update check, community download, Windows bloat scan/removal, Startup extras
+ background readers (5.15.9+, so the UI thread never waits for Windows): live CPU/GPU/disk counters (~2 s, only while
+   the Overview or mini bar asks), VRAM per program + network, Intelligence database preload, program details
+   (path/description/company) warm-up, CPU name/laptop query
 ```
 
 Only the UI thread touches WPF objects; workers publish data into `$script:Yum` and the UI timer renders it.
+
+**Responsiveness rule (5.15.9):** nothing that can wait on Windows (performance counters, WMI/CIM, file version
+info, large JSON) runs on the UI thread; it runs in a background reader and the UI copies the latest result.
+`Tests\ResponsivenessTest.ps1` guards this. The UI test (`Tests\UI\FullUiProbe.ps1`) drives every page.
 
 ## Modules (`App\Bootstrap.ps1` load order)
 
 | Area | Files | Notes |
 |---|---|---|
-| Base | `Core\Logging.ps1`, `Core\Config.ps1`, `Core\Native.ps1` | log with 5 MB rotation; defaults merged with the user's `config.json` (old defaults migrated, user choices kept); Win32 interop (working sets, memory lists, memory combining, priority/EcoQoS) |
+| Base | `Core\TypeCache.ps1`, `Core\Logging.ps1`, `Core\Config.ps1`, `Core\Native.ps1` | compiled C# helpers cached as DLLs in `Runtime\TypeCache` (`Add-YumCompiledType`, name = type + source hash; ~3 s faster start); log with 5 MB rotation; defaults merged with the user's `config.json` (old defaults migrated, user choices kept); Win32 interop (working sets, memory lists, memory combining, priority/EcoQoS) |
 | RAM | `Core\Telemetry*.ps1`, `Core\Controller.ps1`, `Core\Cleanup.ps1`, `Core\MemoryReclaim.ps1`, `Core\Safety.ps1`, `Core\Games.ps1` | goal maintenance with hysteresis/back-off; candidates = identified, non-protected programs, re-checked by start time before acting; smallest-first plan, big programs trimmed in chunks (`SetProcessWorkingSetSizeEx`, soft limits); Free/Deep reclaim verified after 5/15/30 s; learned retention ratio |
 | CPU | `Core\CpuBalance.ps1`, `Core\LeakWatch.ps1` | one `NtQuerySystemInformation` snapshot per second; Gentle / Balanced (make room) / Strong (Efficiency mode); self-check undo; learned level while gaming from `cpu-knowledge.json`; crash-safe restore file |
 | Knowledge | `Core\Intelligence.ps1`, `Core\Research.ps1`, `Core\Scanner.ps1`, `Core\ProcessGuide.ps1` | identity (path, signer, hash), risk lanes, manual organisation, user-triggered scan (every process/service/app + installed programs, signatures checked once per file in parallel, known-apps catalog, one advice vocabulary) and optional online research |
 | Windows | `Core\Startup.ps1`, `Core\WindowsBloat.ps1`, `Core\Bloatware.ps1`, `Core\Elevation.ps1` | startup items (Run keys, Startup folders, Store startup tasks, sign-in scheduled tasks); Windows bloat apps/settings with exact undo; opt-in closing of listed background apps; admin modes |
 | Distribution | `Core\Updates.ps1`, `Core\Report.ps1`, `Core\Community.ps1` | GitHub release check every 15 min, background download + SHA-256 verify, automatic install when nothing blocks it (game, Free RAM, scans, disk clean) via the launcher's `--apply-update` (waits for the old process, ends it after 30 s, keeps `.previous`, restarts the installed version if anything fails); "Report a problem" pre-filled issue; opt-in game-result sharing and weekly shared file |
-| Live readings | `Core\LiveReadings.ps1` | Overview CPU % / speed / GPU busy / VRAM per chip (counters + DXGI) and disk busy / speed / free space (PhysicalDisk counters), UI thread, every 2 s only while the Overview or mini bar is visible; works with monitoring off |
+| Live readings | `Core\LiveReadings.ps1` | Overview CPU % / speed / GPU busy / VRAM per chip (counters + DXGI) and disk busy / speed / free space (PhysicalDisk counters), read by a background sampler (`Start-YumLiveSampler`) every ~2 s only while the Overview or mini bar asks; the UI reads `Get-YumLiveReading` (never waits); works with monitoring off |
 | What is it for | `Core\Purpose.ps1` | Plain "what is it / used for which device" text from the catalog, service descriptions and file version info; cached; used by Intelligence, What's running and Startup apps |
 | GPU memory & network | `Core\Vram.ps1` | VRAM per program ('GPU Process Memory' counters) and network speed, sampled in a background runspace; optional watch that tells you which app holds VRAM; per-app "use the fast GPU" preference (`UserGpuPreferences`) with exact undo. No API frees another program's VRAM - Windows (WDDM) owns it |
 | Mini bar | `UI\MiniBar.ps1` | Small always-on-top floating bar (RAM / CPU / GPU / disk, Free RAM, Open, hide to tray); position saved as MiniBarLeft / MiniBarTop |

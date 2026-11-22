@@ -89,6 +89,52 @@ $cached=@([AppDomain]::CurrentDomain.GetAssemblies() | Where-Object { try{ $_.Lo
 Assert-That ($cached -ge 8) ('Start-up helpers load from the cache ({0}).' -f $cached)
 Assert-That (-not ([IO.File]::ReadAllText((Join-Path $root 'Tools\Build-Release.ps1')) -match "'Runtime'")) 'The cache folder is never packaged.'
 
+# 7. 5.16.1: program details are read once per session in the background; manual decisions still apply.
+$script:Yum['ProcessMetaCache']=$null; Start-YumProcessMetaWarmup
+$deadline=(Get-Date).AddSeconds(20); while(-not $script:Yum['ProcessMetaWarmup'].Handle.IsCompleted -and (Get-Date) -lt $deadline){ Start-Sleep -Milliseconds 200 }
+$mc=$script:Yum['ProcessMetaCache']
+Assert-That ($mc.Count -ge 5 -and @($mc.Values | Where-Object { [string]$_.Path -like '*.exe' }).Count -ge 5) ('Program details warm-up filled the cache ({0}).' -f $mc.Count)
+$me=[Diagnostics.Process]::GetCurrentProcess(); $st=@{Meta=@{}}
+$meta=Get-YumProcessMeta -State $st -Process $me
+Assert-That ([string]$meta.Path -like '*powershell*.exe') ('What''s running reads details from the session cache ({0}).' -f $meta.Path)
+$tmpM=Join-Path $env:TEMP ('yum-manual-'+[guid]::NewGuid().ToString('N')); New-Item -ItemType Directory $tmpM | Out-Null
+$oldDir=$script:Yum.ConfigDirectory
+try{
+    $script:Yum.ConfigDirectory=$tmpM; $script:Yum.ManualOrganizationsCache=$null
+    $item=[pscustomobject]@{Name='ResponsivenessProbe';Path='C:\Probe\probe.exe';Publisher='Probe Inc';FileHash='';SignerThumbprint=''}
+    Assert-That ($null -eq (Get-YumManualOrganization -Item $item)) 'No saved decisions: nothing found.'
+    $key=Get-YumManualOrganizationKey -Name $item.Name -Path $item.Path -Publisher $item.Publisher
+    $orgs=@{}; $orgs[$key]=[pscustomobject]@{Category='Protected';Risk='Safe';Placement='';ActionLane='Keep'}
+    [void](Save-YumManualOrganizations -Organizations $orgs)
+    $found=Get-YumManualOrganization -Item $item
+    Assert-That ($null -ne $found -and [string]$found.Category -eq 'Protected') 'A saved manual decision is still found.'
+}finally{ $script:Yum.ConfigDirectory=$oldDir; $script:Yum.ManualOrganizationsCache=$null; Remove-Item -LiteralPath $tmpM -Recurse -Force -ErrorAction SilentlyContinue }
+
+# 8. 5.16.1: overclock / undervolt tools are never trimmed or held back (user: "undervolted GPU, overclocked CPU").
+foreach($n in 'MSIAfterburner','RTSS.exe','ThrottleStop','AMD Ryzen Master','RadeonSoftware'){ Assert-That (Test-YumTuningTool -Name $n) ("$n is recognised as a tuning tool.") }
+Assert-That (-not (Test-YumTuningTool -Name 'chrome')) 'Ordinary programs are not tuning tools.'
+$cb=Get-YumCpuBalanceSettings
+Assert-That ((Test-YumCpuBalanceEligible -P ([pscustomobject]@{Name='MSIAfterburner';Id=99999;SessionId=1;Priority='Normal';Path=''}) -ForegroundPid 0 -ForegroundName '' -GamePid 0 -Settings $cb) -eq 'hardware tuning tool') 'CPU care never holds back a tuning tool.'
+Assert-That ((Test-YumCpuBalanceEligible -P ([pscustomobject]@{Name='somehog';Id=99998;SessionId=1;Priority='Normal';Path=''}) -ForegroundPid 0 -ForegroundName '' -GamePid 0 -Settings $cb) -eq '') 'CPU care still handles ordinary hogs.'
+$allCode=(Get-ChildItem (Join-Path $root 'Core'),(Join-Path $root 'UI') -Filter *.ps1 | ForEach-Object { [IO.File]::ReadAllText($_.FullName) }) -join "`n"
+Assert-That ($allCode -notmatch '(?i)powercfg|PowerSetActiveScheme|PowerWrite(AC|DC)Value') 'YUMRAM never changes power plans (clocks and voltages stay yours).'
+
+# 9. 5.16.1: name lists in config.json keep their shape (a list once saved as {} showed up in Settings as
+#    "system.collections.specialized.ordereddictionary" and was saved back as a "never hold back" entry).
+$savedRoot=$script:Root; $savedYum=$script:Yum; $repoRoot=$root   # (note: $root and $script:Root are the same variable)
+foreach($case in @(@('{"CpuBalanceExclusions":{},"ProtectedProcesses":["System","notepad"]}',0,2),@('{"CpuBalanceExclusions":["system.collections.specialized.ordereddictionary","handbrake"]}',1,-1),@('{"CpuBalanceExclusions":["handbrake"],"ProtectedProcesses":["System"]}',1,1))){
+    $d=Join-Path $env:TEMP ('yum-cfg-'+[guid]::NewGuid().ToString('N')); New-Item -ItemType Directory (Join-Path $d 'Config') -Force | Out-Null
+    try{
+        Copy-Item (Join-Path $repoRoot 'Config\default-config.json') (Join-Path $d 'Config'); [IO.File]::WriteAllText((Join-Path $d 'config.json'),$case[0])
+        $script:Root=$d; Initialize-YumConfig
+        $ex=@($script:Yum.Config.CpuBalanceExclusions); $pp=@($script:Yum.Config.ProtectedProcesses)
+        Assert-That ($ex.Count -eq $case[1] -and @($ex | Where-Object { -not ($_ -is [string]) -or $_ -match '^system\.' }).Count -eq 0) ('Exclusions repaired for {0} -> [{1}]' -f $case[0],($ex -join ','))
+        if($case[2] -ge 0){ Assert-That ($pp.Count -eq $case[2] -and $pp[0] -eq 'System') ('Protected list kept for {0} ({1})' -f $case[0],$pp.Count) }
+        Assert-That (@((Get-YumCpuBalanceSettings).Exclusions) -notcontains 'system.collections.specialized.ordereddictionary') 'CPU care never reads a type name as a program.'
+    } finally { Remove-Item -LiteralPath $d -Recurse -Force -ErrorAction SilentlyContinue }
+}
+$script:Root=$savedRoot; $script:Yum=$savedYum
+
 # 5. Record checks reuse one defaults table and give the same result.
 $r=[pscustomobject]@{Name='x';Risk=$null}; $null=Ensure-YumIntelligenceRecordSchema -Record $r
 Assert-That (@($r.PSObject.Properties).Count -eq 42 -and $r.Risk -eq 'Review' -and $r.ResearchSources -is [array]) 'Schema check fills the 42 fields and replaces nulls.'

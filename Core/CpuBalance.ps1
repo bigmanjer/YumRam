@@ -246,7 +246,7 @@ function Get-YumCpuBalanceSettings {
         CalmSeconds=[int](& $get 'CpuBalanceCalmSeconds' 3)
         RestorePercent=[double](& $get 'CpuBalanceRestorePercent' 4)
         MaxRestrained=[int](& $get 'CpuBalanceMaxRestrained' 5)
-        Exclusions=@(& $get 'CpuBalanceExclusions' @()) | ForEach-Object { ([string]$_ -replace '\.exe$','').Trim().ToLowerInvariant() } | Where-Object { $_ }
+        Exclusions=@(@(& $get 'CpuBalanceExclusions' @()) | Where-Object { $_ -is [string] -and $_ -notmatch '^(?i)system\.(collections|management)\.' } | ForEach-Object { ([string]$_ -replace '\.exe$','').Trim().ToLowerInvariant() } | Where-Object { $_ })
     }
 }
 
@@ -260,6 +260,7 @@ function Test-YumCpuBalanceEligible {
     if([string]$P.Priority -ne 'Normal'){return 'own priority'}
     if($script:YumCpuBalanceCoreNames -contains $n){return 'windows core'}
     if(@($Settings.Exclusions) -contains $n){return 'excluded'}
+    try{ if(Test-YumTuningTool -Name $n){return 'hardware tuning tool'} }catch{}   # 5.16.1: never hold back overclock / undervolt tools
     # The trim-protection list also names powershell/pwsh only because YUMRAM itself runs in PowerShell;
     # YUMRAM is already excluded by PID here, and a PowerShell script can be a real CPU hog.
     try{ $prot=@($script:Yum.Config.ProtectedProcesses | ForEach-Object {([string]$_ -replace '\.exe$','').ToLowerInvariant()} | Where-Object { $_ -notin @('powershell','pwsh') }); if($prot -contains $n){return 'protected'} }catch{}

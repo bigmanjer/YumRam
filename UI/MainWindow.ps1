@@ -101,6 +101,25 @@ public static class YumGraphGeo {
         g.Freeze();
         return g;
     }
+    // 5.16.1: the live 30-second view - newest value at the right edge, one point per sample.
+    public static StreamGeometry BuildSeries(System.Collections.IList vals, double x0, double plotW, int limit, double top, double height) {
+        var g = new StreamGeometry();
+        int n = vals == null ? 0 : vals.Count;
+        if (limit < 2) limit = 2;
+        double step = plotW / (limit - 1), offset = (limit - n) * step;
+        using (var c = g.Open()) {
+            bool started = false;
+            for (int i = 0; i < n; i++) {
+                double v; try { v = Convert.ToDouble(vals[i]); } catch { continue; }
+                if (double.IsNaN(v)) continue;
+                v = Math.Max(0, Math.Min(100, v));
+                var pt = new Point(x0 + offset + i * step, top + height - (v / 100.0) * height);
+                if (!started) { c.BeginFigure(pt, false, false); started = true; } else { c.LineTo(pt, true, true); }
+            }
+        }
+        g.Freeze();
+        return g;
+    }
 }
 '@
 }
@@ -169,6 +188,8 @@ function Update-YumGraph {
         }catch{}
         $range=[string]$script:Yum['GraphRange']
         $xs=@{Avail=(New-Object System.Collections.Generic.List[double]);Cpu=(New-Object System.Collections.Generic.List[double]);Gpu=(New-Object System.Collections.Generic.List[double])}
+        # 5.16.1 fix: 5.16.0 lost this line, so the graph threw (strict mode) and stayed empty.
+        $vs=@{Avail=(New-Object System.Collections.Generic.List[double]);Cpu=(New-Object System.Collections.Generic.List[double]);Gpu=(New-Object System.Collections.Generic.List[double])}
         if($range -and $range -ne '30s'){
             $win=switch($range){'5m'{300.0};'1h'{3600.0};default{43200.0}}
             $nb=$(if($range -eq '5m'){60}else{180})
@@ -178,12 +199,12 @@ function Update-YumGraph {
             }
             $maxGap=($L.PlotW/$nb)*2.5
         } else {
-            $limit=[math]::Max(2,[int]$script:Yum.GraphPointsLimit);$step=$L.PlotW/($limit-1)
-            foreach($pair in @(@('Avail',$script:Yum.GraphMemoryAvailable),@('Cpu',$script:Yum.GraphCPU),@('Gpu',$script:Yum.GraphGPU))){
-                $vals=$pair[1];if($null -eq $vals){continue};$offset=($limit-$vals.Count)*$step   # new data enters from the right
-                $kx=$xs[$pair[0]];$kv=$vs[$pair[0]];$x0=$L.X0+$offset; for($i=0;$i -lt $vals.Count;$i++){ $kx.Add($x0+$i*$step); $kv.Add([double]$vals[$i]) }
-            }
-            $maxGap=$step*2.5
+            # 5.16.1: the live 30-second view is built in one compiled call per line (new data enters from the right).
+            $limit=[math]::Max(2,[int]$script:Yum.GraphPointsLimit)
+            $L.Avail.Data=[YumGraphGeo]::BuildSeries($script:Yum.GraphMemoryAvailable,$L.X0,$L.PlotW,$limit,$L.MemTop,$L.MemH)
+            $L.Cpu.Data=[YumGraphGeo]::BuildSeries($script:Yum.GraphCPU,$L.X0,$L.PlotW,$limit,$L.CpuTop,$L.CpuH)
+            $L.Gpu.Data=[YumGraphGeo]::BuildSeries($script:Yum.GraphGPU,$L.X0,$L.PlotW,$limit,$L.CpuTop,$L.CpuH)
+            return
         }
         Set-YumGraphPath -Path $L.Avail -X $xs.Avail.ToArray() -V $vs.Avail.ToArray() -Top $L.MemTop -Height $L.MemH -MaxGapX $maxGap
         Set-YumGraphPath -Path $L.Cpu -X $xs.Cpu.ToArray() -V $vs.Cpu.ToArray() -Top $L.CpuTop -Height $L.CpuH -MaxGapX $maxGap
@@ -727,7 +748,7 @@ function Start-YumApplicationUi {
         }catch{}
     })
     if([bool]$script:Yum.Config['ShowTrayIcon']){ try{ Initialize-YumTray }catch{ Write-YumLogException -Context 'Tray icon failed; continuing without it' -Exception $_.Exception } }
-    $timer=New-Object System.Windows.Threading.DispatcherTimer;$timer.Interval=[TimeSpan]::FromSeconds([double]$script:Yum.Config.UIRefreshIntervalSeconds);$timer.Add_Tick({param($tm,$te)try{$want=if($script:Yum.Window.IsVisible){[TimeSpan]::FromSeconds([double]$script:Yum.Config.UIRefreshIntervalSeconds)}else{[TimeSpan]::FromSeconds(1)};if($tm.Interval -ne $want){$tm.Interval=$want}}catch{};try{ $sig=$script:Yum['ShowSignal']; if($null -ne $sig -and $sig.WaitOne(0)){ Show-YumMainWindow } }catch{};Update-YumUiFromSnapshot;Update-YumCpuBalanceUi;Update-YumUpdateUi;Update-YumNoticesUi;Update-YumSideScanUi;Invoke-YumDiskAutoCleanIfDue;Invoke-YumVramWatch;Update-YumAutoUpdate;try{Start-YumIntelligenceDbPreload}catch{};Update-YumCleanupResultUI;try{[void](Update-YumReclaimVerification)}catch{};Update-YumReclaimResultUI});$script:Yum.UiTimer=$timer;$timer.Start()
+    $timer=New-Object System.Windows.Threading.DispatcherTimer;$timer.Interval=[TimeSpan]::FromSeconds([double]$script:Yum.Config.UIRefreshIntervalSeconds);$timer.Add_Tick({param($tm,$te)try{$want=if($script:Yum.Window.IsVisible){[TimeSpan]::FromSeconds([double]$script:Yum.Config.UIRefreshIntervalSeconds)}else{[TimeSpan]::FromSeconds(1)};if($tm.Interval -ne $want){$tm.Interval=$want}}catch{};try{ $sig=$script:Yum['ShowSignal']; if($null -ne $sig -and $sig.WaitOne(0)){ Show-YumMainWindow } }catch{};Update-YumUiFromSnapshot;Update-YumCpuBalanceUi;Update-YumUpdateUi;Update-YumNoticesUi;Update-YumSideScanUi;Invoke-YumDiskAutoCleanIfDue;Invoke-YumVramWatch;Update-YumAutoUpdate;try{Start-YumIntelligenceDbPreload}catch{};try{Start-YumProcessMetaWarmup}catch{};Update-YumCleanupResultUI;try{[void](Update-YumReclaimVerification)}catch{};Update-YumReclaimResultUI});$script:Yum.UiTimer=$timer;$timer.Start()
     try{$initialMemory=Get-YumMemoryTelemetry;if($null -ne $initialMemory){Update-YumSnapshot -Changes @{Memory=$initialMemory;CPU=0.0;GPU3D=0.0;ForegroundProcessId=0;Game=[pscustomobject]@{ProcessId=0;ProcessName=$null;Detected=$false}} -CoreTelemetry}}catch{Write-YumLogException -Context 'Initial memory telemetry failed' -Exception $_.Exception}
     # 5.10: the first snapshot does not bump the version counter; ask for one full draw (paused start showed '--').
     $script:Yum.UiNeedsFullRefresh=$true

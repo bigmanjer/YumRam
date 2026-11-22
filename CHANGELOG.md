@@ -1,5 +1,46 @@
 # Changelog
 
+# YUMRAM 5.16.1 — Overview graph fixed; overclock/undervolt tools left alone; pages open faster; new screenshots
+
+- **Fix: the Overview graph stayed empty in 5.16.0.** When the graph code was sped up, one line was lost; the graph
+  then failed on every redraw (strict mode) and the error was caught silently. Found while re-taking the README
+  pictures (user: "double check graphs working?"). The UI test now checks that the graph really draws lines.
+  **Correction to the 5.16.0 notes:** its "graph 38 -> 4 ms" and "window thread 17 % -> 11 %" were measured with the
+  broken graph (it failed before drawing). Measured again with the fix: graph **38 -> ~13 ms** per redraw (the live
+  30-second view is now built in one compiled call per line); window thread with the Overview open about the same
+  as 5.15.9. The start-up and hidden-in-tray gains of 5.16.0 do not involve the graph and stand.
+- **Overclock / undervolt tools are never touched** (user: "I may have undervolted my GPU and overclocked my CPU").
+  YUMRAM never changes clocks, voltages, power limits, fan curves or power plans (a test now checks there is no
+  power-plan code). In addition, the tools that apply those settings - MSI Afterburner / RTSS, AMD Ryzen Master,
+  Radeon Software, NVIDIA app, ThrottleStop, Intel XTU, EVGA Precision, ASUS GPU Tweak / Armoury Crate, Legion
+  Toolkit, OMEN / Alienware / MSI Center, FanControl, HWiNFO and others - are now never trimmed by RAM care or Free
+  RAM and never held back by CPU care, whatever the settings say.
+- **Fix: Settings > CPU > "Never hold back" could show `system.collections.specialized.ordereddictionary`.** A name
+  list loaded from config.json could lose its shape (PowerShell turns `[]` into nothing and a one-item list into a bare
+  value), was saved as `{}`, shown as a .NET type name and saved back as an entry when Apply was pressed (found on
+  the test PC's real config while taking the screenshots). Lists now keep their shape, and on start the four name
+  lists drop such entries (harmless - no program has that name - but wrong).
+- Live readings: CPU and disk are read before the GPU adapter list (which compiles a helper the first time), so the
+  Overview shows numbers sooner on a busy PC.
+- **Screenshots:** the README gallery shows 5.16.1, now with Disk cleanup. `Tools\Capture-Screenshots.ps1` takes
+  them from the real app and hides the Windows user and computer name.
+
+| Opening (test PC, real data) | 5.16.0 | 5.16.1 |
+|---|---|---|
+| Intelligence (first time) | 1.1-1.3 s | **0.6 s** |
+| What's running | 0.8-1.1 s | **0.7 s** |
+| Window up and responding after start | ~5 s | **3.3 s** |
+
+- **Intelligence:** building the list asked "is there a manual decision for this program?" for every record (~1 ms
+  each, ~600 ms for 521 records) even with no saved decisions. With none saved it is skipped; with decisions the
+  same lookup runs as before (identity keys are now remembered, file path built without a slow cmdlet). Merge:
+  ~740 ms -> ~170-210 ms.
+- **What's running:** program details (path, description, company) are kept for the whole session and read once in
+  the background after start, instead of reading ~100 program files each time the page opens.
+- **Repository:** ARCHITECTURE (5.16: background readers, responsiveness rule, helper cache, live readings off the
+  UI thread) and CONTRIBUTING (UI test, Actions run by hand, new rules for slow calls and C# helpers) updated;
+  GitHub checked: 0 open issues/PRs, all three branches on the same commit, 12 published releases with assets.
+
 # YUMRAM 5.16.0 — starts 2.5 s faster, uses less CPU in the background
 
 Measured on the test PC against 5.15.9 (same machine, same data):

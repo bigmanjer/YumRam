@@ -74,9 +74,9 @@ function Start-YumLiveSampler {
                 $gap=if([int]$S.Samples -lt 2){500}else{[int]$S.IntervalMs-150}
                 if((Get-Date) -lt $S.WantedUntil -and ((Get-Date)-$last).TotalMilliseconds -ge $gap){
                     $last=Get-Date
-                    if($null -eq $S.Adapters){ $S.Adapters=@(Get-YumGpuAdapters) }
+                    # (5.16.1: CPU and disk first - the GPU adapter list compiles a helper the first time)
                     # Each reading is published as soon as it exists (the first GPU read alone takes ~1.5 s).
-                    $S.Cpu=Get-YumLiveCpu; $S.Disk=Get-YumLiveDisk; $S.Gpu=Get-YumLiveGpu
+                    $S.Cpu=Get-YumLiveCpu; $S.Disk=Get-YumLiveDisk; if($null -eq $S.Adapters){ $S.Adapters=@(Get-YumGpuAdapters) }; $S.Gpu=Get-YumLiveGpu
                     $S.Updated=Get-Date; $S.Samples=[int]$S.Samples+1; $S.Error=''
                 }
             }catch{ $S.Error=$_.Exception.Message }

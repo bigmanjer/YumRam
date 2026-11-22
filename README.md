@@ -4,7 +4,7 @@
 
 **Keeps your Windows PC fast by keeping RAM free and the CPU fair — automatically.**
 
-[![Version](https://img.shields.io/badge/version-5.16.0-a855f7)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-5.16.1-a855f7)](CHANGELOG.md)
 [![Platform](https://img.shields.io/badge/Windows-10%20%7C%2011-0078d4)](#requirements)
 [![Stage](https://img.shields.io/badge/stage-beta-22c55e)](#status)
 
@@ -52,12 +52,16 @@ Most "RAM cleaners" flush everything and show a big number. YUMRAM is different:
 | What's running | Reclaim Center |
 |---|---|
 | <img src="Docs/Screenshots/WhatsRunning.png" width="430" alt="What's running: every program's RAM and CPU, explained"> | <img src="Docs/Screenshots/ReclaimCenter.png" width="430" alt="Reclaim Center: what was trimmed and what Windows gave back"> |
-| **Windows bloat** | **Startup apps** |
-| <img src="Docs/Screenshots/WindowsBloat.png" width="430" alt="Windows bloat: preinstalled apps and ad settings, all reversible"> | <img src="Docs/Screenshots/StartupApps.png" width="430" alt="Startup apps including Store apps and sign-in tasks"> |
-| **CPU care settings** | **Intelligence** |
-| <img src="Docs/Screenshots/Settings-CPU.png" width="430" alt="CPU care levels, this PC's layout and game measurement"> | <img src="Docs/Screenshots/Intelligence.png" width="430" alt="Intelligence: identity and safety of every process, service and app"> |
-| **Settings** | **About** |
-| <img src="Docs/Screenshots/Settings.png" width="430" alt="Settings"> | <img src="Docs/Screenshots/About.png" width="430" alt="About YUMRAM"> |
+| **Disk cleanup** | **Windows bloat** |
+| <img src="Docs/Screenshots/DiskCleanup.png" width="430" alt="Disk cleanup: sizes and plain explanations first, look before cleaning"> | <img src="Docs/Screenshots/WindowsBloat.png" width="430" alt="Windows bloat: preinstalled apps and ad settings, all reversible"> |
+| **Startup apps** | **CPU care settings** |
+| <img src="Docs/Screenshots/StartupApps.png" width="430" alt="Startup apps including Store apps and sign-in tasks"> | <img src="Docs/Screenshots/Settings-CPU.png" width="430" alt="CPU care levels, this PC's layout and game measurement"> |
+| **Intelligence** | **Settings** |
+| <img src="Docs/Screenshots/Intelligence.png" width="430" alt="Intelligence: identity and safety of every process, service and app"> | <img src="Docs/Screenshots/Settings.png" width="430" alt="Settings"> |
+| **About** | |
+| <img src="Docs/Screenshots/About.png" width="430" alt="About YUMRAM"> | |
+
+Pictures: version 5.16.1, captured with `Tools\Capture-Screenshots.ps1` (user and computer name hidden).
 
 ## Install
 

@@ -16,7 +16,7 @@ $tmp=Join-Path $env:TEMP ('yum-full-'+[guid]::NewGuid().ToString('N'));New-Item 
 Get-ChildItem $Root -Filter *.json | Copy-Item -Destination $tmp
 $script:Yum.ConfigDirectory=$tmp;$script:Yum.ConfigFile=(Join-Path $tmp 'config.json');$script:Yum.Config.LogFileName=(Join-Path $tmp 'probe.log')
 $script:Yum.Config.StartMonitoringAutomatically=$false; $script:Yum.Config['UpdateCheckEnabled']=$false
-$script:R=New-Object System.Collections.Generic.List[string];$script:Fails=0;$script:WaitN=0;$script:WaitD=0;$script:WaitE=0
+$script:R=New-Object System.Collections.Generic.List[string];$script:Fails=0;$script:WaitN=0;$script:WaitD=0;$script:WaitE=0;$script:WaitG=0
 function Check([bool]$c,[string]$m){ if($c){$script:R.Add("PASS  $m")}else{$script:R.Add("FAIL  $m");$script:Fails++} }
 function Note([string]$m){ $script:R.Add("      $m") }
 function Click($b){ $b.RaiseEvent((New-Object System.Windows.RoutedEventArgs([System.Windows.Controls.Button]::ClickEvent))) }
@@ -31,6 +31,7 @@ $script:Steps=@(
  { $u=$script:Yum.Ui; Check ($u.Status.Text -match 'Paused') "Overview: paused status ($($u.Status.Text))"; Check ($u.SideRamText.Text -notmatch '--') "Sidebar RAM live while paused ($($u.SideRamText.Text))"; Check ([string]$script:Yum.HotkeyStatus -match 'Ctrl\+Alt\+R') "Hotkey registered ($($script:Yum.HotkeyStatus))" },
  { }, { },
  # 5.15.2: CPU %, speed, GPU busy and VRAM are live while monitoring is off (user report: "-- GHz", frozen GPU).
+ { if((($script:Yum.Ui.GpuVram.Text -notmatch 'VRAM') -or ($script:Yum.Ui.DiskBusy.Text -notmatch '^\d+%$')) -and $script:WaitG++ -lt 12){ $script:I--; return } },   # 5.16.1: readings come from the background; a busy PC needs a few seconds
  { $u=$script:Yum.Ui; Check ($null -eq $script:Yum.TelemetryTimer) 'Still paused for the live-readings check'; Check ($u.CpuSpeed.Text -match '^\d+\.\d+ GHz$') "Paused: CPU speed shown ($($u.CpuSpeed.Text))"; Check ($u.CpuRingText.Text -ne '--') "Paused: CPU ring live ($($u.CpuRingText.Text) $($u.CpuRingState.Text))"; Check ($u.GpuVram.Text -match 'VRAM') "Paused: VRAM shown ($(($u.GpuVram.Text -replace '\r?\n',' | ')))"; Check ($u.DiskBusy.Text -match '^\d+%$' -and $u.DiskFree.Text -match 'GB free' -and $u.DiskSpaceText.Text -match '^of .* GB on ' -and $null -ne $u.DiskRing.Data -and $null -ne $u.GpuRing.Data -and $null -ne $u.CpuRing.Data -and $null -ne $u.MemoryRing.Data -and $u.GpuName.Text -ne '--') "Disk card live ($($u.DiskBusy.Text); $($u.DiskSpeed.Text); $($u.DiskSpaceText.Text))"; Note ('disk: '+($u.DiskDetail.Text -replace '\r?\n',' | ')); Shot 'p-overview-paused' },
  { $u=$script:Yum.Ui; Click $u.Monitor },
  { $u=$script:Yum.Ui; Check ($null -ne $script:Yum.TelemetryTimer -and $u.Status.Text -match 'Monitoring|Starting') "Start Monitoring ($($u.Status.Text), button '$($u.Monitor.Content)')" },
@@ -43,6 +44,8 @@ $script:Steps=@(
  # As administrator Free RAM also empties Windows' caches (~7 s measured): wait for it instead of a fixed delay.
  { if((Test-YumReclaimBusy) -and $script:WaitN++ -lt 15){ $script:I-- } },
  { $r=$script:Yum.LastReclaim; Check ($null -ne $r -and $script:Yum.Ui.ReclaimStatus.Text -match 'Free RAM [0-9.]+ .+ GB') "Free RAM result shown: $($script:Yum.Ui.ReclaimStatus.Text)"; Check ($script:Yum.Ui.FreeRam.IsEnabled) 'Free RAM button re-enabled'; Check ([int](Get-YumFreedStats).TotalRuns -ge 0) "Freed card: $($script:Yum.Ui.FreedToday.Text) / $($script:Yum.Ui.FreedTodayRuns.Text)"; Shot 'p-overview' },
+ # 5.16.1: the Overview graph really draws (5.16.0 shipped with an empty graph - an exception was swallowed).
+ { Update-YumGraph; $L=$script:Yum['GraphLayout']; $ok=($null -ne $L); foreach($k in 'Avail','Cpu'){ if($ok){ $d=$L[$k].Data; $ok=($null -ne $d -and $d.Bounds.Width -gt 20) } }; Check $ok ('Overview graph draws its lines (Free RAM: {0})' -f $(if($L -and $L.Avail.Data){'{0:N0} px wide' -f $L.Avail.Data.Bounds.Width}else{'nothing'})) },
  { $u=$script:Yum.Ui; Check ($u.CpuBalanceText.Text -match 'Watching|Holding') "CPU balance card: $($u.CpuBalanceText.Text)"; Check ([bool]$u.CpuBalanceToggle.IsChecked) 'CPU balance on by default'; Check ($null -ne $script:Yum['CpuBalancePowerShell']) 'CPU balance worker running'; $u.CpuBalanceToggle.IsChecked=$false; $u.CpuBalanceToggle.RaiseEvent((New-Object System.Windows.RoutedEventArgs([System.Windows.Controls.Primitives.ButtonBase]::ClickEvent))) },
  { $u=$script:Yum.Ui; Check (-not [bool]$script:Yum.Config['CpuBalanceEnabled'] -and $u.CpuBalanceText.Text -match '^Off') "CPU balance toggle off: $($u.CpuBalanceText.Text)"; $u.CpuBalanceToggle.IsChecked=$true; $u.CpuBalanceToggle.RaiseEvent((New-Object System.Windows.RoutedEventArgs([System.Windows.Controls.Primitives.ButtonBase]::ClickEvent))); Check ([bool]$script:Yum.Config['CpuBalanceEnabled']) 'CPU balance toggle back on' },
  { Set-YumSidebarCompact -Compact $true; Check ($script:Yum.Ui.Sidebar.Width -eq 68) 'Sidebar compact'; Set-YumSidebarCompact -Compact $false; Check ($script:Yum.Ui.Sidebar.Width -eq 220) 'Sidebar expanded' },

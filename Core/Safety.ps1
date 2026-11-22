@@ -6,6 +6,7 @@ function Test-YumProtectedProcess {
     try {
         if($Process.Id -eq $PID){return $true}
         if(Test-YumNameInList -Name $Process.ProcessName -List @($script:Yum.Config.ProtectedProcesses)){return $true}
+        try{ if(Test-YumTuningTool -Name $Process.ProcessName){return $true} }catch{}   # 5.16.1: overclock / undervolt tools
         if([bool]$script:Yum.Config.ProtectForegroundProcess -and $ForegroundPid -gt 0 -and $Process.Id -eq $ForegroundPid){return $true}
         if([bool]$script:Yum.Config.ProtectGame -and $GamePid -gt 0 -and $Process.Id -eq $GamePid){return $true}
         if($Process.PriorityClass -eq [Diagnostics.ProcessPriorityClass]::RealTime){return $true}
