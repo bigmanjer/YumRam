@@ -1,8 +1,8 @@
-## YUMRAM 5.15.10 - starts about 2.5 s faster, uses less CPU in the background
+## YUMRAM 5.16.0 - starts about 2.5 s faster, uses less CPU in the background
 
 Continuing the lag work from 5.15.9. Measured on the test PC against 5.15.9 (same machine, same data):
 
-| | 5.15.9 | 5.15.10 |
+| | 5.15.9 | 5.16.0 |
 |---|---|---|
 | Loading the program (every start after the first) | 3.7-4.5 s | **1.4-2.2 s** |
 | Window up and responding (busy PC) | 7.5 s | **5.2 s** |
@@ -33,4 +33,4 @@ code change, and that a damaged file never breaks YUMRAM) and the 82-step UI tes
 
 ### Install / update
 - From 5.15.4 or newer: installs itself within about 15 minutes (never while you play).
-- New install: `YUMRAM-Setup-5.15.10.exe` or `YUMRAM-5.15.10.zip`; `SHA256SUMS.txt` lists both checksums.
+- New install: `YUMRAM-Setup-5.16.0.exe` or `YUMRAM-5.16.0.zip`; `SHA256SUMS.txt` lists both checksums.

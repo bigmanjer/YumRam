@@ -1,10 +1,10 @@
 # Changelog
 
-# YUMRAM 5.15.10 — starts 2.5 s faster, uses less CPU in the background
+# YUMRAM 5.16.0 — starts 2.5 s faster, uses less CPU in the background
 
 Measured on the test PC against 5.15.9 (same machine, same data):
 
-| | 5.15.9 | 5.15.10 |
+| | 5.15.9 | 5.16.0 |
 |---|---|---|
 | Loading the program (every start after the first) | 3.7-4.2 s | **1.4-1.5 s** |
 | Overview graph, per redraw (twice a second) | 38 ms | **4 ms** |
