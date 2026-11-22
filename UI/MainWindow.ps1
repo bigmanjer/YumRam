@@ -439,7 +439,7 @@ function Update-YumAutoUpdate {
         $info=$script:Yum['UpdateInfo']; if($null -eq $info -or [string]$info.Status -ne 'Available'){return}
         $done=Receive-YumUpdateDownload
         if($null -ne $done){
-            if([bool]$done.Success){ $script:Yum['UpdateStaged']=[string]$done.Staging; $script:Yum['UpdateStagedVersion']=[string]$info.Latest; Write-YumLog ('Automatic update: {0} downloaded and verified; installing at the next quiet moment.' -f $info.Latest) }
+            if([bool]$done.Success){ $script:Yum['UpdateStaged']=[string]$done.Staging; $script:Yum['UpdateStagedVersion']=[string]$info.Latest; Write-YumLog ('Automatic update: {0} downloaded and verified; installing now unless a game is running.' -f $info.Latest) }
             else { $script:Yum['UpdateFailures']=[int]$script:Yum['UpdateFailures']+1; Write-YumLog ('Automatic update download failed: {0}' -f [string]$done.Message); try{ $script:Yum.Ui.UpdateText.Text=('Automatic update could not be downloaded: {0}. It is tried again later; Install and restart works too.' -f $done.Message) }catch{} }
         }
         $staged=[string]$script:Yum['UpdateStaged']
