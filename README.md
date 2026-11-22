@@ -4,7 +4,7 @@
 
 **Keeps your Windows PC fast by keeping RAM free and the CPU fair — automatically.**
 
-[![Version](https://img.shields.io/badge/version-5.15.7-a855f7)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-5.15.8-a855f7)](CHANGELOG.md)
 [![Platform](https://img.shields.io/badge/Windows-10%20%7C%2011-0078d4)](#requirements)
 [![Stage](https://img.shields.io/badge/stage-beta-22c55e)](#status)
 
@@ -37,7 +37,7 @@ Most "RAM cleaners" flush everything and show a big number. YUMRAM is different:
 | **What's running** | Live RAM and CPU per program, sortable, explained in plain words, with your own rules (*never trim*, *never hold back*). |
 | **Memory-leak alerts** | Spots a program whose memory keeps rising and tells you once — restarting it gives the memory back. |
 | **Windows bloat** | Removes preinstalled apps you do not need (News, Clipchamp, Solitaire, promoted games…) and turns off Windows ads, tips, suggestions, Bing in Start search, Copilot and Recall. Store, Edge, Windows Update and Defender are never touched; every change can be undone. |
-| **Disk cleanup** | Frees space from caches and leftovers that rebuild themselves (temp files, browser caches, picture previews, crash reports, old Windows Update files, Recycle Bin) — sizes and a plain explanation first, never your files, cookies or passwords. Optional weekly automatic clean. |
+| **Disk cleanup** | Frees space from caches and leftovers that rebuild themselves (temp files, browser and app caches, Store app temp files, picture previews, crash reports, old Windows Update and browser-updater files, developer download caches, Windows' own component and driver clean-up, Recycle Bin) — sizes and a plain explanation first, *Open folder* to look, a list of every deleted file afterwards; never your files, cookies or passwords. Optional weekly automatic clean. |
 | **What's using my disk** | Biggest folders (click to go deeper) and biggest files, like WinDirStat, with Open location. |
 | **Live readings** | RAM, CPU, GPU (busy + VRAM per graphics chip) and disk (busy, read/write, free space) as four rings on the Overview — also while monitoring is off. |
 | **Floating mini bar** | A small always-on-top bar with RAM, CPU, GPU and disk you can drag anywhere, with Free RAM and hide-to-tray. |
@@ -45,7 +45,7 @@ Most "RAM cleaners" flush everything and show a big number. YUMRAM is different:
 | **Intelligence** | Identifies every process, service, installed program and app (signatures, installed-software records, services, Store packages, optional web lookup) and says what each one is *for* (which device or feature) with one plain piece of advice: *Keep*, *Turn off is fine*, *Your call* or *Careful*. Only identified, non-protected programs are ever trimmed. |
 | **History** | Usage graph for 30 s, 5 min, 1 h and 12 h, kept across restarts. |
 | **Game measurement** | *Measure games on this PC* tests each CPU care level with a test game; while you play, YUMRAM uses what worked best here. Optional, opt-in sharing helps everyone with the same CPU. |
-| **Tray & updates** | Lives in the tray with live RAM %, low-RAM and leak notices; checks GitHub for updates and installs them verified. |
+| **Tray & updates** | Lives in the tray with live RAM %, low-RAM and leak notices; checks GitHub for updates every 15 minutes and installs them by itself (SHA-256 verified, never while you play, short heads-up first; can be turned off). |
 
 ## Screenshots
 
@@ -101,7 +101,7 @@ Measured on a Ryzen 7 4800H laptop: a simulated 8-thread game next to a 32-threa
 - No account, no telemetry. Settings, statistics and learned data stay in the YUMRAM folder.
 - **Online research** (on by default, Settings › Privacy): only the name, publisher and product of a
   program YUMRAM cannot identify locally is sent to Bing search; up to 4 trustworthy result pages (e.g. the publisher's site) are then opened to check the answer.
-- **Update check** (once a day, can be turned off): one request to GitHub's public releases API.
+- **Update check** (every 15 minutes, can be turned off): one request to GitHub's public releases API; an update is downloaded from GitHub only when there is one.
 - **Community game results** ([details](Docs/COMMUNITY.md)): sharing your game benchmark results is **off unless you turn it on**, and you see the exact text first (CPU model, laptop/desktop, Windows build, frame rates of YUMRAM's test game - nothing else). Using other people's results for your CPU downloads a public file once a week and sends nothing about you.
 
 ## Requirements

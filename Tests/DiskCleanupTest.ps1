@@ -75,6 +75,13 @@ Assert-That (-not [bool]$script:Yum.Config['DiskAutoClean']) 'Automatic clean is
 Assert-That (@($cats | Where-Object { @($_.Roots) -match '(?i)spotify' }).Count -eq 0) 'Spotify is left out: its folder can hold downloaded songs.'
 Assert-That ((@($cats | Where-Object Key -eq 'DriverSetup')[0]).Advice -eq 'YourCall') 'Driver installer folders are your call, not ticked by default.'
 Assert-That ((@($cats | Where-Object Key -eq 'UserTemp')[0]).SkipExt -contains '.docx') 'Temp cleaning skips documents.'
+# 5.15.8 additions: never what Windows needs to repair/uninstall apps, never package stores projects link to.
+$allRoots=@($cats | ForEach-Object { @($_.Roots) } | ForEach-Object { [string]$_ })
+Assert-That (@($allRoots | Where-Object { $_ -match '(?i)\\Package Cache(\\|$)|\\Installer(\\|$)|\$PatchCache\$|\\pnpm\\store|\\go\\pkg\\mod|\\\.m2\\|\\\.gradle\\' }).Count -eq 0) 'Never the installer caches Windows needs to repair or uninstall apps, nor package stores projects use.'
+foreach($k in 'StoreTemp','DevCaches','UpdaterDownloads'){ $c=@($cats | Where-Object Key -eq $k)[0]; Assert-That ($null -ne $c -and -not $c.Auto) ('New category {0} exists and is not part of the weekly automatic clean.' -f $k) }
+Assert-That (@(@($cats | Where-Object Key -eq 'StoreTemp')[0].Roots | Where-Object { $_ -notmatch '(?i)\\AC\\(Temp|INetCache)$' }).Count -eq 0) 'Store apps: only their Temp and web-cache folders.'
+$ud=@($cats | Where-Object Key -eq 'UpdaterDownloads')[0]; Assert-That ($ud.Admin -and $ud.MinAgeHours -ge 168) 'Updater downloads: administrator and only files older than 7 days.'
+Assert-That ((@($cats | Where-Object Key -eq 'DevCaches')[0]).Advice -eq 'YourCall') 'Developer caches are your call (the next build is slower once).'
 $logTmp=Join-Path $env:TEMP ('yum-dlog-'+[guid]::NewGuid().ToString('N')); New-Item -ItemType Directory $logTmp | Out-Null
 $oldDir=$script:Yum.ConfigDirectory; $script:Yum.ConfigDirectory=$logTmp
 try{ [void](Invoke-YumDiskCleanup -Keys @()); Assert-That (Test-Path -LiteralPath (Get-YumDiskCleanupLogPath)) 'Each clean writes the "what was deleted" list.' }finally{ $script:Yum.ConfigDirectory=$oldDir; Remove-Item -LiteralPath $logTmp -Recurse -Force -ErrorAction SilentlyContinue }

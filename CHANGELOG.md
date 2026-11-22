@@ -1,5 +1,25 @@
 # Changelog
 
+# YUMRAM 5.15.8 — more disk space found, repository brought up to date
+
+- **Disk cleanup 15 -> 18 categories** (researched against BleachBit, CCleaner and Storage Sense; every location
+  checked to be a re-creatable cache). On the test PC this finds **0.95 GB more (2.26 -> 3.21 GB)**; measuring takes
+  ~0.3 s longer (background, the window does not wait).
+  - **Store app temporary files** - only the `AC\Temp` and `AC\INetCache` folders of Microsoft Store apps, files
+    older than 24 hours.
+  - **Developer download caches** (pip, NuGet, npm, pnpm cache, Yarn, Go build cache) - *your call*: the next build
+    downloads/compiles once more. Never projects, installed packages or the pnpm store projects link to.
+  - **Old app updater downloads** (Edge / Chrome updaters' installer copies) - administrator, only files older than
+    7 days.
+  - **App caches** now also cover Steam's logs and crash reports and classic Teams.
+  - Deliberately **not** cleaned (researched): `ProgramData\Package Cache` and `Windows\Installer` (needed to repair
+    and uninstall programs), Maven/Gradle/Go module stores, Office's document cache (can hold unsynced files).
+  - None of the new categories is part of the weekly automatic clean unless you tick them.
+- **Repository:** the `YUMRAM.exe` committed in the repo (used when running from a clone or "Download ZIP") was still
+  the 5.15.1 launcher without the 5.15.7 updater fix - rebuilt, and a test now fails if it falls behind again. README
+  (update check every 15 minutes with automatic install, disk cleanup list) and ARCHITECTURE (GPU memory & network
+  module, updater, Windows' own clean-up tools) brought up to date.
+
 # YUMRAM 5.15.7 — automatic updates fixed (found by the first real update)
 
 - **Fix: an automatic update could leave you with no YUMRAM.** First real-world update (5.15.5 -> 5.15.6 on the test

@@ -141,6 +141,10 @@ function Get-YumDiskJunkCategories {
         foreach($p in $profiles){ foreach($c in 'Cache','Code Cache','GPUCache'){ $x=Join-Path $p $c; if(Test-Path -LiteralPath $x){ $chromium+=$x } } }
     }
     $firefox=@(); try{ $ff=Join-Path $la 'Mozilla\Firefox\Profiles'; if([IO.Directory]::Exists($ff)){ $firefox=@([IO.Directory]::GetDirectories($ff) | ForEach-Object { Join-Path $_ 'cache2' }) } }catch{}
+    # 5.15.8 (user: "more can be done with disk cleaning"; measured on the test PC: ~990 MB more, all re-creatable).
+    $steam=@(); try{ $sp=[string](Get-ItemProperty -LiteralPath 'HKCU:\Software\Valve\Steam' -Name SteamPath -ErrorAction Stop).SteamPath; if($sp){ $sp=$sp.Replace('/','\'); $steam=@((Join-Path $sp 'logs'),(Join-Path $sp 'dumps')) } }catch{}
+    $storeTemp=@(); try{ $pk=Join-Path $la 'Packages'; if([IO.Directory]::Exists($pk)){ foreach($p in [IO.Directory]::GetDirectories($pk)){ foreach($s in 'AC\Temp','AC\INetCache'){ $x=Join-Path $p $s; if([IO.Directory]::Exists($x)){ $storeTemp+=$x } } } } }catch{}
+    $pf86=${env:ProgramFiles(x86)}; if(-not $pf86){ $pf86=$env:ProgramFiles }
     @(
         [pscustomobject]@{Key='UserTemp';Name='Temporary files (your account)';Advice='Clean';Admin=$false;Auto=$true;MinAgeHours=24;Patterns=@();SkipExt=$script:YumTempKeepExt;SkipDirs=$script:YumTempKeepDirs;Roots=@($env:TEMP)
             Why='Leftover files programs and installers put in your Temp folder and forgot to delete.';Effect='Nothing you will notice. Never touched here: files from the last 24 hours, files still in use, documents, pictures, videos, music and archives (you may have opened them from an e-mail), and files Windows unpacked when you opened a zip.'}
@@ -162,8 +166,16 @@ function Get-YumDiskJunkCategories {
         # Windows logs, and Windows' own deep clean-up (component store, old drivers, previous Windows) - the same tools
         # Microsoft documents for Disk Cleanup / DISM, never hand-deleting system folders.
         [pscustomobject]@{Key='AppCache';Name='App caches (Discord, Steam, Epic, Teams, VS Code)';Advice='Clean';Admin=$false;Auto=$false;MinAgeHours=0;Patterns=@()
-            Roots=@((Join-Path $env:APPDATA 'discord\Cache'),(Join-Path $env:APPDATA 'discord\Code Cache'),(Join-Path $env:APPDATA 'discord\GPUCache'),(Join-Path $la 'Steam\htmlcache\Cache'),(Join-Path $la 'Steam\htmlcache\Code Cache'),(Join-Path $la 'Steam\htmlcache\GPUCache'),(Join-Path $la 'EpicGamesLauncher\Saved\webcache'),(Join-Path $la 'EpicGamesLauncher\Saved\webcache_4430'),(Join-Path $la 'EpicGamesLauncher\Saved\webcache_4147'),(Join-Path $la 'Packages\MSTeams_8wekyb3d8bbwe\LocalCache\Microsoft\MSTeams\EBWebView\Default\Cache'),(Join-Path $env:APPDATA 'Code\Cache'),(Join-Path $env:APPDATA 'Code\CachedData'),(Join-Path $env:APPDATA 'Code\Code Cache'))
-            Why='Web pictures and scripts these apps saved to open faster. Only caches: never your messages, logins, downloads, games or settings. (Spotify is left out on purpose: its folder can hold the songs you downloaded for offline listening.)';Effect='The apps load things again the first time. Close the apps first for the biggest result; files in use are skipped.'}
+            Roots=@((Join-Path $env:APPDATA 'discord\Cache'),(Join-Path $env:APPDATA 'discord\Code Cache'),(Join-Path $env:APPDATA 'discord\GPUCache'),(Join-Path $la 'Steam\htmlcache\Cache'),(Join-Path $la 'Steam\htmlcache\Code Cache'),(Join-Path $la 'Steam\htmlcache\GPUCache'),(Join-Path $la 'EpicGamesLauncher\Saved\webcache'),(Join-Path $la 'EpicGamesLauncher\Saved\webcache_4430'),(Join-Path $la 'EpicGamesLauncher\Saved\webcache_4147'),(Join-Path $la 'Packages\MSTeams_8wekyb3d8bbwe\LocalCache\Microsoft\MSTeams\EBWebView\Default\Cache'),(Join-Path $env:APPDATA 'Code\Cache'),(Join-Path $env:APPDATA 'Code\CachedData'),(Join-Path $env:APPDATA 'Code\Code Cache'),(Join-Path $env:APPDATA 'Microsoft\Teams\Cache'),(Join-Path $env:APPDATA 'Microsoft\Teams\Code Cache'),(Join-Path $env:APPDATA 'Microsoft\Teams\GPUCache'))+$steam
+            Why='Web pictures and scripts these apps saved to open faster, plus Steam''s own log files and crash reports. Only caches: never your messages, logins, downloads, games, saves or settings. (Spotify is left out on purpose: its folder can hold the songs you downloaded for offline listening.)';Effect='The apps load things again the first time. Close the apps first for the biggest result; files in use are skipped.'}
+        [pscustomobject]@{Key='StoreTemp';Name='Store app temporary files';Advice='Clean';Admin=$false;Auto=$false;MinAgeHours=24;Patterns=@();Roots=@($storeTemp)
+            Why='Temporary files and web caches of apps from the Microsoft Store (Photos, Widgets, Xbox, Teams and others) - only their Temp and web-cache folders, never the apps'' data or settings.';Effect='Nothing you will notice. Files from the last 24 hours and files in use are skipped.'}
+        [pscustomobject]@{Key='DevCaches';Name='Developer download caches (pip, NuGet, npm, pnpm, Yarn, Go)';Advice='YourCall';Admin=$false;Auto=$false;MinAgeHours=0;Patterns=@()
+            Roots=@((Join-Path $la 'pip\Cache'),(Join-Path $la 'NuGet\v3-cache'),(Join-Path $la 'NuGet\plugins-cache'),(Join-Path $la 'npm-cache'),(Join-Path $la 'pnpm-cache'),(Join-Path $la 'Yarn\Cache'),(Join-Path $la 'go-build'))
+            Why='Copies of packages that programming tools downloaded, and Go''s build cache. Only download/build caches: never your projects, installed packages or the pnpm store your projects link to.';Effect='Your call: the next build or install downloads or compiles those packages again, so it is slower once. Only shown if you have these tools.'}
+        [pscustomobject]@{Key='UpdaterDownloads';Name='Old app updater downloads (Edge, Chrome)';Advice='Clean';Admin=$true;Auto=$false;MinAgeHours=168;Patterns=@()
+            Roots=@((Join-Path $pf86 'Microsoft\EdgeUpdate\Download'),(Join-Path $pf86 'Google\Update\Download'))
+            Why='Installer copies Microsoft Edge''s and Google Chrome''s updaters downloaded for updates that are already installed.';Effect='Nothing you will notice. Only files older than 7 days, so an update in progress is never touched. The browsers themselves are not touched.'}
         [pscustomobject]@{Key='DriverSetup';Name='Graphics driver installer leftovers';Advice='YourCall';Admin=$false;Auto=$false;MinAgeHours=24;Patterns=@()
             Roots=@((Join-Path $env:SystemDrive 'NVIDIA'),(Join-Path $env:SystemDrive 'AMD'),(Join-Path $pd 'NVIDIA Corporation\Downloader'))
             Why='Copies of NVIDIA / AMD driver installers that were unpacked or downloaded during driver updates (C:\NVIDIA, C:\AMD).';Effect='Your call: the installed driver is not touched. Use Open folder first - if you ever saved your own files in C:\AMD or C:\NVIDIA, do not clean this.'}
@@ -187,7 +199,8 @@ function Get-YumOpenCacheApps {
     param([string[]]$Keys)
     $map=@{
         Browser=@(@('chrome','Chrome'),@('msedge','Edge'),@('brave','Brave'),@('opera','Opera'),@('vivaldi','Vivaldi'),@('firefox','Firefox'))
-        AppCache=@(@('discord','Discord'),@('spotify','Spotify'),@('steamwebhelper','Steam'),@('EpicGamesLauncher','Epic Games'),@('ms-teams','Teams'),@('Code','VS Code'))
+        AppCache=@(@('discord','Discord'),@('spotify','Spotify'),@('steamwebhelper','Steam'),@('EpicGamesLauncher','Epic Games'),@('ms-teams','Teams'),@('Teams','Teams (classic)'),@('steam','Steam'),@('Code','VS Code'))
+        DevCaches=@(@('node','Node.js'),@('dotnet','.NET'),@('pip','pip'),@('go','Go'))
     }
     $running=@{}; foreach($p in @(Get-Process -ErrorAction SilentlyContinue)){ $running[$p.ProcessName.ToLowerInvariant()]=$true }
     $names=foreach($k in @($Keys)){ foreach($e in @($map[$k])){ if($null -ne $e -and $running.ContainsKey(([string]$e[0]).ToLowerInvariant())){ $e[1] } } }

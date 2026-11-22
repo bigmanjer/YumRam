@@ -116,6 +116,10 @@ $r=Install-YumUpdate -Info $i -NoRestart
     Assert-That ((([IO.File]::ReadAllText((Join-Path $installed 'VERSION'))).Trim()) -eq $currentVersion) 'A broken update must not change the installed version.'
     Assert-That ((Get-Content (Join-Path $installed 'YUMRAM.log') -Raw) -match 'update not applied') 'A broken update is logged in the installed copy.'
     $app=[IO.File]::ReadAllText((Join-Path $root 'App\YUMRAM.ps1')); Assert-That ($app -match '\[Environment\]::Exit\(0\)') 'YUMRAM must end its process when it closes.'
+    # 5.15.8 repository review: the YUMRAM.exe committed in the repo (used when running from a clone or GitHub's
+    # "Download ZIP") was still the 5.15.1 launcher. It must contain the current updater.
+    $rootExe=Join-Path $root 'YUMRAM.exe'
+    if(Test-Path -LiteralPath $rootExe){ $exeBytes=[IO.File]::ReadAllBytes($rootExe); $exeText=[Text.Encoding]::Unicode.GetString($exeBytes)+'|'+[Text.Encoding]::Unicode.GetString($exeBytes,1,$exeBytes.Length-1); Assert-That ($exeText.Contains('still running after') -and $exeText.Contains('update not applied')) 'The repository''s YUMRAM.exe is out of date: run Tools\Build-Launcher.ps1.' }
 
     Write-Host ('Release 5.10 update test passed ({0} -> 9.9.9 -> {0}; tampered download refused; user data kept).' -f $currentVersion)
 }finally{
