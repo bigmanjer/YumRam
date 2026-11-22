@@ -19,3 +19,8 @@ cpu-balance.json
 .previous/
 dist/
 YUMRAM.exe.old
+cpu-community.json
+cpu-knowledge.json
+history.json
+windows-bloat-*.json
+disk-cleanup-*.json
