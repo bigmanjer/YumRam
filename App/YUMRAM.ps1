@@ -24,3 +24,8 @@ try {
     exit 1
 }
 try { Start-YumRamApplication } catch { try { $line=("[{0}] STARTUP ERROR: {1}" -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss.fff'),$_.Exception.ToString()); Add-Content -LiteralPath $log -Value $line -Encoding UTF8; $tempCopy=Join-Path $env:TEMP 'YUMRAM-app-startup-error.log'; Copy-Item -LiteralPath $log -Destination $tempCopy -Force -ErrorAction SilentlyContinue; Add-Content -LiteralPath (Join-Path $env:TEMP 'YUMRAM-startup.log') -Value $line -Encoding UTF8 } catch {}; exit 1 }
+# 5.15.7 (real-PC test): after the window closed, background helper threads kept this process alive for over a minute,
+# so the updater timed out and Windows' "start without asking" task would not start YUMRAM again. Everything is saved
+# by now (the window's Closed handler), so end the process explicitly.
+try { Add-Content -LiteralPath $log -Value ('[{0}] Process exit.' -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss.fff')) -Encoding UTF8 } catch {}
+[Environment]::Exit(0)

@@ -1,5 +1,22 @@
 # Changelog
 
+# YUMRAM 5.15.7 — automatic updates fixed (found by the first real update)
+
+- **Fix: an automatic update could leave you with no YUMRAM.** First real-world update (5.15.5 -> 5.15.6 on the test
+  PC): YUMRAM found, downloaded and verified 5.15.6 and closed its window, but its process stayed alive for over a
+  minute (background helper threads). The updater gave up after 60 s with an error box, and Windows' "start without
+  asking" task would not start YUMRAM again while the old process was still there - so nothing was running.
+  - YUMRAM now **ends its process right after its window closes** (everything is saved by then). Measured: 13 ms.
+  - The updater **ends a lingering old YUMRAM after 30 s** instead of giving up, and copes with a process it may not
+    inspect (e.g. an administrator YUMRAM watched by a normal updater; that used to crash it).
+  - If an update cannot be applied, the updater **starts the installed version again** and logs why - no blocking
+    error box, no YUMRAM-less PC. The in-app updater simply tries again later.
+- **Real end-to-end test:** a copy of YUMRAM started like a user would, found a local test release, downloaded and
+  verified it, gave the 10-second heads-up, closed, was updated and started again as the new version - unattended,
+  36 s. The automated update test now also covers a lingering old process, "nothing to wait for" and a broken update.
+- Coming from 5.15.4-5.15.6: the new updater (inside the 5.15.7 package) handles the old version's lingering process,
+  so the update goes through.
+
 # YUMRAM 5.15.6 — updates as soon as they come out
 
 - **Checks every 15 minutes** (was every 6 hours; GitHub allows ~60 unauthenticated checks an hour from one address,

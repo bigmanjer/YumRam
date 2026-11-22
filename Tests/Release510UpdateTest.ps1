@@ -91,6 +91,32 @@ $r=Install-YumUpdate -Info $i -NoRestart
     $p=Start-Process -FilePath (Join-Path $installed 'YUMRAM.exe') -ArgumentList '--rollback','--no-restart' -PassThru -Wait
     Assert-That ((([IO.File]::ReadAllText((Join-Path $installed 'VERSION'))).Trim()) -eq $currentVersion) 'Rollback must restore the previous version.'
     Assert-That ([IO.File]::ReadAllText((Join-Path $installed 'config.json')) -eq $userConfig) 'Rollback must not touch config.json.'
+    # 5. 5.15.7 real-PC failure: the old YUMRAM's process stayed alive after its window closed; the updater gave up
+    #    after 60 s and the user was left with no YUMRAM. Now it ends the lingering process and installs anyway.
+    $stagedExe=Get-ChildItem -LiteralPath (Join-Path $env:TEMP 'YUMRAM-update-9.9.9') -Recurse -Filter 'YUMRAM.exe' -ErrorAction SilentlyContinue | Select-Object -First 1
+    Assert-That ($null -ne $stagedExe) 'The automatic path should have left a staged 9.9.9 update.'
+    $staging=$stagedExe.DirectoryName
+    $linger=Start-Process powershell.exe -ArgumentList '-NoProfile','-Command','Start-Sleep -Seconds 120' -WindowStyle Hidden -PassThru
+    $sw=[Diagnostics.Stopwatch]::StartNew()
+    $u=Start-Process -FilePath $stagedExe.FullName -ArgumentList @('--apply-update',('"{0}"' -f $staging),'--target',('"{0}"' -f $installed),'--wait-pid',[string]$linger.Id,'--wait-seconds','3','--no-restart') -WindowStyle Hidden -PassThru -Wait
+    Assert-That ($u.ExitCode -eq 0) ('Updater must succeed even when the old process lingers (exit {0}).' -f $u.ExitCode)
+    Assert-That ($linger.HasExited) 'The lingering old process must be ended.'
+    Assert-That ((([IO.File]::ReadAllText((Join-Path $installed 'VERSION'))).Trim()) -eq '9.9.9') 'Update applied after ending the lingering process.'
+    Assert-That ((Get-Content (Join-Path $installed 'YUMRAM.log') -Raw) -match 'still running after 3 s; ending it') 'The updater logs that it ended the old process.'
+    Assert-That ($sw.Elapsed.TotalSeconds -lt 30) 'It must not wait a whole minute.'
+    $p=Start-Process -FilePath (Join-Path $installed 'YUMRAM.exe') -ArgumentList '--rollback','--no-restart' -PassThru -Wait
+    # "Nothing to wait for" (PID 0, or a process it may not open) must not crash the updater.
+    $u=Start-Process -FilePath $stagedExe.FullName -ArgumentList @('--apply-update',('"{0}"' -f $staging),'--target',('"{0}"' -f $installed),'--wait-pid','0','--no-restart') -WindowStyle Hidden -PassThru -Wait
+    Assert-That ($u.ExitCode -eq 0 -and (([IO.File]::ReadAllText((Join-Path $installed 'VERSION'))).Trim()) -eq '9.9.9') ('PID 0 must just mean "nothing to wait for" (exit {0}).' -f $u.ExitCode)
+    $p=Start-Process -FilePath (Join-Path $installed 'YUMRAM.exe') -ArgumentList '--rollback','--no-restart' -PassThru -Wait
+    # A broken update leaves the installed version untouched and says so (and would start it again without --no-restart).
+    $bad=Join-Path $work 'bad-staging'; Copy-Item -LiteralPath $staging -Destination $bad -Recurse; Remove-Item -LiteralPath (Join-Path $bad 'App\YUMRAM.ps1') -Force
+    $u=Start-Process -FilePath (Join-Path $bad 'YUMRAM.exe') -ArgumentList @('--apply-update',('"{0}"' -f $bad),'--target',('"{0}"' -f $installed),'--wait-pid','0','--no-restart') -WindowStyle Hidden -PassThru -Wait
+    Assert-That ($u.ExitCode -eq 1) 'A broken update must report failure.'
+    Assert-That ((([IO.File]::ReadAllText((Join-Path $installed 'VERSION'))).Trim()) -eq $currentVersion) 'A broken update must not change the installed version.'
+    Assert-That ((Get-Content (Join-Path $installed 'YUMRAM.log') -Raw) -match 'update not applied') 'A broken update is logged in the installed copy.'
+    $app=[IO.File]::ReadAllText((Join-Path $root 'App\YUMRAM.ps1')); Assert-That ($app -match '\[Environment\]::Exit\(0\)') 'YUMRAM must end its process when it closes.'
+
     Write-Host ('Release 5.10 update test passed ({0} -> 9.9.9 -> {0}; tampered download refused; user data kept).' -f $currentVersion)
 }finally{
     Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue

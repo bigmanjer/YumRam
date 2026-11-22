@@ -39,7 +39,20 @@ static class YumramLauncher
         {
             CleanupOldExe(exeDir);
             string mode = args.Length > 0 ? args[0].ToLowerInvariant() : "";
-            if (mode == "--apply-update") return ApplyUpdate(args, exeDir);
+            if (mode == "--apply-update")
+            {
+                // 5.15.7: an update that cannot be applied must never leave the user without YUMRAM. Log it and start the
+                // version that is installed (no blocking error box - the in-app updater tries again later).
+                try { return ApplyUpdate(args, exeDir); }
+                catch (Exception ex)
+                {
+                    string target = Arg(args, "--target");
+                    string logDir = string.IsNullOrEmpty(target) ? exeDir : target.Trim('"');
+                    Log(logDir, "Updater: update not applied (" + ex.Message + "); starting the installed version again.");
+                    try { if (Array.IndexOf(args, "--no-restart") < 0 && File.Exists(Path.Combine(logDir, @"App\YUMRAM.ps1"))) StartYumram(logDir); } catch { }
+                    return 1;
+                }
+            }
             if (mode == "--rollback") return Rollback(exeDir, Array.IndexOf(args, "--no-restart") < 0);
             if (mode == "--uninstall") return Uninstall(exeDir, Array.IndexOf(args, "/S") >= 0);
             return StartYumram(exeDir);
@@ -85,9 +98,17 @@ static class YumramLauncher
         if (!File.Exists(Path.Combine(target, @"App\YUMRAM.ps1"))) throw new InvalidOperationException("The target folder is not a YUMRAM folder: " + target);
 
         int pid;
-        if (int.TryParse(waitPid, out pid))
+        int waitSeconds = 30; int ws; if (int.TryParse(Arg(args, "--wait-seconds"), out ws) && ws > 0) waitSeconds = ws;
+        if (int.TryParse(waitPid, out pid) && pid > 0)
         {
-            try { var p = Process.GetProcessById(pid); if (!p.WaitForExit(60000)) throw new TimeoutException("YUMRAM did not close within 60 seconds."); } catch (ArgumentException) { /* already gone */ }
+            // 5.15.7 (real-PC test): YUMRAM's window closed but its process stayed alive >60 s (background helper
+            // threads), the updater gave up, and the user was left with no YUMRAM at all. Now: wait, then end the old
+            // process if it is still there; and never fail just because the old process cannot be inspected.
+            if (!WaitForProcessExit(pid, waitSeconds * 1000))
+            {
+                Log(target, "Updater: the old YUMRAM (PID " + pid + ") was still running after " + waitSeconds + " s; ending it.");
+                try { var lingering = Process.GetProcessById(pid); if (string.Equals(lingering.ProcessName, "powershell", StringComparison.OrdinalIgnoreCase)) { lingering.Kill(); lingering.WaitForExit(10000); } } catch (Exception ex) { Log(target, "Updater: could not end it (" + ex.Message + "); continuing."); }
+            }
         }
         Log(target, "Updater: applying update from " + staging);
 
@@ -113,6 +134,22 @@ static class YumramLauncher
         try { using (var k = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Uninstall\YUMRAM", true)) { if (k != null && string.Equals(((string)k.GetValue("InstallLocation", "")).TrimEnd('\\'), target, StringComparison.OrdinalIgnoreCase)) k.SetValue("DisplayVersion", File.ReadAllText(Path.Combine(target, "VERSION")).Trim()); } } catch { }
         if (restart) StartYumram(target);
         return 0;
+    }
+
+    // True when the process is gone (or cannot be found). Works even when the process may not be opened (e.g. an
+    // administrator YUMRAM watched by a normal updater): then it polls the process list instead.
+    static bool WaitForProcessExit(int pid, int timeoutMs)
+    {
+        var sw = Stopwatch.StartNew();
+        try { var p = Process.GetProcessById(pid); try { return p.WaitForExit(timeoutMs); } catch (System.ComponentModel.Win32Exception) { } catch (InvalidOperationException) { return true; } }
+        catch (ArgumentException) { return true; }
+        while (sw.ElapsedMilliseconds < timeoutMs)
+        {
+            bool alive = false; try { Process.GetProcessById(pid); alive = true; } catch (ArgumentException) { }
+            if (!alive) return true;
+            System.Threading.Thread.Sleep(500);
+        }
+        return false;
     }
 
     static int Rollback(string root, bool restart)

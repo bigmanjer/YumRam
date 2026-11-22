@@ -9,7 +9,7 @@ body:
     id: version
     attributes:
       label: "YUMRAM version"
-      description: "About page, e.g. 5.15.6"
+      description: "About page, e.g. 5.15.7"
     validations:
       required: true
   - type: dropdown
