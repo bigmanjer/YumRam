@@ -100,20 +100,114 @@ function Update-YumDiskExplanation {
 }
 
 function Start-YumDiskUsage {
+    # 5.16.4 (user: "What's using my disk - that whole section doesn't really work"). Measured: a scan of C:\ took 85 s
+    # on the test PC (983,000 files) and showed nothing until the very end. Now the folders below the path appear
+    # at once and each one gets its size as soon as it is measured (biggest first), with progress, a Stop button,
+    # and the last result is remembered (also after a restart).
     param([hashtable]$State,[string]$Path)
-    if([string]::IsNullOrWhiteSpace($Path) -or -not (Test-Path -LiteralPath $Path -PathType Container)){ $State.Ui.Details.Text='That folder does not exist.'; return }
+    if([string]::IsNullOrWhiteSpace($Path) -or -not (Test-Path -LiteralPath $Path -PathType Container)){ $State.Ui.UsageStatus.Text='That folder does not exist.'; return }
+    Stop-YumDiskUsage -State $State
     $State.Ui.UsagePath.Text=$Path
-    Start-YumDiskWork -State $State -Busy ('Measuring {0} … a whole drive can take a minute or two.' -f $Path) -Work { param($a) Get-YumDiskUsage -Path $a -TopFiles 50 } -Argument $Path -Done {
-        param($st,$res)
-        $st.Busy=$false
-        $u=@($res)[0]
-        if($null -ne $u){
-            $st.Ui.UsageFolders.ItemsSource=@($u.Folders)
-            $st.Ui.UsageFiles.ItemsSource=@($u.TopFiles)
-            $st.Ui.Details.Text=('{0}: {1} in {2:N0} files, measured in {3} s{4}. Double-click a folder to look inside.' -f $u.Path,(Format-YumBytes $u.Bytes),$u.Files,$u.Seconds,$(if([int]$u.Denied -gt 0){(' ({0} places Windows keeps private were skipped{1})' -f $u.Denied,$(if(-not (Test-YumIsElevated)){'; run as administrator to include them'}else{''}))}else{''}))
-        }
-        Update-YumDiskButtons -State $st
-    }
+    $shared=[hashtable]::Synchronized(@{Path=$Path;Items=$null;Top=$null;Done=$false;Cancel=$false;Count=0;Measured=0;Denied=0;Error='';Started=(Get-Date)})
+    $ps=[powershell]::Create()
+    [void]$ps.AddScript({
+        param($S,[string]$Root)
+        try{
+            foreach($m in 'Core\Logging.ps1','Core\Config.ps1','Core\Native.ps1','Core\DiskCleanup.ps1'){ . (Join-Path $Root $m) }
+            Initialize-YumDiskWalkType
+            $path=[string]$S.Path
+            $items=New-Object System.Collections.ArrayList
+            $dirs=@(); try{ $dirs=@([IO.Directory]::GetDirectories($path)) }catch{}
+            foreach($d in $dirs){
+                try{ $a=[IO.File]::GetAttributes($d); if(($a -band [IO.FileAttributes]::ReparsePoint) -ne 0){ continue } }catch{ continue }
+                [void]$items.Add(@{Name=[IO.Path]::GetFileName($d);Path=$d;IsFolder=$true;Bytes=[int64]-1;Files=[int64]0})
+            }
+            # Files directly in the folder (one quick pass, no sub-folders).
+            $rootBytes=[int64]0;$rootFiles=[int64]0;$top=New-Object System.Collections.ArrayList
+            try{ foreach($f in [IO.Directory]::GetFiles($path)){ try{ $fi=New-Object IO.FileInfo($f); $rootBytes+=$fi.Length; $rootFiles++; [void]$top.Add(@{Name=$fi.Name;Path=$fi.FullName;Bytes=[int64]$fi.Length;Modified=$fi.LastWriteTime}) }catch{} } }catch{}
+            [void]$items.Add(@{Name='(files directly in this folder)';Path=$path;IsFolder=$false;Bytes=$rootBytes;Files=$rootFiles})
+            $S.Count=$items.Count-1; $S.Items=$items; $S.Top=$top
+            foreach($it in @($items)){
+                if($S.Cancel){ break }
+                if(-not [bool]$it.IsFolder){ continue }
+                try{
+                    $u=[YumDiskWalk]::Analyze([string]$it.Path,50)
+                    $it.Bytes=[int64]$u.Bytes; $it.Files=[int64]$u.Files; $S.Denied=[int]$S.Denied+[int]$u.Denied
+                    foreach($tf in @($u.TopFiles)){ [void]$top.Add(@{Name=[string]$tf.Name;Path=[string]$tf.Path;Bytes=[int64]$tf.Bytes;Modified=$tf.Modified}) }
+                    if($top.Count -gt 400){ $keep=@($top | Sort-Object { [int64]$_.Bytes } -Descending | Select-Object -First 50); $top.Clear(); foreach($k in $keep){ [void]$top.Add($k) } }
+                }catch{ $it.Bytes=[int64]0 }
+                $S.Measured=[int]$S.Measured+1
+            }
+        }catch{ $S.Error=$_.Exception.Message }
+        $S.Done=$true
+    }).AddArgument($shared).AddArgument([string]$script:Yum.Root)
+    $State.Usage=@{Shared=$shared;Ps=$ps;Handle=$ps.BeginInvoke()}
+    $State.Ui.UsageScan.Content='Stop'
+    $t=New-Object System.Windows.Threading.DispatcherTimer; $t.Interval=[TimeSpan]::FromMilliseconds(500); $t.Tag=$State
+    $t.Add_Tick({param($s,$e)
+        $st=$s.Tag; $u=$st.Usage
+        if($null -eq $u){ $s.Stop(); return }
+        try{ Show-YumDiskUsageResult -State $st -Shared $u.Shared }catch{}
+        if([bool]$u.Shared.Done){ $s.Stop(); try{$u.Ps.Dispose()}catch{}; $st.Usage=$null; $st.Ui.UsageScan.Content='Scan'; try{ Save-YumDiskUsageResult -Shared $u.Shared }catch{} }
+    })
+    $t.Start()
+    try{ Show-YumDiskUsageResult -State $State -Shared $shared }catch{}
+}
+
+function Stop-YumDiskUsage {
+    param([hashtable]$State)
+    try{ $u=$State['Usage']; if($null -ne $u){ $u.Shared.Cancel=$true } }catch{}
+}
+
+function Show-YumDiskUsageResult {
+    # Draws the folder / file lists from a running or finished scan (or a saved one).
+    param([hashtable]$State,$Shared,[string]$SavedNote='')
+    $items=@($Shared.Items); if($items.Count -eq 0 -and -not [bool]$Shared.Done){ $State.Ui.UsageStatus.Text=('Listing {0} …' -f $Shared.Path); return }
+    $known=[int64]0; foreach($it in $items){ if([int64]$it.Bytes -gt 0){ $known+=[int64]$it.Bytes } }
+    $total=[math]::Max([double]1,[double]$known)
+    $rows=@($items | Sort-Object @{Expression={ if([int64]$_.Bytes -lt 0){ -1 }else{ [int64]$_.Bytes } };Descending=$true} | ForEach-Object {
+        $b=[int64]$_.Bytes
+        [pscustomobject]@{Name=[string]$_.Name;Path=[string]$_.Path;IsFolder=[bool]$_.IsFolder;Bytes=$b
+            SizeText=$(if($b -lt 0){'measuring…'}else{Format-YumBytes $b});Share=$(if($b -gt 0){[math]::Round(100*$b/$total,1)}else{0})
+            FilesText=$(if($b -lt 0){''}else{'{0:N0} files' -f [int64]$_.Files})}
+    })
+    $State.Ui.UsageFolders.ItemsSource=$rows
+    $files=@(@($Shared.Top) | Sort-Object { [int64]$_.Bytes } -Descending | Select-Object -First 50 | ForEach-Object {
+        [pscustomobject]@{Name=[string]$_.Name;Path=[string]$_.Path;Folder=[IO.Path]::GetDirectoryName([string]$_.Path);Bytes=[int64]$_.Bytes;SizeText=(Format-YumBytes ([int64]$_.Bytes));Modified=$(try{([datetime]$_.Modified).ToString('yyyy-MM-dd')}catch{''})}
+    })
+    $State.Ui.UsageFiles.ItemsSource=$files
+    $secs=[int]((Get-Date)-[datetime]$Shared.Started).TotalSeconds
+    $denied=if([int]$Shared.Denied -gt 0){' {0} places Windows keeps private were skipped{1}.' -f $Shared.Denied,$(if(Test-YumIsElevated){''}else{' (run as administrator to include them)'})}else{''}
+    $State.Ui.UsageStatus.Text=if($SavedNote){ $SavedNote }
+        elseif(-not [bool]$Shared.Done){ 'Measuring {0} … {1} of {2} folders done ({3}, {4} s so far). The biggest appear at the top as they finish.' -f $Shared.Path,$Shared.Measured,$Shared.Count,(Format-YumBytes $known),$secs }
+        elseif([bool]$Shared.Cancel){ 'Stopped. {0}: {1} measured so far.{2}' -f $Shared.Path,(Format-YumBytes $known),$denied }
+        else{ '{0}: {1} in {2} folders, measured in {3} s.{4} Double-click a folder to look inside.' -f $Shared.Path,(Format-YumBytes $known),$Shared.Count,$secs,$denied }
+}
+
+function Get-YumDiskUsageSavePath { return (Join-Path $script:Yum.ConfigDirectory 'disk-usage-last.json') }
+
+function Save-YumDiskUsageResult {
+    param($Shared)
+    if([bool]$Shared.Cancel){ return }
+    $o=[ordered]@{Path=[string]$Shared.Path;Measured=(Get-Date).ToString('o');Count=[int]$Shared.Count;Denied=[int]$Shared.Denied
+        Items=@(@($Shared.Items) | ForEach-Object { [ordered]@{Name=[string]$_.Name;Path=[string]$_.Path;IsFolder=[bool]$_.IsFolder;Bytes=[int64]$_.Bytes;Files=[int64]$_.Files} })
+        Top=@(@($Shared.Top) | Sort-Object { [int64]$_.Bytes } -Descending | Select-Object -First 50 | ForEach-Object { [ordered]@{Name=[string]$_.Name;Path=[string]$_.Path;Bytes=[int64]$_.Bytes;Modified=$(try{([datetime]$_.Modified).ToString('o')}catch{''})} })}
+    [IO.File]::WriteAllText((Get-YumDiskUsageSavePath),($o | ConvertTo-Json -Depth 5),(New-Object Text.UTF8Encoding $false))
+}
+
+function Restore-YumDiskUsageResult {
+    # The last finished scan, shown when the page opens (no new scan needed).
+    param([hashtable]$State)
+    try{
+        $f=Get-YumDiskUsageSavePath; if(-not [IO.File]::Exists($f)){ return $false }
+        $o=Get-Content -LiteralPath $f -Raw | ConvertFrom-Json
+        $sh=@{Path=[string]$o.Path;Items=@($o.Items | ForEach-Object { @{Name=$_.Name;Path=$_.Path;IsFolder=[bool]$_.IsFolder;Bytes=[int64]$_.Bytes;Files=[int64]$_.Files} });Top=@($o.Top | ForEach-Object { @{Name=$_.Name;Path=$_.Path;Bytes=[int64]$_.Bytes;Modified=$_.Modified} });Done=$true;Cancel=$false;Count=[int]$o.Count;Measured=[int]$o.Count;Denied=[int]$o.Denied;Started=(Get-Date)}
+        $when=[datetime]$o.Measured
+        $ago=((Get-Date)-$when); $agoText=if($ago.TotalMinutes -lt 60){'{0:N0} minutes ago' -f [math]::Max(1,$ago.TotalMinutes)}elseif($ago.TotalHours -lt 48){'{0:N0} hours ago' -f $ago.TotalHours}else{'on {0:d MMM}' -f $when}
+        $State.Ui.UsagePath.Text=[string]$o.Path
+        Show-YumDiskUsageResult -State $State -Shared $sh -SavedNote ('{0}: last measured {1}. Click Scan to measure again; double-click a folder to look inside.' -f $o.Path,$agoText)
+        return $true
+    }catch{ return $false }
 }
 
 function Show-YumDiskCleanup {
@@ -121,13 +215,15 @@ function Show-YumDiskCleanup {
         [xml]$xaml=Read-YumXamlText -Path (Join-Path $script:Yum.Root 'UI\Xaml\DiskCleanup.xaml')
         $window=[Windows.Markup.XamlReader]::Load((New-Object System.Xml.XmlNodeReader $xaml))
         $ui=@{}
-        foreach($n in 'PickAll','Junk','Reload','AdminPill','AdminText','RestartAdmin','SumJunk','SumDrive','SumDriveBar','SumFreed','AutoClean','AutoLast','CleanSelected','UsagePath','UsageScan','UsageUp','UsageOpen','UsageTabs','UsageFolders','UsageFiles','ExplainTitle','ExplainSub','ExplainWhy','ExplainBody','ExplainEffect','ExplainUndo','LastResult','OpenFolder','SeeDeleted','StorageSense','Close','Details'){$ui[$n]=$window.FindName($n);if($null -eq $ui[$n]){throw "Disk cleanup page control missing: $n"}}
-        $state=@{Window=$window;Ui=$ui;Rows=@();Picked=@{};Busy=$false}
+        foreach($n in 'PickAll','Junk','Reload','AdminPill','AdminText','RestartAdmin','SumJunk','SumDrive','SumDriveBar','SumFreed','AutoClean','AutoLast','CleanSelected','UsagePath','UsageStatus','UsageScan','UsageUp','UsageOpen','UsageTabs','UsageFolders','UsageFiles','ExplainTitle','ExplainSub','ExplainWhy','ExplainBody','ExplainEffect','ExplainUndo','LastResult','OpenFolder','SeeDeleted','StorageSense','Close','Details'){$ui[$n]=$window.FindName($n);if($null -eq $ui[$n]){throw "Disk cleanup page control missing: $n"}}
+        $state=@{Window=$window;Ui=$ui;Rows=@();Picked=@{};Busy=$false;Usage=$null}
         $window.Tag=$state
         foreach($c in 'Junk','Reload','AutoClean','CleanSelected','UsageScan','UsageUp','UsageOpen','UsageFolders','UsageFiles','Close'){$ui[$c].Tag=$state}
         if(Test-YumIsElevated){$ui.AdminPill.Visibility='Collapsed';$ui.RestartAdmin.Visibility='Collapsed'}else{$ui.AdminText.Text='Not administrator: Windows'' own files are locked'}
         $ui.RestartAdmin.Add_Click({ try{ [void](Restart-YumAsAdministrator) }catch{} })
         $ui.UsagePath.Text=($env:SystemDrive+'\')
+        # 5.16.4: show the last measured result right away, or say how to start.
+        if(-not (Restore-YumDiskUsageResult -State $state)){ $ui.UsageStatus.Text=('Click Scan to see what is using {0} - folders appear as soon as each one is measured (a whole drive takes about a minute).' -f $ui.UsagePath.Text) }
         # Tick boxes live in the list rows; one handler for all of them.
         $ui.Junk.AddHandler([System.Windows.Controls.Primitives.ButtonBase]::ClickEvent,[System.Windows.RoutedEventHandler]{param($s,$e)
             try{ $cb=$e.OriginalSource; if($cb -is [System.Windows.Controls.CheckBox]){ $st=$s.Tag; $k=[string]$cb.Tag; if([bool]$cb.IsChecked){$st.Picked[$k]=$true}else{[void]$st.Picked.Remove($k)}
@@ -164,7 +260,7 @@ function Show-YumDiskCleanup {
                 Start-YumDiskMeasure -State $st2 -After $msg
             }
         })
-        $ui.UsageScan.Add_Click({param($s,$e) Start-YumDiskUsage -State $s.Tag -Path ([string]$s.Tag.Ui.UsagePath.Text).Trim() })
+        $ui.UsageScan.Add_Click({param($s,$e) if($null -ne $s.Tag['Usage']){ Stop-YumDiskUsage -State $s.Tag } else { Start-YumDiskUsage -State $s.Tag -Path ([string]$s.Tag.Ui.UsagePath.Text).Trim() } })
         $ui.UsageUp.Add_Click({param($s,$e) try{ $p=[IO.Directory]::GetParent(([string]$s.Tag.Ui.UsagePath.Text).TrimEnd('\')); if($null -ne $p){ Start-YumDiskUsage -State $s.Tag -Path $p.FullName } }catch{} })
         $ui.UsageFolders.Add_MouseDoubleClick({param($s,$e) try{ $it=$s.SelectedItem; if($null -ne $it -and [bool]$it.IsFolder){ Start-YumDiskUsage -State $s.Tag -Path ([string]$it.Path) } }catch{} })
         $ui.UsageOpen.Add_Click({param($s,$e)

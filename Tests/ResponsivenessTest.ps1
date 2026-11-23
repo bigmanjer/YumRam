@@ -143,6 +143,14 @@ Assert-That ($mw -match 'Set-YumProcessIdentity' -and $mw -match 'Set-YumWindowL
 $tw=New-Object System.Windows.Window; $tw.WindowStyle='None'; $tw.ShowInTaskbar=$false; $tw.Width=10; $tw.Height=10; $tw.Left=-2000; $tw.Show(); Set-YumWindowLook -Window $tw -Main
 Assert-That ($null -ne $tw.Icon) 'A YUMRAM window gets YUMRAM''s icon.'; $tw.Close()
 
+# 11. 5.16.4: anti-stutter (ISLC-style) is opt-in, needs a game and administrator, and never blocks the window.
+$dflt2=Get-Content (Join-Path $repoRoot 'Config\default-config.json') -Raw | ConvertFrom-Json
+Assert-That (-not [bool]$dflt2.GameStandbyGuard -and [int]$dflt2.GameStandbyGuardFreeMB -eq 1024 -and [int]$dflt2.GameStandbyGuardStandbyMB -eq 1024) 'Anti-stutter is off by default with ISLC''s 1 GB / 1 GB rule.'
+Assert-That ([IO.File]::ReadAllText((Join-Path $repoRoot 'UI\Xaml\Settings.xaml')) -match 'x:Name="GameStandbyGuard"') 'Settings > Gaming has the anti-stutter switch.'
+$script:Yum.Config['GameStandbyGuard']=$true; $script:YumStandbyGuard.LastCheck=[datetime]::MinValue; $script:Yum.Snapshot=[pscustomobject]@{Game=[pscustomobject]@{Detected=$false;ProcessName=''}}
+$c0=[int]$script:YumStandbyGuard.Count; Invoke-YumGameStandbyGuard; Assert-That ([int]$script:YumStandbyGuard.Count -eq $c0) 'No game running: anti-stutter does nothing.'
+$script:Yum.Config['GameStandbyGuard']=$false
+
 # 5. Record checks reuse one defaults table and give the same result.
 $r=[pscustomobject]@{Name='x';Risk=$null}; $null=Ensure-YumIntelligenceRecordSchema -Record $r
 Assert-That (@($r.PSObject.Properties).Count -eq 42 -and $r.Risk -eq 'Review' -and $r.ResearchSources -is [array]) 'Schema check fills the 42 fields and replaces nulls.'

@@ -66,7 +66,7 @@ $script:Steps+=@(
  { Go 'WindowsBloat' }, { }, { }, { }, { Save-YumShot 'WindowsBloat' },
  { Go 'DiskCleanup' }, { }, { Hold { (PW 'DiskCleanup') -and (PW 'DiskCleanup').Tag.Busy } 40 },
  { $st=(PW 'DiskCleanup').Tag; $st.Ui.Junk.SelectedIndex=0; Start-YumDiskUsage -State $st -Path ${env:ProgramFiles} }, { },
- { Hold { (PW 'DiskCleanup').Tag.Busy } 60 }, { }, { Save-YumShot 'DiskCleanup' },
+ { Hold { $x=(PW 'DiskCleanup').Tag; $x.Busy -or ($null -ne $x['Usage']) } 150 }, { }, { Save-YumShot 'DiskCleanup' },
  { Go 'Intelligence' }, { }, { }, { $st=$script:Yum.IntelligenceWindow.Tag; if(@($st.ListView.Items).Count){ $st.ListView.SelectedIndex=0 } }, { Save-YumShot 'Intelligence' },
  { Go 'Settings' }, { },
  # Show the defaults (update check and shortcut are on for users; only this capture copy has them off). Not applied.

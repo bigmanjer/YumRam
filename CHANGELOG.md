@@ -1,5 +1,20 @@
 # Changelog
 
+# YUMRAM 5.16.4 — "What's using my disk" really works; anti-stutter while gaming; competitor review
+
+- **What's using my disk, rebuilt** (user: "that whole section doesn't really work"). Measured: a scan of C:\ took
+  85 s on the test PC (983,000 files) and showed nothing until the very end, the page never scanned by itself, and
+  only about two rows fit. Now the folders appear at once and each gets its size as soon as it is measured
+  (biggest first, "15 of 18 folders done"), Scan becomes **Stop** while it runs, double-click / Up start a new scan
+  right away, the last result is remembered (also after a restart), the section has its own status line and more
+  room, and folder rows take one line. Checked on the test PC's screen: C:\ (Program Files (x86) 129 GB, Users
+  86 GB...), double-click into a folder (2 s), biggest files.
+- **Anti-stutter while I play** (Settings > Gaming, **off by default**, administrator): ISLC-style - while a game runs,
+  when free memory is below 1 GB and Windows' standby cache is above 1 GB, the standby cache is emptied, at most
+  every 30 s. Measured: standby 5.4 GB -> 0, free 0.16 GB -> 5.5 GB; the clearing and the first opening of the
+  memory counters run in the background (window thread 20-32 ms per check, every 5 s, only while a game runs).
+- **Competitor review updated** (`Docs/COMPETITIVE-REVIEW.md`): pros, cons and what is still open versus Mem Reduct,
+  ISLC, Process Lasso, WizTree/WinDirStat, BleachBit/CCleaner, HWiNFO, PC Manager and others.
 # YUMRAM 5.16.3 — Disk cleanup "Select all" really ticks everything; startup names without account IDs
 
 - **Fix: Disk cleanup "Select all" left some categories unticked** (user: "Select all doesn't tick everything"). It

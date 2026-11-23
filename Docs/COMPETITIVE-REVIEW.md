@@ -1,52 +1,64 @@
-# Competitive review (November 2026)
+# Competitive review (YUMRAM 5.16.4, November 2026)
 
-How established Windows memory/optimizer tools work, and what YUMRAM should take from them.
-Researched for the 5.4.0 visual overhaul. Sources are listed at the end.
+How YUMRAM compares with the tools people use for the same jobs, what it does better, what it still lacks, and what
+was fixed because of this review. Earlier version of this review: 5.4 (its roadmap items are marked below).
 
-## Design: what professional tools look like
+## The tools
 
-| Pattern | Seen in | YUMRAM 5.4 |
+| Job | Tools people use |
+|---|---|
+| Free / manage RAM | Mem Reduct, Wise Memory Optimizer, WinMemoryCleaner, Microsoft PC Manager, Razer Cortex |
+| Gaming stutter (standby list) | ISLC (Intelligent Standby List Cleaner) |
+| CPU priority / background hogs | Process Lasso (ProBalance) |
+| Startup programs | Task Manager, Autoruns, CCleaner |
+| Disk cleanup | Windows Disk Cleanup / Storage Sense, BleachBit, CCleaner |
+| What's using my disk | WinDirStat, WizTree, TreeSize |
+| Live readings and temperatures | Task Manager, HWiNFO, MSI Afterburner, Core Temp |
+| Windows bloat | WinUtil, O&O ShutUp10++ |
+
+## Pros - where YUMRAM is better
+
+- **One tool instead of six:** RAM care, CPU care, startup apps, Windows bloat, disk cleanup, disk usage and live
+  readings with temperatures, explained in plain words.
+- **Honest numbers:** every reclaim is re-measured after Windows settles (5 / 15 / 30 s) and only real gains count;
+  Mem Reduct-style tools show what was trimmed, not what was kept.
+- **Goal-based, careful automation:** keeps RAM above *your* goal and backs off when it cannot help; protected,
+  security, driver, game, unknown and (since 5.16.1) overclock/undervolt tools are never touched.
+- **Knows every program** (signatures, installed software, Store packages, optional web research) and says what it
+  is for - none of the RAM tools do this.
+- **Safe disk cleanup:** sizes and explanations first, "open folder" to look, a list of every deleted file, Windows'
+  own tools for system areas; never personal files, cookies or passwords (BleachBit/CCleaner can).
+- **Everything can be undone** (Windows bloat, startup items, GPU preferences, CPU care).
+- **No drivers, no account, no telemetry, free.**
+
+## Cons - where competitors are still ahead
+
+| Gap | Who does it | Status |
 |---|---|---|
-| One large primary action ("Boost", "Optimize") above a memory summary | Microsoft PC Manager, Wise Memory Optimizer | Done: "Free RAM now" is the only primary button in the top row |
-| Memory gauge (pie/ring) for used vs available | Wise Memory Optimizer, IObit dashboards | Done: RAM-in-use ring beside Available RAM |
-| Live real-time graph | Wise Memory Optimizer | Done: themed, labelled, legend outside the plot |
-| Settings that are easy to find (a common IObit criticism) | IObit reviews | Done: Settings split into tabs |
-| Avoid fixed-height windows that force scrolling (PC Manager criticism) | PC Manager reviews | Done: all windows resizable; only side panels scroll |
-| Windows 11 type and spacing: Segoe UI, 14 px body / 12 px caption, 4 px grid, AA contrast | Microsoft design guidance | Done: `UI/Xaml/Theme.xaml` |
-| Honest results: reviewers note boost gains are temporary | PC Manager reviews | Already unique to YUMRAM: 5/15/30 s retained-gain verification |
+| Anti-stutter standby-list cleaning while gaming | ISLC | **Added in 5.16.4** (opt-in, administrator) |
+| Fast whole-drive "what's using my disk" | WizTree (reads the NTFS file table, seconds) | 5.16.4: results appear live while scanning; a full NTFS reader is not planned (needs raw disk access) |
+| Exact CPU core temperatures | HWiNFO, Core Temp (kernel drivers) | By design: Windows' thermal zone only - no kernel drivers (WinRing0 is flagged by Windows) |
+| Signed program, WinGet / Scoop listing | WinMemoryCleaner, Process Lasso | Open (needs a code-signing certificate - an owner decision) |
+| Command-line actions (e.g. a "Free RAM" shortcut) | WinMemoryCleaner, Mem Reduct | Open - next candidate |
+| Uninstall programs from the same window | CCleaner, PC Manager | Open (YUMRAM points to Windows' own Apps settings) |
+| Real-time per-app rules (CPU affinity, priority classes) | Process Lasso | Partly: "never trim" / "never hold back" rules; full rules not planned |
+| Native look and start-up time | All compiled tools start in < 1 s | Improved (5.16.0 helper cache, 5.16.2 own icon and title bar); PowerShell + WPF still needs ~3 s |
 
-## Features worth adopting (roadmap)
+## 5.4 roadmap - where it stands
 
-1. **Tray icon with live RAM %** and quick actions (Open, Free RAM now, Start/Stop monitoring, Exit);
-   minimize to tray. Standard in Mem Reduct-class tools.
-2. **Standby-list guard (ISLC-style)** for gaming: purge the standby list only when *free* memory is
-   below X MB **and** the standby list is above Y MB, while monitoring and elevated. Smarter than an
-   unconditional Deep purge.
-3. **Choose reclaim areas in Settings** (working sets, system working set, standby, low-priority
-   standby, modified list). The config keys already exist (`Reclaim*`); only the UI is missing.
-4. **Command-line switches** (`/FreeRam`, `/Deep`, `/Minimized`) for shortcuts and scheduled tasks,
-   as WinMemoryCleaner does.
-5. **ProBalance-style CPU restraint**: temporarily lower the priority of background CPU hogs (never
-   the foreground app or the game) and show them as "Restrained". Addresses lag RAM trimming cannot.
-6. **Distribution**: code-signed scripts and a WinGet/Scoop manifest (WinMemoryCleaner ships both).
+1. Tray icon with live RAM % - **done**.
+2. Standby-list guard for gaming (ISLC-style) - **done in 5.16.4**.
+3. Choose reclaim areas in Settings - **done**.
+4. Command-line switches - open.
+5. ProBalance-style CPU care - **done** (CPU care, with self-check and undo).
+6. Code signing / WinGet - open (owner decision).
 
-## Where YUMRAM is already ahead
+## Fixed because of this review (5.16.4)
 
-- Target-based automatic care with a no-progress back-off, instead of a fixed "% used" trigger.
-- Measures the real Available-RAM gain after Windows settles, and learns each PC's retention.
-- Shows what is realistically reachable next to the goal.
-- Identifies every program (signatures, installed software, services, Store packages, WinGet,
-  verified web sources) and never trims protected, security, driver, game or unknown programs.
-
-## Sources
-
-- IObit Advanced SystemCare: https://www.tech-critter.com/a-beginners-guide-to-enhancing-pc-performance-with-advanced-systemcare-18-free/ ,
-  https://www.techradar.com/sg/reviews/iobit-advanced-systemcare-free , https://mspoweruser.com/ccleaner-vs-iobit-advanced-system-care
-- Wise Memory Optimizer: https://www.wisecleaner.com/wise-memory-optimizer.html , https://www.filehorse.com/download-wise-memory-optimizer
-- Microsoft PC Manager: https://windowsreport.com/microsoft-pc-manager-review/ , https://pureinfotech.com/reduce-ram-usage-windows-11-pc-manager/ ,
-  https://www.windowscentral.com/software-apps/windows-11/what-is-pc-manager-and-how-to-get-started-using-it-on-windows-11
-- Windows design guidance: https://learn.microsoft.com/en-us/windows/apps/design/widgets/widgets-design-fundamentals
-- Mem Reduct: https://github.com/henrypp/memreduct , https://betanews.com/2015/04/22/mem-reduct-a-memory-cleaner-which-isnt-rubbish
-- ISLC: https://www.wagnardsoft.com/forums/viewtopic.php?p=11392 , https://tier1settings.com/intelligent-standby-list-cleaner-islc-guide/
-- WinMemoryCleaner: https://github.com/IgorMundstein/WinMemoryCleaner
-- Process Lasso ProBalance: https://bitsum.com/apps/process-lasso/docs/algorithms/probalance/
+- **Anti-stutter while I play** (Settings > Gaming, off by default): while a game runs and YUMRAM is administrator,
+  when free memory is below 1 GB and Windows' standby cache is above 1 GB, the standby cache is emptied (at most
+  every 30 s) - ISLC's default rule. Measured on the test PC: standby 5.4 GB -> 0, free 0.16 GB -> 5.5 GB; the work
+  runs in the background (window thread 20-32 ms per check, every 5 s, only while a game runs).
+- **What's using my disk** works like a disk analyzer should: folders appear at once, sizes fill in biggest-first
+  while it scans (a full C:\ took 85 s and showed nothing until the end), Stop, the last result is remembered, and
+  rows are compact.

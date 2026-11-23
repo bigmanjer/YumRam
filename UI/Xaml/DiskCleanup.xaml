@@ -44,7 +44,7 @@
     <Grid Grid.Row="2">
       <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="360"/></Grid.ColumnDefinitions>
       <Grid Margin="0,0,12,0">
-        <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="12"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+        <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="12"/><RowDefinition Height="1.3*"/></Grid.RowDefinitions>
 
         <!-- Junk categories -->
         <Border Style="{StaticResource Card}" Padding="0">
@@ -97,12 +97,13 @@
               <TextBlock Text="WHAT'S USING MY DISK" Style="{StaticResource StatLabel}" VerticalAlignment="Center" Margin="0,0,10,0"/>
               <TextBox x:Name="UsagePath" VerticalAlignment="Center" Margin="0,0,8,0" ToolTip="Folder or drive to measure, e.g. C:\ or your user folder."/>
             </DockPanel>
+            <TextBlock x:Name="UsageStatus" DockPanel.Dock="Top" Text="" Style="{StaticResource Caption}" Margin="14,0,14,4" TextWrapping="Wrap"/>
             <TabControl x:Name="UsageTabs" Margin="8,0,8,8" Background="Transparent" BorderThickness="0">
               <TabItem Header="Biggest folders">
                 <ListView x:Name="UsageFolders" BorderThickness="0" Background="Transparent" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ToolTip="Double-click a folder to look inside it.">
                   <ListView.View><GridView>
                     <GridViewColumn Header="Folder" Width="250">
-                      <GridViewColumn.CellTemplate><DataTemplate><StackPanel><TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/><TextBlock Text="{Binding FilesText}" FontSize="11.5" Foreground="{StaticResource TextMuted}"/></StackPanel></DataTemplate></GridViewColumn.CellTemplate>
+                      <GridViewColumn.CellTemplate><DataTemplate><DockPanel><TextBlock DockPanel.Dock="Right" Text="{Binding FilesText}" FontSize="11.5" Margin="8,0,0,0" VerticalAlignment="Center" Foreground="{StaticResource TextMuted}"/><TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/></DockPanel></DataTemplate></GridViewColumn.CellTemplate>
                     </GridViewColumn>
                     <GridViewColumn Header="Share" Width="170">
                       <GridViewColumn.CellTemplate><DataTemplate><Grid Width="150"><ProgressBar Height="8" Maximum="100" Value="{Binding Share, Mode=OneWay}" Foreground="#7DD3FC"/></Grid></DataTemplate></GridViewColumn.CellTemplate>

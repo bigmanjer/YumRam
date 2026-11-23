@@ -585,3 +585,49 @@ function Invoke-YumMemoryReclaim {
 
 function Invoke-YumFreeRamNow { Invoke-YumMemoryReclaim -Mode Quick -Force }
 function Invoke-YumDeepRamReclaim { Invoke-YumMemoryReclaim -Mode Deep -Force }
+
+# 5.16.4 (competitor review: ISLC - Intelligent Standby List Cleaner - is what many gamers run next to a RAM tool).
+# Opt-in "Anti-stutter while I play": while a game runs and YUMRAM is administrator, when free memory is below
+# GameStandbyGuardFreeMB (1 GB) and the standby cache is above GameStandbyGuardStandbyMB (1 GB), the standby cache
+# is emptied - at most every 30 s. Same rule as ISLC's defaults. Cheap counters (read every 5 s, only while gaming).
+$script:YumStandbyGuard=@{Free=$null;Standby=@();LastCheck=[datetime]::MinValue;LastPurge=[datetime]::MinValue;Count=0;Job=$null;Opening=$null}
+function Invoke-YumGameStandbyGuard {
+    try{
+        if(-not [bool]$script:Yum.Config['GameStandbyGuard']){ return }
+        $g=$script:YumStandbyGuard
+        if(((Get-Date)-[datetime]$g.LastCheck).TotalSeconds -lt 5){ return }
+        $g.LastCheck=Get-Date
+        $s=$script:Yum.Snapshot; if($null -eq $s -or $null -eq $s.Game -or -not [bool]$s.Game.Detected){ return }
+        if(-not (Test-YumIsElevated)){ return }
+        if(((Get-Date)-[datetime]$g.LastPurge).TotalSeconds -lt 30){ return }
+        if($null -eq $g.Free){
+            # Windows opens these counters slowly the first time (~1.3 s measured): done in the background; the
+            # guard starts checking on a later tick once they are ready.
+            if($null -eq $g['Opening']){
+                $ps=[powershell]::Create()
+                [void]$ps.AddScript({ param($G)
+                    $sb=@(foreach($n in 'Standby Cache Core Bytes','Standby Cache Normal Priority Bytes','Standby Cache Reserve Bytes'){ $c=New-Object System.Diagnostics.PerformanceCounter('Memory',$n); [void]$c.NextValue(); $c })
+                    $f=New-Object System.Diagnostics.PerformanceCounter('Memory','Free & Zero Page List Bytes'); [void]$f.NextValue()
+                    $G.Standby=$sb; $G.Free=$f
+                }).AddArgument($g)
+                $g.Opening=@{Ps=$ps;Handle=$ps.BeginInvoke()}
+            }
+            return
+        }
+        $freeMB=[double]$g.Free.NextValue()/1MB
+        $standbyMB=0.0; foreach($c in $g.Standby){ $standbyMB+=[double]$c.NextValue()/1MB }
+        $wantFree=[double]$script:Yum.Config['GameStandbyGuardFreeMB']; if($wantFree -le 0){ $wantFree=1024 }
+        $wantStandby=[double]$script:Yum.Config['GameStandbyGuardStandbyMB']; if($wantStandby -le 0){ $wantStandby=1024 }
+        if($freeMB -ge $wantFree -or $standbyMB -le $wantStandby){ return }
+        $g.LastPurge=Get-Date
+        $g.Count=[int]$g.Count+1
+        Write-YumLog ('Anti-stutter: free memory {0:N0} MB, standby cache {1:N0} MB while playing {2} - emptying the standby cache.' -f $freeMB,$standbyMB,[string]$s.Game.ProcessName)
+        # Emptying takes ~1-2 s (measured 1.6 s for 4.3 GB): done in the background so YUMRAM never freezes.
+        try{ if($null -ne $g['Job'] -and $g.Job.Handle.IsCompleted){ try{$g.Job.Ps.Dispose()}catch{}; $g.Job=$null } }catch{}
+        if($null -eq $g['Job']){
+            $ps=[powershell]::Create()
+            [void]$ps.AddScript({ param($Root,$Y) foreach($m in 'Core\Logging.ps1','Core\Config.ps1','Core\Native.ps1','Core\MemoryReclaim.ps1'){ . (Join-Path $Root $m) }; $script:Yum=$Y; [void](Invoke-YumNativeMemoryCommand -Command PurgeStandby) }).AddArgument([string]$script:Yum.Root).AddArgument($script:Yum)
+            $g.Job=@{Ps=$ps;Handle=$ps.BeginInvoke()}
+        }
+    }catch{}
+}

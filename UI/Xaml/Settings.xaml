@@ -106,6 +106,7 @@
             <CheckBox x:Name="AutoDetectGames" Content="Detect games automatically"/>
             <CheckBox x:Name="ProtectGame" Content="Never trim the active game"/>
             <CheckBox x:Name="AutoCleanOnGameStart" Content="Free RAM when a game starts"/>
+            <CheckBox x:Name="GameStandbyGuard" Content="Anti-stutter while I play: empty Windows' standby cache when free memory runs low (administrator)" Margin="0,6,0,0" ToolTip="Like ISLC: while a game runs, when free memory is below 1 GB and the standby cache is above 1 GB, YUMRAM empties the standby cache (at most every 30 s). Helps some games that stutter when Windows is slow to hand out memory. Off by default."/>
             <Grid Style="{StaticResource Row}" Margin="0,14,0,0"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="260"/></Grid.ColumnDefinitions>
               <StackPanel><TextBlock Text="Game CPU priority" Style="{StaticResource RowLabel}"/><TextBlock Text="CPU scheduling only; this does not add RAM or GPU power." Style="{StaticResource RowHint}"/></StackPanel>
               <ComboBox x:Name="GamePriority" Grid.Column="1" VerticalAlignment="Top"><ComboBoxItem Content="Keep existing"/><ComboBoxItem Content="Normal (default)"/><ComboBoxItem Content="Above normal (game preference)"/><ComboBoxItem Content="High (advanced)"/></ComboBox></Grid>

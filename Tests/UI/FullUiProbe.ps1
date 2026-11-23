@@ -84,7 +84,7 @@ $script:Steps=@(
    $st.Ui.PickAll.IsChecked=$false; $st.Ui.PickAll.RaiseEvent((New-Object System.Windows.RoutedEventArgs([System.Windows.Controls.Primitives.ButtonBase]::ClickEvent)))
    $on=0; for($r=0;$r -lt $rows.Count;$r++){ $lv.ScrollIntoView($rows[$r]); $lv.UpdateLayout(); $c=$lv.ItemContainerGenerator.ContainerFromIndex($r); if($null -eq $c){continue}; $stack=New-Object System.Collections.Generic.Stack[object]; $stack.Push($c); while($stack.Count){ $el=$stack.Pop(); if($el -is [System.Windows.Controls.CheckBox]){ if([bool]$el.IsChecked){$on++}; break }; for($k=0;$k -lt [System.Windows.Media.VisualTreeHelper]::GetChildrenCount($el);$k++){ $stack.Push([System.Windows.Media.VisualTreeHelper]::GetChild($el,$k)) } } }
    Check ($on -eq 0 -and $st.Picked.Count -eq 0) "Select all again unticks every box on screen ($on left)" },
- { if((PW 'DiskCleanup').Tag.Busy -and $script:WaitE++ -lt 40){ $script:I-- } },
+ { $t=(PW 'DiskCleanup').Tag; if((($t.Busy) -or ($null -ne $t['Usage'])) -and $script:WaitE++ -lt 40){ $script:I-- } },
  { $st=(PW 'DiskCleanup').Tag; Check (@($st.Ui.UsageFolders.ItemsSource).Count -ge 1 -and @($st.Ui.UsageFiles.ItemsSource).Count -ge 1) "What's using my disk: $($st.Ui.Details.Text)"; Shot 'p-disk' },
  { Go 'Intelligence' },
  { }, { },

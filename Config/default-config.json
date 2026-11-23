@@ -1,5 +1,5 @@
 {
-  "Version": "5.16.3",
+  "Version": "5.16.4",
   "TelemetryIntervalSeconds": 0.5,
   "UIRefreshIntervalSeconds": 0.25,
   "GPUIntervalSeconds": 5.0,
@@ -20,6 +20,9 @@
   "AutoDetectGames": true,
   "ProtectGame": true,
   "AutoCleanOnGameStart": false,
+  "GameStandbyGuard": false,
+  "GameStandbyGuardFreeMB": 1024,
+  "GameStandbyGuardStandbyMB": 1024,
   "GamePriority": "KeepExisting",
   "Logging": true,
   "LogFileName": "YUMRAM.log",
@@ -386,7 +389,7 @@
     "GitHub Repository Corroboration",
     "Reddit Community Context"
   ],
-  "ResearchEngineVersion": "5.16.3",
+  "ResearchEngineVersion": "5.16.4",
   "CleanupStepDelayMs": 200,
   "CleanupMaxPassMilliseconds": 750,
   "CleanupMaxTrimMBPerPass": 384,
