@@ -67,6 +67,8 @@ $script:Steps+=@(
  { Go 'DiskCleanup' }, { }, { Hold { (PW 'DiskCleanup') -and (PW 'DiskCleanup').Tag.Busy } 40 },
  { $st=(PW 'DiskCleanup').Tag; $st.Ui.Junk.SelectedIndex=0; Start-YumDiskUsage -State $st -Path ${env:ProgramFiles} }, { },
  { Hold { $x=(PW 'DiskCleanup').Tag; $x.Busy -or ($null -ne $x['Usage']) } 150 }, { }, { Save-YumShot 'DiskCleanup' },
+ { Go 'Uninstaller' }, { }, { Hold { $x=(PW 'Uninstaller'); (-not $x) -or $x.Tag.Busy -or @($x.Tag.All | Where-Object { $_.Kind -eq 'Store' }).Count -eq 0 } 20 },
+ { $st=(PW 'Uninstaller').Tag; if(@($st.Ui.Items.Items).Count){ $st.Ui.Items.SelectedIndex=0 } }, { }, { Save-YumShot 'Uninstaller' },
  { Go 'Intelligence' }, { }, { }, { $st=$script:Yum.IntelligenceWindow.Tag; if(@($st.ListView.Items).Count){ $st.ListView.SelectedIndex=0 } }, { Save-YumShot 'Intelligence' },
  { Go 'Settings' }, { },
  # Show the defaults (update check and shortcut are on for users; only this capture copy has them off). Not applied.

@@ -1,4 +1,4 @@
-# Competitive review (YUMRAM 5.16.4, November 2026)
+# Competitive review (YUMRAM 5.17.0, November 2026)
 
 How YUMRAM compares with the tools people use for the same jobs, what it does better, what it still lacks, and what
 was fixed because of this review. Earlier version of this review: 5.4 (its roadmap items are marked below).
@@ -15,6 +15,7 @@ was fixed because of this review. Earlier version of this review: 5.4 (its roadm
 | What's using my disk | WinDirStat, WizTree, TreeSize |
 | Live readings and temperatures | Task Manager, HWiNFO, MSI Afterburner, Core Temp |
 | Windows bloat | WinUtil, O&O ShutUp10++ |
+| Uninstall programs + leftovers | IObit Uninstaller, Revo Uninstaller, Geek Uninstaller, Windows Settings > Apps |
 
 ## Pros - where YUMRAM is better
 
@@ -40,7 +41,7 @@ was fixed because of this review. Earlier version of this review: 5.4 (its roadm
 | Exact CPU core temperatures | HWiNFO, Core Temp (kernel drivers) | By design: Windows' thermal zone only - no kernel drivers (WinRing0 is flagged by Windows) |
 | Signed program, WinGet / Scoop listing | WinMemoryCleaner, Process Lasso | Open (needs a code-signing certificate - an owner decision) |
 | Command-line actions (e.g. a "Free RAM" shortcut) | WinMemoryCleaner, Mem Reduct | Open - next candidate |
-| Uninstall programs from the same window | CCleaner, PC Manager | Open (YUMRAM points to Windows' own Apps settings) |
+| Uninstall programs from the same window, with leftover clean-up | IObit Uninstaller, Revo, CCleaner, PC Manager | **Added in 5.17.0** (own uninstaller, then leftovers to the Recycle Bin, registry backed up first). Not planned: install monitoring / snapshots (Revo Pro) and forced removal of broken programs without an uninstaller |
 | Real-time per-app rules (CPU affinity, priority classes) | Process Lasso | Partly: "never trim" / "never hold back" rules; full rules not planned |
 | Native look and start-up time | All compiled tools start in < 1 s | Improved (5.16.0 helper cache, 5.16.2 own icon and title bar); PowerShell + WPF still needs ~3 s |
 
@@ -52,6 +53,15 @@ was fixed because of this review. Earlier version of this review: 5.4 (its roadm
 4. Command-line switches - open.
 5. ProBalance-style CPU care - **done** (CPU care, with self-check and undo).
 6. Code signing / WinGet - open (owner decision).
+
+## Added in 5.17.0
+
+- **Uninstall programs** (user: "having ability like IObit Uninstaller"): every desktop program and Store app with
+  size, install date and plain advice, biggest first, searchable. Runs the program's own uninstaller and then finds
+  what it left behind. Safer than IObit / Revo's defaults: only exact-name matches, never a folder used by another
+  program or with a program running in it, settings folders unticked, folders to the Recycle Bin and registry keys
+  backed up to a `.reg` file you can double-click to restore. Also bundles no extra software and shows no ads (IObit
+  Uninstaller's free version does both).
 
 ## Fixed because of this review (5.16.4)
 

@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <!--
   YUMRAM main window (5.6 one-window layout). Styles come from UI\Xaml\Theme.xaml (Application resources).
   Every x:Name below is referenced by UI\MainWindow.ps1 / UI\Shell.ps1; keep the names when changing the layout.
@@ -123,7 +123,10 @@
           <Button x:Name="DiskCleanup" Style="{StaticResource NavButton}" ToolTip="Free disk space: caches and leftovers that rebuild themselves, and what is using your disk. Never your files. (Ctrl+9)" AutomationProperties.Name="Disk cleanup">
             <StackPanel Orientation="Horizontal"><TextBlock Text="💽" Width="24" TextAlignment="Center"/><TextBlock Text="Disk cleanup" Margin="10,0,0,0"/></StackPanel>
           </Button>
-          <Button x:Name="Intelligence" Style="{StaticResource NavButton}" ToolTip="Identify every program, service and app; unknown items are researched automatically. (Ctrl+5)" AutomationProperties.Name="Intelligence">
+          <Button x:Name="Uninstaller" Style="{StaticResource NavButton}" ToolTip="Uninstall programs and Store apps, then clean up what they leave behind (Recycle Bin and registry backup, so nothing is lost for good). (Ctrl+0)" AutomationProperties.Name="Uninstall programs">
+              <StackPanel Orientation="Horizontal"><TextBlock Text="🗑" Width="24" TextAlignment="Center"/><TextBlock Text="Uninstall programs" Margin="10,0,0,0"/></StackPanel>
+            </Button>
+            <Button x:Name="Intelligence" Style="{StaticResource NavButton}" ToolTip="Identify every program, service and app; unknown items are researched automatically. (Ctrl+5)" AutomationProperties.Name="Intelligence">
             <StackPanel Orientation="Horizontal"><TextBlock Text="🧠" Width="24" TextAlignment="Center"/><TextBlock Text="Intelligence" Margin="10,0,0,0"/></StackPanel>
           </Button>
         </StackPanel>

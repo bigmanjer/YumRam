@@ -4,7 +4,7 @@
 
 **Keeps your Windows PC fast by keeping RAM free and the CPU fair — automatically.**
 
-[![Version](https://img.shields.io/badge/version-5.16.4-a855f7)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-5.17.0-a855f7)](CHANGELOG.md)
 [![Platform](https://img.shields.io/badge/Windows-10%20%7C%2011-0078d4)](#requirements)
 [![Stage](https://img.shields.io/badge/stage-beta-22c55e)](#status)
 
@@ -39,6 +39,7 @@ Most "RAM cleaners" flush everything and show a big number. YUMRAM is different:
 | **Windows bloat** | Removes preinstalled apps you do not need (News, Clipchamp, Solitaire, promoted games…) and turns off Windows ads, tips, suggestions, Bing in Start search, Copilot and Recall. Store, Edge, Windows Update and Defender are never touched; every change can be undone. |
 | **Disk cleanup** | Frees space from caches and leftovers that rebuild themselves (temp files, browser and app caches, Store app temp files, picture previews, crash reports, old Windows Update and browser-updater files, developer download caches, Windows' own component and driver clean-up, Recycle Bin) — sizes and a plain explanation first, *Open folder* to look, a list of every deleted file afterwards; never your files, cookies or passwords. Optional weekly automatic clean. |
 | **What's using my disk** | Biggest folders (click to go deeper) and biggest files, like WinDirStat, with Open location. |
+| **Uninstall programs** | Every desktop program and Store app with its size and install date, biggest first, searchable, with plain advice (*Careful* for drivers, runtimes and codecs). Runs the program's own uninstaller, then finds what it left behind (folders, shortcuts, registry settings) — like IObit Uninstaller or Revo. Leftovers go to the Recycle Bin and registry settings are backed up to a `.reg` file first. |
 | **Live readings** | RAM, CPU, GPU (busy + VRAM per graphics chip) and disk (busy, read/write, free space) as four rings on the Overview — also while monitoring is off. |
 | **Floating mini bar** | A small always-on-top bar with RAM, CPU, GPU and disk you can drag anywhere, with Free RAM and hide-to-tray. |
 | **Startup apps** | What starts with Windows, what it costs in RAM, and safe on/off using the same switch as Task Manager. |
@@ -58,10 +59,10 @@ Most "RAM cleaners" flush everything and show a big number. YUMRAM is different:
 | <img src="Docs/Screenshots/StartupApps.png" width="430" alt="Startup apps including Store apps and sign-in tasks"> | <img src="Docs/Screenshots/Settings-CPU.png" width="430" alt="CPU care levels, this PC's layout and game measurement"> |
 | **Intelligence** | **Settings** |
 | <img src="Docs/Screenshots/Intelligence.png" width="430" alt="Intelligence: identity and safety of every process, service and app"> | <img src="Docs/Screenshots/Settings.png" width="430" alt="Settings"> |
-| **About** | |
-| <img src="Docs/Screenshots/About.png" width="430" alt="About YUMRAM"> | |
+| **Uninstall programs** | **About** |
+| <img src="Docs/Screenshots/Uninstaller.png" width="430" alt="Uninstall programs: sizes, dates, advice and leftover clean-up"> | <img src="Docs/Screenshots/About.png" width="430" alt="About YUMRAM"> |
 
-Pictures: version 5.16.4, captured with `Tools\Capture-Screenshots.ps1` (user and computer name hidden).
+Pictures: version 5.17.0, captured with `Tools\Capture-Screenshots.ps1` (user and computer name hidden).
 
 ## Install
 

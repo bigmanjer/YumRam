@@ -86,6 +86,9 @@ $script:Steps=@(
    Check ($on -eq 0 -and $st.Picked.Count -eq 0) "Select all again unticks every box on screen ($on left)" },
  { $t=(PW 'DiskCleanup').Tag; if((($t.Busy) -or ($null -ne $t['Usage'])) -and $script:WaitE++ -lt 40){ $script:I-- } },
  { $st=(PW 'DiskCleanup').Tag; Check (@($st.Ui.UsageFolders.ItemsSource).Count -ge 1 -and @($st.Ui.UsageFiles.ItemsSource).Count -ge 1) "What's using my disk: $($st.Ui.Details.Text)"; Shot 'p-disk' },
+ # 5.17.0: Uninstall programs - list, details, search, sort (nothing is uninstalled here).
+ { Go 'Uninstaller' }, { }, { },
+ { $w=PW 'Uninstaller'; $st=$w.Tag; Check ($null -ne $w -and $script:Yum.CurrentPage -eq 'Uninstaller') 'Uninstall programs page open'; Check (@($st.Shown).Count -ge 10) ("Installed programs listed: {0} ({1})" -f @($st.Shown).Count,$st.Ui.SumCount.Text); $st.Ui.Items.SelectedIndex=0; Check ($st.Ui.ExplainBody.Visibility -eq 'Visible' -and $st.Ui.ExplainTitle.Text -ne 'Click a program') ("Program explained: {0}" -f $st.Ui.ExplainTitle.Text); Check (@($st.All | Where-Object { $_.Kind -eq 'Store' }).Count -ge 1) 'Store apps merged in'; $st.Ui.Search.Text='zzqqxx-nothing'; Check (@($st.Shown).Count -eq 0) 'Search filters the list'; $st.Ui.Search.Text=''; $st.Ui.SortBy.SelectedIndex=1; $names=@($st.Shown | Select-Object -First 5 | ForEach-Object Name); Check (($names -join '|') -eq ((@($names | Sort-Object)) -join '|')) 'Sort by name'; $st.Ui.SortBy.SelectedIndex=0; Shot 'p-uninstall' },
  { Go 'Intelligence' },
  { }, { },
  { $st=$script:Yum.IntelligenceWindow.Tag; foreach($card in 'ALL ITEMS','PROTECTED','RESOLVED','REVIEW','UNKNOWN','CACHED','ERRORS','RESEARCHING'){ try{ Set-YumIntelligenceFilter -State $st -Name $card; Note ("card {0,-12} -> filter '{1}' | {2}" -f $card,[string]$st.Filter.SelectedItem.Content,$st.ResultCount.Text) }catch{ Check $false "card $card : $($_.Exception.Message)" } }; Check $true 'Intelligence: all cards switch the view' },

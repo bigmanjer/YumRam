@@ -1,5 +1,28 @@
 # Changelog
 
+# YUMRAM 5.17.0 — Uninstall programs (with leftover clean-up)
+
+- **New page: Uninstall programs** (sidebar, <kbd>Ctrl</kbd>+<kbd>0</kbd>; user: "having ability like IObit
+  Uninstaller"). Lists every desktop program (all users and this account) and every Store app with its size and
+  install date, biggest first, with search, sort (size / name / date) and plain advice: *Careful* for drivers,
+  hardware tools, runtimes (.NET, Visual C++, DirectX) and codecs; *Your call* with a note for anti-cheat and
+  antivirus. Windows updates, system components and child entries are hidden. Measured on the test PC: 98 desktop
+  programs in about 0.15 s, 37 Store apps read in the background.
+- **Uninstall** runs the program's own uninstaller (Windows Installer programs with `msiexec /x`, Store apps with
+  Windows' own removal); Windows asks for administrator approval when the program needs it. YUMRAM waits until
+  Windows no longer lists the program (also for uninstallers that hand off to a copy and exit) and can stop waiting.
+- **Leftovers**: afterwards YUMRAM looks for what was left behind - the install folder, folders with the program's
+  exact name in Program Files / ProgramData / AppData, Start menu and desktop shortcuts, and its registry settings -
+  and lists them with sizes. Strict on purpose: never a folder with a merely similar name, a shared folder
+  (Microsoft, Common Files...), a folder another installed program uses, or one with a program running from it.
+  Settings folders in AppData are listed but not ticked (they may hold your own files). Folders and shortcuts go to
+  the **Recycle Bin**; registry keys are first saved to a `.reg` file (double-click to restore, "Open backups");
+  a list of what was removed is kept in `uninstall-last.txt`.
+- YUMRAM cannot uninstall itself while it runs; for YUMRAM the page points to Settings > Apps.
+- New test `Tests\UninstallerTest.ps1`: installs a fake program for this account only, uninstalls it with its own
+  uninstaller, checks that exactly the right leftovers are found and ticked (a similar-named folder and a folder used
+  by another program are not), removes them, and restores the registry backup. The UI test checks the new page.
+- README: feature row and picture; competitor review and architecture updated.
 # YUMRAM 5.16.4 — "What's using my disk" really works; anti-stutter while gaming; competitor review
 
 - **What's using my disk, rebuilt** (user: "that whole section doesn't really work"). Measured: a scan of C:\ took
