@@ -15,7 +15,8 @@
       <StackPanel VerticalAlignment="Center">
         <TextBlock Text="YUMRAM" Style="{StaticResource AppTitle}"/>
         <TextBlock x:Name="Version" Text="Version" Style="{StaticResource Caption}"/>
-        <TextBlock Text="Your ultimate memory reclaim &amp; monitor for Windows" Style="{StaticResource Caption}"/>
+        <TextBlock x:Name="NameMeaning" Text="Yume's Ultimate Machine Rescue And Maintenance" Style="{StaticResource Caption}" FontWeight="SemiBold" Foreground="{StaticResource Brand}"/>
+        <TextBlock x:Name="Dedication" Text="Named for Yume 💜" Style="{StaticResource Caption}"/>
         <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
           <Button x:Name="CheckUpdates" Content="⟳  Check for updates" Style="{StaticResource GhostButton}" Padding="8,3" ToolTip="Ask GitHub whether a newer YUMRAM release exists. Nothing about you or your PC is sent."/>
           <TextBlock x:Name="UpdateStatus" Text="" Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="8,0,0,0" TextWrapping="Wrap" MaxWidth="520"/>
@@ -36,6 +37,7 @@
           <Border Style="{StaticResource Tile}"><StackPanel><TextBlock Text="▣  One window" FontWeight="SemiBold"/><TextBlock Style="{StaticResource Caption}" TextWrapping="Wrap" Margin="0,4,0,0" Text="Every tool is a page in the sidebar. The X button keeps YUMRAM working in the background (Exit is in the tray menu), or shrink it to the floating mini bar."/></StackPanel></Border>
           <Border Style="{StaticResource Tile}"><StackPanel><TextBlock Text="💽  Disk cleanup" FontWeight="SemiBold"/><TextBlock Style="{StaticResource Caption}" TextWrapping="Wrap" Margin="0,4,0,0" Text="Frees disk space from caches and leftovers that rebuild themselves, showing every size first. Never your files, cookies or passwords. Also shows what is using your disk."/></StackPanel></Border>
           <Border Style="{StaticResource Tile}"><StackPanel><TextBlock Text="📊  Live readings" FontWeight="SemiBold"/><TextBlock Style="{StaticResource Caption}" TextWrapping="Wrap" Margin="0,4,0,0" Text="RAM, CPU, graphics (with VRAM) and disk as four rings on the Overview, like Task Manager, with temperatures - even while automatic care is off."/></StackPanel></Border>
+          <Border Style="{StaticResource Tile}"><StackPanel><TextBlock Text="🗑  Uninstall programs" FontWeight="SemiBold"/><TextBlock Style="{StaticResource Caption}" TextWrapping="Wrap" Margin="0,4,0,0" Text="Every program and Store app with its size and date. Runs its own uninstaller, then cleans up what it left behind - to the Recycle Bin, with registry settings backed up first."/></StackPanel></Border>
         </UniformGrid>
 
         <Border Style="{StaticResource Card}" Margin="0,4,0,10" Padding="14,12">
@@ -46,8 +48,8 @@
               <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
               <TextBlock x:Name="HotkeyKeys" Text="Ctrl+Alt+R" FontWeight="SemiBold" Foreground="{StaticResource Brand}" Margin="0,0,0,6"/>
               <TextBlock x:Name="HotkeyText" Grid.Column="1" Text="Free RAM now, from anywhere (even from a game or the tray)" Style="{StaticResource Caption}" TextWrapping="Wrap" Margin="0,0,0,6"/>
-              <TextBlock Grid.Row="1" Text="Ctrl+1 … Ctrl+8" FontWeight="SemiBold" Foreground="{StaticResource Brand}" Margin="0,0,0,6"/>
-              <TextBlock Grid.Row="1" Grid.Column="1" Text="Overview · What's running · Reclaim Center · Startup apps · Intelligence · Settings · About · Windows bloat (Ctrl+8)" Style="{StaticResource Caption}" TextWrapping="Wrap" Margin="0,0,0,6"/>
+              <TextBlock Grid.Row="1" Text="Ctrl+1 … Ctrl+0" FontWeight="SemiBold" Foreground="{StaticResource Brand}" Margin="0,0,0,6"/>
+              <TextBlock Grid.Row="1" Grid.Column="1" Text="Overview · What's running · Reclaim Center · Startup apps · Intelligence · Settings · About · Windows bloat (Ctrl+8) · Disk cleanup (Ctrl+9) · Uninstall programs (Ctrl+0)" Style="{StaticResource Caption}" TextWrapping="Wrap" Margin="0,0,0,6"/>
               <TextBlock Grid.Row="2" Text="☰" FontWeight="SemiBold" Foreground="{StaticResource Brand}"/>
               <TextBlock Grid.Row="2" Grid.Column="1" Text="Show or hide the page names in the sidebar" Style="{StaticResource Caption}" TextWrapping="Wrap"/>
             </Grid>

@@ -840,7 +840,7 @@ function Show-YumAbout {
         }
     }catch{
         Write-YumLogException -Context 'About window failed' -Exception $_.Exception
-        Show-YumInfoWindow -Title 'About YUMRAM' -Subtitle ([string]$script:Yum.Config.Version) -Lines @('YUMRAM — memory reclaim & monitor for Windows.')
+        Show-YumInfoWindow -Title 'About YUMRAM' -Subtitle ([string]$script:Yum.Config.Version) -Lines @('YUMRAM — Yume''s Ultimate Machine Rescue And Maintenance. Named for Yume.')
     }
 }
 

@@ -1,5 +1,13 @@
 # Changelog
 
+# YUMRAM 5.17.2 — YUMRAM now stands for "Yume's Ultimate Machine Rescue And Maintenance"
+
+- **The name has a meaning** (owner's choice): **Y**ume's **U**ltimate **M**achine **R**escue **A**nd
+  **M**aintenance - named for Yume. Shown on the About page (under the name, with "Named for Yume 💜") and at the
+  top of the README. The program, installer, settings and updates keep the name YUMRAM, so nothing changes for
+  anyone who has it installed.
+- About: the keyboard shortcuts now include Disk cleanup (Ctrl+9) and Uninstall programs (Ctrl+0).
+
 # YUMRAM 5.17.1 — Disk cleanup: progress bar, "finished", list updates by itself
 
 - **Progress bar while cleaning** (user: "loading bar indicating when clean is finished, then update automatically").

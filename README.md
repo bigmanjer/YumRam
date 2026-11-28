@@ -2,9 +2,11 @@
 
 # YUMRAM
 
+<b>Y</b>ume's <b>U</b>ltimate <b>M</b>achine <b>R</b>escue <b>A</b>nd <b>M</b>aintenance — named for Yume 💜
+
 **Keeps your Windows PC fast by keeping RAM free and the CPU fair — automatically.**
 
-[![Version](https://img.shields.io/badge/version-5.17.1-a855f7)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-5.17.2-a855f7)](CHANGELOG.md)
 [![Platform](https://img.shields.io/badge/Windows-10%20%7C%2011-0078d4)](#requirements)
 [![Stage](https://img.shields.io/badge/stage-beta-22c55e)](#status)
 
@@ -62,7 +64,7 @@ Most "RAM cleaners" flush everything and show a big number. YUMRAM is different:
 | **Uninstall programs** | **About** |
 | <img src="Docs/Screenshots/Uninstaller.png" width="430" alt="Uninstall programs: sizes, dates, advice and leftover clean-up"> | <img src="Docs/Screenshots/About.png" width="430" alt="About YUMRAM"> |
 
-Pictures: version 5.17.0, captured with `Tools\Capture-Screenshots.ps1` (user and computer name hidden).
+Pictures: version 5.17.2, captured with `Tools\Capture-Screenshots.ps1` (user and computer name hidden).
 
 ## Install
 
