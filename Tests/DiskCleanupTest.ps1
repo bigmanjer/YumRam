@@ -86,7 +86,15 @@ $ud=@($cats | Where-Object Key -eq 'UpdaterDownloads')[0]; Assert-That ($ud.Admi
 Assert-That ((@($cats | Where-Object Key -eq 'DevCaches')[0]).Advice -eq 'YourCall') 'Developer caches are your call (the next build is slower once).'
 $logTmp=Join-Path $env:TEMP ('yum-dlog-'+[guid]::NewGuid().ToString('N')); New-Item -ItemType Directory $logTmp | Out-Null
 $oldDir=$script:Yum.ConfigDirectory; $script:Yum.ConfigDirectory=$logTmp
-try{ [void](Invoke-YumDiskCleanup -Keys @()); Assert-That (Test-Path -LiteralPath (Get-YumDiskCleanupLogPath)) 'Each clean writes the "what was deleted" list.' }finally{ $script:Yum.ConfigDirectory=$oldDir; Remove-Item -LiteralPath $logTmp -Recurse -Force -ErrorAction SilentlyContinue }
+try{ [void](Invoke-YumDiskCleanup -Keys @()); Assert-That (Test-Path -LiteralPath (Get-YumDiskCleanupLogPath)) 'Each clean writes the "what was deleted" list.'
+     # 5.17.1: progress for the loading bar. A category that needs administrator is skipped without touching files
+     # when not elevated, so this counts progress without deleting anything; elevated, only the key-less run is used.
+     $pg=[hashtable]::Synchronized(@{}); $adminKeys=@($cats | Where-Object { $_.Admin } | ForEach-Object { [string]$_.Key } | Select-Object -First 2)
+     $useKeys=if(Test-YumIsElevated){@()}else{$adminKeys}
+     $saved=@{}; foreach($k in 'DiskCleanupLast','DiskCleanupFreedTotal'){ $saved[$k]=$script:Yum.Config[$k] }
+     [void](Invoke-YumDiskCleanup -Keys $useKeys -Progress $pg)
+     foreach($k in $saved.Keys){ $script:Yum.Config[$k]=$saved[$k] }
+     Assert-That ([int]$pg.Total -eq @($useKeys).Count -and [int]$pg.Done -eq [int]$pg.Total -and [bool]$pg.Finished) ('Clean progress counts every category and ends finished ({0} of {1}).' -f $pg.Done,$pg.Total) }finally{ $script:Yum.ConfigDirectory=$oldDir; Remove-Item -LiteralPath $logTmp -Recurse -Force -ErrorAction SilentlyContinue }
 $dx=[IO.File]::ReadAllText((Join-Path $root 'UI\Xaml\DiskCleanup.xaml')); Assert-That ($dx -match 'x:Name="OpenFolder"' -and $dx -match 'x:Name="SeeDeleted"') 'Disk cleanup lets you look first and see what was deleted.'
 Assert-That ((Get-YumStorageSenseOn) -is [bool]) 'Storage Sense status is read.'
 Assert-That ([IO.File]::ReadAllText((Join-Path $root 'UI\Xaml\DiskCleanup.xaml')) -match 'x:Name="StorageSense"') 'Disk cleanup shows Windows Storage Sense.'

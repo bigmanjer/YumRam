@@ -16,7 +16,7 @@ $tmp=Join-Path $env:TEMP ('yum-full-'+[guid]::NewGuid().ToString('N'));New-Item 
 Get-ChildItem $Root -Filter *.json | Copy-Item -Destination $tmp
 $script:Yum.ConfigDirectory=$tmp;$script:Yum.ConfigFile=(Join-Path $tmp 'config.json');$script:Yum.Config.LogFileName=(Join-Path $tmp 'probe.log')
 $script:Yum.Config.StartMonitoringAutomatically=$false; $script:Yum.Config['UpdateCheckEnabled']=$false
-$script:R=New-Object System.Collections.Generic.List[string];$script:Fails=0;$script:WaitN=0;$script:WaitD=0;$script:WaitE=0;$script:WaitG=0
+$script:R=New-Object System.Collections.Generic.List[string];$script:Fails=0;$script:WaitN=0;$script:WaitD=0;$script:WaitE=0;$script:WaitG=0;$script:WaitF=0;$script:WaitH=0
 function Check([bool]$c,[string]$m){ if($c){$script:R.Add("PASS  $m")}else{$script:R.Add("FAIL  $m");$script:Fails++} }
 function Note([string]$m){ $script:R.Add("      $m") }
 function Click($b){ $b.RaiseEvent((New-Object System.Windows.RoutedEventArgs([System.Windows.Controls.Button]::ClickEvent))) }
@@ -86,6 +86,16 @@ $script:Steps=@(
    Check ($on -eq 0 -and $st.Picked.Count -eq 0) "Select all again unticks every box on screen ($on left)" },
  { $t=(PW 'DiskCleanup').Tag; if((($t.Busy) -or ($null -ne $t['Usage'])) -and $script:WaitE++ -lt 40){ $script:I-- } },
  { $st=(PW 'DiskCleanup').Tag; Check (@($st.Ui.UsageFolders.ItemsSource).Count -ge 1 -and @($st.Ui.UsageFiles.ItemsSource).Count -ge 1) "What's using my disk: $($st.Ui.Details.Text)"; Shot 'p-disk' },
+ # 5.17.1: clean progress strip. First a picture of it mid-clean, then a real run of the clean flow on categories that
+ # need administrator (skipped without touching files when not elevated; elevated, no categories) - the strip must end
+ # "finished" and the list must re-measure by itself.
+ { $st=(PW 'DiskCleanup').Tag; $st.Progress=[hashtable]::Synchronized(@{Done=3;Total=7;Current='Browser caches';Slow=$false;Freed=432013312L;Finished=$false;Started=[DateTime]::Now.AddSeconds(-14)}); Set-YumCleanProgress -State $st
+   Check ($st.Ui.CleanProgress.Visibility -eq 'Visible' -and $st.Ui.CleanProgressBar.Value -gt 40 -and $st.Ui.CleanProgressBar.Value -lt 60 -and $st.Ui.CleanProgressText.Text -match 'Cleaning: Browser caches' -and $st.Ui.CleanProgressCount.Text -match '3 of 7') ("Clean progress strip mid-clean: {0} | {1} | {2:N0}%" -f $st.Ui.CleanProgressText.Text,$st.Ui.CleanProgressCount.Text,$st.Ui.CleanProgressBar.Value); Shot 'p-clean-progress' },
+ { $st=(PW 'DiskCleanup').Tag; $k=if(Test-YumIsElevated){[string[]]@()}else{[string[]]@($st.Rows | Where-Object { $_.Locked } | Select-Object -First 2 | ForEach-Object { [string]$_.Key })}; Start-YumDiskClean -State $st -Keys $k; Check ([bool]$st.Busy) 'Clean runs in the background (page busy)' },
+ { $t=(PW 'DiskCleanup').Tag; if(($t.Busy -or [bool]$t.Progress['Refreshing']) -and $script:WaitF++ -lt 40){ $script:I-- } },
+ { $st=(PW 'DiskCleanup').Tag; Check ([bool]$st.Progress.Finished -and $st.Ui.CleanProgressBar.Value -eq 100 -and $st.Ui.CleanProgressText.Text -match 'Finished.*List updated' -and -not $st.Busy -and @($st.Rows).Count -ge 8) ("Clean finished and the list updated by itself: {0} | {1}" -f $st.Ui.CleanProgressText.Text,$st.Ui.CleanProgressCount.Text); Shot 'p-clean-done' },
+ { $st=(PW 'DiskCleanup').Tag; $st.Ui.Reload.RaiseEvent((New-Object System.Windows.RoutedEventArgs([System.Windows.Controls.Primitives.ButtonBase]::ClickEvent))); Check ($st.Ui.CleanProgress.Visibility -eq 'Collapsed') 'Check again hides the finished strip' },
+ { $t=(PW 'DiskCleanup').Tag; if($t.Busy -and $script:WaitG++ -lt 40){ $script:I-- } },
  # 5.17.0: Uninstall programs - list, details, search, sort (nothing is uninstalled here).
  { Go 'Uninstaller' }, { }, { },
  { $w=PW 'Uninstaller'; $st=$w.Tag; Check ($null -ne $w -and $script:Yum.CurrentPage -eq 'Uninstaller') 'Uninstall programs page open'; Check (@($st.Shown).Count -ge 10) ("Installed programs listed: {0} ({1})" -f @($st.Shown).Count,$st.Ui.SumCount.Text); $st.Ui.Items.SelectedIndex=0; Check ($st.Ui.ExplainBody.Visibility -eq 'Visible' -and $st.Ui.ExplainTitle.Text -ne 'Click a program') ("Program explained: {0}" -f $st.Ui.ExplainTitle.Text); Check (@($st.All | Where-Object { $_.Kind -eq 'Store' }).Count -ge 1) 'Store apps merged in'; $st.Ui.Search.Text='zzqqxx-nothing'; Check (@($st.Shown).Count -eq 0) 'Search filters the list'; $st.Ui.Search.Text=''; $st.Ui.SortBy.SelectedIndex=1; $names=@($st.Shown | Select-Object -First 5 | ForEach-Object Name); Check (($names -join '|') -eq ((@($names | Sort-Object)) -join '|')) 'Sort by name'; $st.Ui.SortBy.SelectedIndex=0; Shot 'p-uninstall' },

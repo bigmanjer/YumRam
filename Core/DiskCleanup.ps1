@@ -274,13 +274,18 @@ function Format-YumBytes {
 
 function Invoke-YumDiskCleanup {
     # Cleans the given categories. Returns one row per category with what was freed and what was skipped.
-    param([string[]]$Keys,[switch]$Automatic)
+    # -Progress (5.17.1): a synchronized hashtable the page reads while this runs: Done / Total categories, Current
+    # name, Slow (a Windows tool that can take minutes), Freed so far, Finished.
+    param([string[]]$Keys,[switch]$Automatic,[hashtable]$Progress)
     Initialize-YumDiskWalkType
     $admin=$false; try{ $admin=Test-YumIsElevated }catch{}
     $free0=0L; try{ $free0=[long](New-Object IO.DriveInfo ($env:SystemDrive)).AvailableFreeSpace }catch{}
     $deletedList=New-Object System.Collections.Generic.List[string]
-    $out=foreach($c in @(Get-YumDiskJunkCategories | Where-Object { $Keys -contains $_.Key })){
-        if([bool]$c.Admin -and -not $admin){ [pscustomobject]@{Key=$c.Key;Name=$c.Name;Freed=0L;Deleted=0L;Skipped=0L;Note='needs administrator'}; continue }
+    $cats=@(Get-YumDiskJunkCategories | Where-Object { $Keys -contains $_.Key })
+    if($null -ne $Progress){ $Progress.Total=$cats.Count; $Progress.Done=0; $Progress.Freed=0L; $Progress.Finished=$false }
+    $out=foreach($c in $cats){
+        if($null -ne $Progress){ $Progress.Current=[string]$c.Name; $Progress.Slow=[bool]($c.PSObject.Properties['Special'] -and [string]$c.Special -in @('Dism','Cleanmgr')) }
+        if([bool]$c.Admin -and -not $admin){ if($null -ne $Progress){ $Progress.Done=[int]$Progress.Done+1 }; [pscustomobject]@{Key=$c.Key;Name=$c.Name;Freed=0L;Deleted=0L;Skipped=0L;Note='needs administrator'}; continue }
         $freed=0L;$del=0L;$skip=0L;$note=''
         try{
             $special=if($c.PSObject.Properties['Special']){[string]$c.Special}else{''}
@@ -301,6 +306,7 @@ function Invoke-YumDiskCleanup {
                 $freed=[math]::Max(0L,$before-$after) }
             else { foreach($r in @($c.Roots)){ if(-not $r){continue}; $w=[YumDiskWalk]::WalkEx([string]$r,[string[]]@($c.Patterns),[double]$c.MinAgeHours,$true,(Get-YumCatList $c 'SkipExt'),(Get-YumCatList $c 'SkipDirs')); $freed+=$w.Freed; $del+=$w.Deleted; $skip+=$w.Skipped; foreach($dp in $w.DeletedPaths){ [void]$deletedList.Add(('{0}	{1}' -f $c.Name,$dp)) } } }
         }catch{ $note=$_.Exception.Message }
+        if($null -ne $Progress){ $Progress.Done=[int]$Progress.Done+1; $Progress.Freed=[long]$Progress.Freed+$freed }
         [pscustomobject]@{Key=$c.Key;Name=$c.Name;Freed=$freed;Deleted=$del;Skipped=$skip;Note=$note}
     }
     $out=@($out)
@@ -313,6 +319,7 @@ function Invoke-YumDiskCleanup {
         [IO.File]::WriteAllLines((Get-YumDiskCleanupLogPath),[string[]]($head+$tools+@($deletedList)),(New-Object Text.UTF8Encoding($true)))
     }catch{}
     $free1=0L; try{ $free1=[long](New-Object IO.DriveInfo ($env:SystemDrive)).AvailableFreeSpace }catch{}
+    if($null -ne $Progress){ $Progress.Current=''; $Progress.Finished=$true }
     try{
         $script:Yum.Config['DiskCleanupLast']=(Get-Date).ToString('o')
         $script:Yum.Config['DiskCleanupFreedTotal']=[double]$script:Yum.Config['DiskCleanupFreedTotal']+$total

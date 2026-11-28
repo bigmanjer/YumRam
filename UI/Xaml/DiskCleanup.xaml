@@ -52,7 +52,20 @@
             <DockPanel DockPanel.Dock="Top" Margin="14,10,10,6">
               <CheckBox x:Name="PickAll" DockPanel.Dock="Right" Content="Select all" VerticalAlignment="Center" Margin="16,0,4,0" ToolTip="Tick every category that can be cleaned now (click again to untick all). You still confirm the total before anything is removed."/>
               <Button x:Name="CleanSelected" DockPanel.Dock="Right" Content="Clean selected" Style="{StaticResource PrimaryButton}" Padding="14,4" ToolTip="Removes the ticked categories after you confirm the total."/>
-              <TextBlock Text="SAFE TO CLEAN" Style="{StaticResource StatLabel}" VerticalAlignment="Center"/>
+              <DockPanel>
+                <TextBlock Text="SAFE TO CLEAN" DockPanel.Dock="Left" Style="{StaticResource StatLabel}" VerticalAlignment="Center"/>
+                <!-- 5.17.1 (user: "loading bar indicating when clean is finished, then update automatically"). In the header
+                     line so the list keeps its room. -->
+                <Border x:Name="CleanProgress" Visibility="Collapsed" Margin="14,0,4,0" Padding="10,4,10,5" CornerRadius="6" Background="#1AA855F7" BorderBrush="#40A855F7" BorderThickness="1" VerticalAlignment="Center">
+                  <StackPanel>
+                    <DockPanel>
+                      <TextBlock x:Name="CleanProgressCount" DockPanel.Dock="Right" Text="" FontSize="11.5" Foreground="{StaticResource TextMuted}" VerticalAlignment="Center" Margin="10,0,0,0"/>
+                      <TextBlock x:Name="CleanProgressText" Text="" FontSize="12.5" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                    </DockPanel>
+                    <ProgressBar x:Name="CleanProgressBar" Height="5" Margin="0,4,0,0" Maximum="100" Foreground="#A855F7"/>
+                  </StackPanel>
+                </Border>
+              </DockPanel>
             </DockPanel>
             <ListView x:Name="Junk" BorderThickness="0" Background="Transparent" Margin="1" SelectionMode="Single" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
               <ListView.View><GridView>

@@ -3,7 +3,7 @@
 # background runspace; the UI thread only polls and renders, like the Windows bloat page.
 
 function Start-YumDiskWork {
-    param([hashtable]$State,[scriptblock]$Work,$Argument,[scriptblock]$Done,[string]$Busy='Working…')
+    param([hashtable]$State,[scriptblock]$Work,$Argument,[scriptblock]$Done,[string]$Busy='Working…',[scriptblock]$Tick)
     $ps=[powershell]::Create()
     [void]$ps.AddScript({
         param($Shared,[string]$Root,$Arg,[string]$WorkText)
@@ -11,13 +11,13 @@ function Start-YumDiskWork {
         $script:Yum=$Shared
         & ([scriptblock]::Create($WorkText)) $Arg
     }.ToString()).AddArgument($script:Yum).AddArgument([string]$script:Yum.Root).AddArgument($Argument).AddArgument($Work.ToString())
-    $job=@{Ps=$ps;Handle=$ps.BeginInvoke();State=$State;Done=$Done}
+    $job=@{Ps=$ps;Handle=$ps.BeginInvoke();State=$State;Done=$Done;Tick=$Tick}
     $t=New-Object System.Windows.Threading.DispatcherTimer
     $t.Interval=[TimeSpan]::FromMilliseconds(250)
     $t.Tag=$job
     $t.Add_Tick({param($s,$e)
         $j=$s.Tag
-        if(-not $j.Handle.IsCompleted){return}
+        if(-not $j.Handle.IsCompleted){ if($null -ne $j.Tick){ try{ & $j.Tick $j.State }catch{} }; return }
         $s.Stop()
         $res=$null
         try{ $res=$j.Ps.EndInvoke($j.Handle) }catch{ try{Write-YumLogException -Context 'Disk cleanup background work failed' -Exception $_.Exception}catch{} }
@@ -26,6 +26,58 @@ function Start-YumDiskWork {
     })
     if($null -ne $State){ $State.Busy=$true; $State.Ui.Details.Text=$Busy; Update-YumDiskButtons -State $State }
     $t.Start()
+}
+
+function Set-YumCleanProgress {
+    # 5.17.1 (user: "loading bar indicating when clean is finished, then update automatically"): a progress strip above
+    # the list - which category is being cleaned, how many are done, time so far; then "finished", the list re-measures
+    # by itself and the strip says when it is up to date.
+    param([hashtable]$State)
+    $p=$State['Progress']; $ui=$State.Ui
+    if($null -eq $p){ $ui.CleanProgress.Visibility='Collapsed'; return }
+    $ui.CleanProgress.Visibility='Visible'
+    $ui.CleanProgress.ToolTip=if([bool]$p.Finished){'Every ticked category is done; the list above was measured again. Details are under LAST CLEAN.'}else{'Cleaning one category at a time. Windows'' own tools (component store, Windows Disk Cleanup) can take a few minutes.'}
+    $total=[math]::Max(1,[int]$p.Total); $done=[math]::Min($total,[int]$p.Done)
+    $secs=[int]([DateTime]::Now-[datetime]$p.Started).TotalSeconds
+    $time=if($secs -ge 60){'{0}:{1:00}' -f [int][math]::Floor($secs/60),($secs%60)}else{'{0} s' -f $secs}
+    if(-not [bool]$p.Finished){
+        $ui.CleanProgressBar.Foreground=Get-YumBrush '#A855F7'
+        # Part of a step while a category runs, so the bar moves from the start.
+        $ui.CleanProgressBar.Value=[math]::Min(99,100*($done+0.15)/$total)
+        $now=if([string]$p.Current){[string]$p.Current}else{'Starting'}
+        $ui.CleanProgressText.Text=('Cleaning: {0}{1}' -f $now,$(if([bool]$p.Slow){' (Windows tool, a few minutes)'}else{'…'}))
+        $ui.CleanProgressCount.Text=('{0} of {1}  •  {2}  •  {3}' -f $done,$total,(Format-YumBytes ([double]$p.Freed)),$time)
+        return
+    }
+    $ui.CleanProgressBar.Value=100
+    $ui.CleanProgressBar.Foreground=Get-YumBrush '#34D399'
+    if([bool]$p['Refreshing']){
+        $ui.CleanProgressText.Text=('Finished - freed {0}. Updating the list…' -f (Format-YumBytes ([double]$p.Freed)))
+    } else {
+        $ui.CleanProgressText.Text=('✓ Finished - freed {0}. List updated.' -f (Format-YumBytes ([double]$p.Freed)))
+    }
+    if(-not $p['Took']){ $p.Took=$time }
+    $ui.CleanProgressCount.Text=('took {1}' -f $total,$p.Took)
+}
+
+function Start-YumDiskClean {
+    # Cleans the given categories in the background with the progress strip; then re-measures the list by itself.
+    param([hashtable]$State,[string[]]$Keys)
+    $st=$State; $rows=@($Keys)
+    $prog=[hashtable]::Synchronized(@{Done=0;Total=$rows.Count;Current='';Slow=$false;Freed=0L;Finished=$false;Started=[DateTime]::Now})
+    $st.Progress=$prog
+    Set-YumCleanProgress -State $st
+    Start-YumDiskWork -State $st -Busy ('Cleaning {0} categories…' -f $rows.Count) -Argument @{Keys=[string[]]$rows;Progress=$prog} -Work { param($a) Invoke-YumDiskCleanup -Keys $a.Keys -Progress $a.Progress } -Tick { param($st1) Set-YumCleanProgress -State $st1 } -Done {
+        param($st2,$res)
+        $st2.Busy=$false
+        $x=@($res)[0]
+        if($null -ne $st2['Progress']){ $st2.Progress.Finished=$true; $st2.Progress.Done=$st2.Progress.Total; $st2.Progress.Freed=[long]$x.Freed; $st2.Progress.Refreshing=$true; Set-YumCleanProgress -State $st2 }
+        $lines=@($x.Rows | ForEach-Object { '{0}: {1}{2}' -f $_.Name,(Format-YumBytes $_.Freed),$(if($_.Skipped -gt 0){(' ({0:N0} in use, skipped)' -f $_.Skipped)}elseif($_.Note){' ('+$_.Note+')'}else{''}) })
+        $msg=('Freed {0}. Windows drive free: {1} -> {2}.' -f (Format-YumBytes $x.Freed),(Format-YumBytes $x.DriveFreeBefore),(Format-YumBytes $x.DriveFreeAfter))
+        $st2.Ui.LastResult.Text=($msg+[Environment]::NewLine+($lines -join [Environment]::NewLine))
+        try{ Show-YumToast -Text $msg }catch{}
+        Start-YumDiskMeasure -State $st2 -After $msg
+    }
 }
 
 function Update-YumDiskButtons {
@@ -82,6 +134,8 @@ function Start-YumDiskMeasure {
         param($st,$res)
         $st.Busy=$false
         Set-YumDiskRows -State $st -Rows @($res)
+        # 5.17.1: the list is up to date again after a clean - say so on the progress strip.
+        if($null -ne $st['Progress'] -and [bool]$st.Progress['Refreshing']){ $st.Progress.Refreshing=$false; Set-YumCleanProgress -State $st }
         $st.Ui.Details.Text=if($st.After){[string]$st.After}else{('Measured {0:T}. Tick what to clean, or click a line to read what it is.' -f (Get-Date))}
         Update-YumDiskButtons -State $st
     }
@@ -215,8 +269,8 @@ function Show-YumDiskCleanup {
         [xml]$xaml=Read-YumXamlText -Path (Join-Path $script:Yum.Root 'UI\Xaml\DiskCleanup.xaml')
         $window=[Windows.Markup.XamlReader]::Load((New-Object System.Xml.XmlNodeReader $xaml))
         $ui=@{}
-        foreach($n in 'PickAll','Junk','Reload','AdminPill','AdminText','RestartAdmin','SumJunk','SumDrive','SumDriveBar','SumFreed','AutoClean','AutoLast','CleanSelected','UsagePath','UsageStatus','UsageScan','UsageUp','UsageOpen','UsageTabs','UsageFolders','UsageFiles','ExplainTitle','ExplainSub','ExplainWhy','ExplainBody','ExplainEffect','ExplainUndo','LastResult','OpenFolder','SeeDeleted','StorageSense','Close','Details'){$ui[$n]=$window.FindName($n);if($null -eq $ui[$n]){throw "Disk cleanup page control missing: $n"}}
-        $state=@{Window=$window;Ui=$ui;Rows=@();Picked=@{};Busy=$false;Usage=$null}
+        foreach($n in 'CleanProgress','CleanProgressText','CleanProgressCount','CleanProgressBar','PickAll','Junk','Reload','AdminPill','AdminText','RestartAdmin','SumJunk','SumDrive','SumDriveBar','SumFreed','AutoClean','AutoLast','CleanSelected','UsagePath','UsageStatus','UsageScan','UsageUp','UsageOpen','UsageTabs','UsageFolders','UsageFiles','ExplainTitle','ExplainSub','ExplainWhy','ExplainBody','ExplainEffect','ExplainUndo','LastResult','OpenFolder','SeeDeleted','StorageSense','Close','Details'){$ui[$n]=$window.FindName($n);if($null -eq $ui[$n]){throw "Disk cleanup page control missing: $n"}}
+        $state=@{Window=$window;Ui=$ui;Rows=@();Picked=@{};Busy=$false;Usage=$null;Progress=$null}
         $window.Tag=$state
         foreach($c in 'Junk','Reload','AutoClean','CleanSelected','UsageScan','UsageUp','UsageOpen','UsageFolders','UsageFiles','Close'){$ui[$c].Tag=$state}
         if(Test-YumIsElevated){$ui.AdminPill.Visibility='Collapsed';$ui.RestartAdmin.Visibility='Collapsed'}else{$ui.AdminText.Text='Not administrator: Windows'' own files are locked'}
@@ -235,7 +289,7 @@ function Show-YumDiskCleanup {
         $ui.PickAll.Tag=$state
         $ui.PickAll.Add_Click({param($s,$e) try{ Set-YumDiskPickAll -State $s.Tag -On ([bool]$s.IsChecked) }catch{} })
         $ui.Junk.Add_SelectionChanged({param($s,$e)try{ Update-YumDiskExplanation -State $s.Tag }catch{}})
-        $ui.Reload.Add_Click({param($s,$e) Start-YumDiskMeasure -State $s.Tag })
+        $ui.Reload.Add_Click({param($s,$e) $s.Tag.Progress=$null; Set-YumCleanProgress -State $s.Tag; Start-YumDiskMeasure -State $s.Tag })
         $ui.AutoClean.Add_Click({param($s,$e) try{ Update-YumConfigValue -Name DiskAutoClean -Value ([bool]$s.IsChecked); Show-YumToast -Text $(if([bool]$s.IsChecked){'Automatic weekly clean on: only the safest leftovers.'}else{'Automatic weekly clean off.'}) }catch{} })
         $ui.CleanSelected.Add_Click({param($s,$e)
             $st=$s.Tag; if($st.Busy){return}
@@ -249,16 +303,7 @@ function Show-YumDiskCleanup {
             try{ $open=@(Get-YumOpenCacheApps -Keys @($rows | ForEach-Object { $_.Key })); if($open.Count){ $warn+=("`n`nOpen now: {0}. Their files in use are skipped - close them first for the biggest result, or clean anyway." -f ($open -join ', ')) } }catch{}
             $r=[System.Windows.MessageBox]::Show($script:Yum.Window,("Clean about {0}?`n`n{1}{2}`n`nFiles in use are skipped. Your own files, cookies and passwords are never touched." -f $total,$names,$warn),'YUMRAM - Disk cleanup',[System.Windows.MessageBoxButton]::YesNo,[System.Windows.MessageBoxImage]::Question)
             if($r -ne [System.Windows.MessageBoxResult]::Yes){return}
-            Start-YumDiskWork -State $st -Busy ('Cleaning {0} categories…' -f $rows.Count) -Argument ([string[]]@($rows | ForEach-Object { $_.Key })) -Work { param($a) Invoke-YumDiskCleanup -Keys $a } -Done {
-                param($st2,$res)
-                $st2.Busy=$false
-                $x=@($res)[0]
-                $lines=@($x.Rows | ForEach-Object { '{0}: {1}{2}' -f $_.Name,(Format-YumBytes $_.Freed),$(if($_.Skipped -gt 0){(' ({0:N0} in use, skipped)' -f $_.Skipped)}elseif($_.Note){' ('+$_.Note+')'}else{''}) })
-                $msg=('Freed {0}. Windows drive free: {1} -> {2}.' -f (Format-YumBytes $x.Freed),(Format-YumBytes $x.DriveFreeBefore),(Format-YumBytes $x.DriveFreeAfter))
-                $st2.Ui.LastResult.Text=($msg+[Environment]::NewLine+($lines -join [Environment]::NewLine))
-                try{ Show-YumToast -Text $msg }catch{}
-                Start-YumDiskMeasure -State $st2 -After $msg
-            }
+            Start-YumDiskClean -State $st -Keys ([string[]]@($rows | ForEach-Object { $_.Key }))
         })
         $ui.UsageScan.Add_Click({param($s,$e) if($null -ne $s.Tag['Usage']){ Stop-YumDiskUsage -State $s.Tag } else { Start-YumDiskUsage -State $s.Tag -Path ([string]$s.Tag.Ui.UsagePath.Text).Trim() } })
         $ui.UsageUp.Add_Click({param($s,$e) try{ $p=[IO.Directory]::GetParent(([string]$s.Tag.Ui.UsagePath.Text).TrimEnd('\')); if($null -ne $p){ Start-YumDiskUsage -State $s.Tag -Path $p.FullName } }catch{} })

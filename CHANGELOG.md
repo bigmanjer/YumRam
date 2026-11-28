@@ -1,5 +1,17 @@
 # Changelog
 
+# YUMRAM 5.17.1 — Disk cleanup: progress bar, "finished", list updates by itself
+
+- **Progress bar while cleaning** (user: "loading bar indicating when clean is finished, then update automatically").
+  Disk cleanup used to show only "Cleaning 7 categories…" in the footer until it was done - with Windows' own tools
+  that can be minutes with no sign of life. Now a bar in the "Safe to clean" header shows which category is being
+  cleaned, how many are done, how much is freed so far and the time ("Cleaning: Browser caches… 3 of 7 • 412 MB •
+  14 s"; Windows' own tools say "a few minutes"). When it ends the bar turns green - "Finished - freed X. Updating
+  the list…" - the list is measured again by itself and the bar then says "List updated" with how long it took.
+  "Check again" hides it. In the header line, so the list keeps all its room.
+- Tests: the disk cleanup test checks the progress counts (without deleting anything); the UI test checks the bar
+  mid-clean, runs the real clean flow end to end (on categories that are skipped without administrator) and checks
+  that it ends "finished" with the list re-measured.
 # YUMRAM 5.17.0 — Uninstall programs (with leftover clean-up)
 
 - **New page: Uninstall programs** (sidebar, <kbd>Ctrl</kbd>+<kbd>0</kbd>; user: "having ability like IObit

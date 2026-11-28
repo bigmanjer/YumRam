@@ -4,7 +4,7 @@
 
 **Keeps your Windows PC fast by keeping RAM free and the CPU fair — automatically.**
 
-[![Version](https://img.shields.io/badge/version-5.17.0-a855f7)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-5.17.1-a855f7)](CHANGELOG.md)
 [![Platform](https://img.shields.io/badge/Windows-10%20%7C%2011-0078d4)](#requirements)
 [![Stage](https://img.shields.io/badge/stage-beta-22c55e)](#status)
 
@@ -37,7 +37,7 @@ Most "RAM cleaners" flush everything and show a big number. YUMRAM is different:
 | **What's running** | Live RAM and CPU per program, sortable, explained in plain words, with your own rules (*never trim*, *never hold back*). |
 | **Memory-leak alerts** | Spots a program whose memory keeps rising and tells you once — restarting it gives the memory back. |
 | **Windows bloat** | Removes preinstalled apps you do not need (News, Clipchamp, Solitaire, promoted games…) and turns off Windows ads, tips, suggestions, Bing in Start search, Copilot and Recall. Store, Edge, Windows Update and Defender are never touched; every change can be undone. |
-| **Disk cleanup** | Frees space from caches and leftovers that rebuild themselves (temp files, browser and app caches, Store app temp files, picture previews, crash reports, old Windows Update and browser-updater files, developer download caches, Windows' own component and driver clean-up, Recycle Bin) — sizes and a plain explanation first, *Open folder* to look, a list of every deleted file afterwards; never your files, cookies or passwords. Optional weekly automatic clean. |
+| **Disk cleanup** | Frees space from caches and leftovers that rebuild themselves (temp files, browser and app caches, Store app temp files, picture previews, crash reports, old Windows Update and browser-updater files, developer download caches, Windows' own component and driver clean-up, Recycle Bin) — sizes and a plain explanation first, *Open folder* to look, a list of every deleted file afterwards; never your files, cookies or passwords. A progress bar shows each category as it is cleaned, says when it is finished and the list updates by itself. Optional weekly automatic clean. |
 | **What's using my disk** | Biggest folders (click to go deeper) and biggest files, like WinDirStat, with Open location. |
 | **Uninstall programs** | Every desktop program and Store app with its size and install date, biggest first, searchable, with plain advice (*Careful* for drivers, runtimes and codecs). Runs the program's own uninstaller, then finds what it left behind (folders, shortcuts, registry settings) — like IObit Uninstaller or Revo. Leftovers go to the Recycle Bin and registry settings are backed up to a `.reg` file first. |
 | **Live readings** | RAM, CPU, GPU (busy + VRAM per graphics chip) and disk (busy, read/write, free space) as four rings on the Overview — also while monitoring is off. |
